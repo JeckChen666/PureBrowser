@@ -103,7 +103,7 @@ class DownloadStore(
                     .put("displayName", r.displayName).field("mediaUrl", r.mediaUrl).field("sourceUrl", r.sourceUrl)
                     .field("sourceTitle", r.sourceTitle).field("createdAt", r.createdAt).field("userAgent", r.userAgent)
                     .field("wifiOnly", r.wifiOnly).field("mimeType", r.mimeType).field("retryOf", r.retryOf)
-                    .field("sourceTabId", r.sourceTabId).field("sourceGeneration", r.sourceGeneration))
+                    .field("sourceTabId", r.sourceTabId).field("sourceGeneration", r.sourceGeneration).put("cancelled", r.cancelled))
             } }
             val assets = JSONArray().apply { data.assets.forEach { a ->
                 put(JSONObject().put("recordId", a.recordId).put("systemId", a.systemId).put("uri", a.uri)
@@ -130,7 +130,7 @@ class DownloadStore(
                         sourceTitle = r.nullableString("sourceTitle"), createdAt = r.nullableLong("createdAt"),
                         userAgent = r.nullableString("userAgent"), wifiOnly = r.nullableBoolean("wifiOnly"),
                         mimeType = r.nullableString("mimeType"), retryOf = r.nullableString("retryOf"),
-                        sourceTabId = r.nullableString("sourceTabId"), sourceGeneration = r.nullableLong("sourceGeneration"))
+                        sourceTabId = r.nullableString("sourceTabId"), sourceGeneration = r.nullableLong("sourceGeneration"), cancelled = r.optBoolean("cancelled", false))
                 } }
             }
             val assets = obj.getJSONArray("assets").let { a ->

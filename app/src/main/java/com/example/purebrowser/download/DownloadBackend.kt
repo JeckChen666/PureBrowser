@@ -6,6 +6,8 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import androidx.core.net.toUri
 import android.os.Environment
+import android.system.Os
+import android.system.OsConstants
 import java.io.FileNotFoundException
 
 sealed interface SystemDownloadResult {
@@ -33,6 +35,12 @@ interface DownloadBackend {
     fun access(uri: String): FileAccess
     fun inspect(uri: String): MediaInspection
     fun remove(id: Long): Int
+    /** A positive row count alone is not evidence that a known file disappeared. */
+    fun removeFileAndConfirm(id: Long, uri: String?): Boolean {
+        val count = remove(id)
+        return if(uri != null) access(uri).availability == FileAvailability.MISSING
+            else count > 0 && query(id) == SystemDownloadResult.Missing
+    }
 }
 
 class AndroidDownloadBackend(context: Context) : DownloadBackend {
@@ -109,4 +117,29 @@ class AndroidDownloadBackend(context: Context) : DownloadBackend {
     }
 
     override fun remove(id: Long): Int = manager.remove(id)
+
+    override fun removeFileAndConfirm(id: Long, uri: String?): Boolean {
+        if(uri == null) return super.removeFileAndConfirm(id, null)
+        if(!DownloadRules.isOwnedDownloadUri(uri,id)) return false
+        if(access(uri).availability == FileAvailability.MISSING) return super.removeFileAndConfirm(id,uri)
+        // Removing a system row revokes its URI permission. Hold the actual owned file's
+        // descriptor so revoked access cannot be confused with physical deletion evidence.
+        return try {
+            app.contentResolver.openFileDescriptor(uri.toUri(), "r")?.use { descriptor ->
+                val before = Os.fstat(descriptor.fileDescriptor)
+                if(!OsConstants.S_ISREG(before.st_mode)) return@use false
+                val originalLink = runCatching { Os.readlink("/proc/self/fd/${descriptor.fd}") }.getOrNull()
+                if(manager.remove(id) <= 0) return@use access(uri).availability == FileAvailability.MISSING
+                repeat(6) {
+                    val unlinked = runCatching { Os.fstat(descriptor.fileDescriptor).st_nlink == 0L }.getOrDefault(false)
+                    val deletedLink = originalLink != null && runCatching {
+                        Os.readlink("/proc/self/fd/${descriptor.fd}") == "$originalLink (deleted)"
+                    }.getOrDefault(false)
+                    if(unlinked || deletedLink || access(uri).availability == FileAvailability.MISSING) return@use true
+                    Thread.sleep(50) // Bounded IO-thread reconciliation, not a foreground service.
+                }
+                false
+            } ?: false
+        } catch (_: Exception) { false }
+    }
 }

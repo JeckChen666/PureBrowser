@@ -36,14 +36,14 @@ class DownloadRepository(
     fun enqueue(candidate: MediaCandidate, userAgent: String, wifiOnly: Boolean): Long =
         enqueue(DownloadDraft(candidate, userAgent), wifiOnly)
 
-    fun enqueue(draft: DownloadDraft, wifiOnly: Boolean, fileName: String? = null): Long = synchronized(DownloadStore.transactionLock) {
+    fun enqueue(draft: DownloadDraft, wifiOnly: Boolean, fileName: String? = null, retryOf: String? = null): Long = synchronized(DownloadStore.transactionLock) {
         val data = load()
         check(store.writable)
         require(draft.candidate.kind == MediaKind.FILE && BrowserAddress.isWebUrl(draft.candidate.url))
         val uri = URI(draft.candidate.url)
         require(uri.port in -1..65535)
         require(uri.scheme.equals("https", true) || (allowLocalHttp && uri.scheme.equals("http", true) && uri.host in setOf("127.0.0.1", "10.0.2.2")))
-        require(data.records.size < DownloadRules.MAX_RECORDS)
+        require(data.records.size < DownloadRules.MAX_RECORDS) { "下载记录已达 200 条，请先移除不再需要的记录" }
         val guessed = fileName ?: URLUtil.guessFileName(draft.candidate.url, null, draft.candidate.mimeType)
         val name = "${UUID.randomUUID().toString().take(8)}_${DownloadRules.safeFileName(guessed)}"
         val agent = draft.userAgent.filterNot { it.isISOControl() }.take(1024)
@@ -51,7 +51,7 @@ class DownloadRepository(
             sourceUrl = draft.sourceUrl?.takeIf(BrowserAddress::isWebUrl), sourceTitle = draft.sourceTitle?.take(180),
             createdAt = System.currentTimeMillis(), userAgent = agent, wifiOnly = wifiOnly,
             mimeType = draft.candidate.mimeType?.take(120), sourceTabId = draft.sourceTabId?.take(100),
-            sourceGeneration = draft.sourceGeneration)
+            sourceGeneration = draft.sourceGeneration, retryOf = retryOf, displayName = DownloadRules.safeFileName(guessed))
         DownloadRules.validate(DownloadData(records = listOf(proposed)))
         val id = backend.enqueue(draft.candidate.url, name, agent, wifiOnly)
         require(id > 0)
@@ -84,8 +84,12 @@ class DownloadRepository(
             if (system is SystemDownloadResult.Present && system.status == DownloadManager.STATUS_SUCCESSFUL) {
                 val uri = backend.fileUri(record.systemId)?.takeIf { DownloadRules.isOwnedDownloadUri(it, record.systemId) } ?: asset?.uri
                 if (uri != null) {
-                    val access = backend.access(uri)
-                    var inspection = MediaInspection(asset?.format ?: FormatCheck.NOT_CHECKED, asset?.mimeType, asset?.durationMillis)
+                    val observed = backend.access(uri)
+                    // Providers may hide newly saved non-media files as ENOENT. Until this
+                    // app has actually read/check-tested the file, that isn't proof of loss.
+                    val access = if(observed.availability == FileAvailability.MISSING &&
+                        asset?.format !in setOf(FormatCheck.PASSED,FormatCheck.INVALID)) observed.copy(availability=FileAvailability.UNKNOWN) else observed
+                    var inspection = MediaInspection(asset?.format?.takeIf { it != FormatCheck.NOT_CHECKED } ?: FormatCheck.UNCONFIRMED, asset?.mimeType, asset?.durationMillis)
                     if (access.availability == FileAvailability.AVAILABLE) {
                         val cached = checks[record.systemId]
                         inspection = if (cached?.uri == uri && cached.size == access.sizeBytes && cached.updatedAt == system.updatedAt) cached.result
@@ -115,7 +119,7 @@ class DownloadRepository(
     private fun toItem(record: DownloadRecord, system: SystemDownloadResult, asset: VideoAsset?): DownloadItem {
         val current = system as? SystemDownloadResult.Present
         val usable = current?.status == DownloadManager.STATUS_SUCCESSFUL && asset?.format == FormatCheck.PASSED && asset.availability == FileAvailability.AVAILABLE
-        val detail = when (system) {
+        val detail = if (record.cancelled) "已取消，原记录已保留" else when (system) {
             SystemDownloadResult.Missing -> "系统任务不存在，记录已保留"
             SystemDownloadResult.Unavailable -> "暂时无法读取系统任务，状态未确认"
             is SystemDownloadResult.Present -> when (system.status) {
@@ -125,8 +129,8 @@ class DownloadRepository(
                 DownloadManager.STATUS_SUCCESSFUL -> when (asset?.availability) {
                     FileAvailability.MISSING -> "已下载的文件已丢失"
                     FileAvailability.UNREADABLE -> "文件暂时无法读取，请检查访问权限"
-                    FileAvailability.UNKNOWN, null -> "传输已完成，文件可用性尚未确认"
-                    FileAvailability.AVAILABLE -> when (asset!!.format) {
+                    FileAvailability.UNKNOWN, null -> if(record.mimeType?.startsWith("text/html")==true) "传输完成，但服务器返回网页类型；文件无法读取，不能确认为视频" else "传输已完成，文件可用性尚未确认"
+                    FileAvailability.AVAILABLE -> when (asset.format) {
                         FormatCheck.PASSED -> "已保存 · 格式初检通过"
                         FormatCheck.INVALID -> "文件已保存，但格式初检失败（可能是登录页）"
                         FormatCheck.UNCONFIRMED -> "文件已保存，但无法完成格式初检"
@@ -143,35 +147,89 @@ class DownloadRepository(
             }
         }
         return DownloadItem(record.systemId, record.name, current?.status ?: DownloadManager.STATUS_FAILED,
-            current?.bytes ?: 0, current?.total ?: -1, detail, usable, record.recordId,
+            current?.bytes ?: -1, current?.total ?: -1, detail, usable, record.recordId,
             asset?.format ?: FormatCheck.NOT_CHECKED, asset?.availability ?: FileAvailability.UNKNOWN, record.sourceUrl,
-            when(system) { SystemDownloadResult.Missing -> SystemTaskRead.MISSING; SystemDownloadResult.Unavailable -> SystemTaskRead.UNAVAILABLE; else -> SystemTaskRead.PRESENT })
+            when(system) { SystemDownloadResult.Missing -> SystemTaskRead.MISSING; SystemDownloadResult.Unavailable -> SystemTaskRead.UNAVAILABLE; else -> SystemTaskRead.PRESENT },
+            displayName = record.displayName, createdAt = record.createdAt, wifiOnly = record.wifiOnly,
+            canRetry = record.mediaUrl != null && (record.cancelled || system == SystemDownloadResult.Missing ||
+                (current != null && current.status !in setOf(DownloadManager.STATUS_PENDING, DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PAUSED) && !usable)),
+            retryOf = record.retryOf, sourceTitle = record.sourceTitle, cancelled = record.cancelled)
     }
 
-    /** Forget metadata only. Never remove a system task or a device file. T12 will expose a distinct UI action. */
+    private fun isActive(system: SystemDownloadResult) = system is SystemDownloadResult.Present &&
+        system.status in setOf(DownloadManager.STATUS_PENDING, DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PAUSED)
+
+    fun record(id: Long): DownloadRecord? = synchronized(DownloadStore.transactionLock) { load().records.firstOrNull { it.systemId == id } }
+
+    /** A new system transfer. The failed record and any existing file are never overwritten. */
+    fun retry(id: Long, fallbackAgent: String, defaultWifiOnly: Boolean): Long = synchronized(DownloadStore.transactionLock) {
+        val state = stateSnapshot()
+        check(state.tasks.firstOrNull { it.id == id }?.canRetry == true) { "资源暂时不能重试，请返回来源页面重新嗅探" }
+        val old = record(id) ?: error("记录不存在")
+        val url = old.mediaUrl ?: error("旧记录没有可重试的地址")
+        enqueue(DownloadDraft(MediaCandidate(url, MediaKind.FILE, emptySet(), old.mimeType), old.userAgent ?: fallbackAgent,
+            old.sourceUrl, old.sourceTitle, old.sourceTabId, old.sourceGeneration), old.wifiOnly ?: defaultWifiOnly,
+            old.displayName, old.recordId)
+    }
+
+    fun rename(id: Long, title: String): Unit = synchronized(DownloadStore.transactionLock) {
+        val value = title.trim()
+        require(value.isNotBlank() && value.length <= 180 && value.none { it.isISOControl() }) { "请输入 1–180 字的显示名称" }
+        val data = load()
+        require(data.records.any { it.systemId == id })
+        store.save(data.copy(records = data.records.map { if(it.systemId == id) it.copy(displayName = value) else it },
+            assets = data.assets.map { if(it.systemId == id) it.copy(displayName = value) else it }))
+    }
+
+    /** Forget metadata only. Active or unconfirmed tasks cannot be forgotten into an orphan transfer. */
     fun forgetRecord(id: Long): Unit = synchronized(DownloadStore.transactionLock) {
         val data = load()
+        val system = backend.query(id)
+        require(data.records.any { it.systemId == id })
+        check(!isActive(system) && system != SystemDownloadResult.Unavailable) { "请等待系统状态确认，或先取消正在下载的任务" }
         store.save(DownloadRules.forget(data, id))
         checks.remove(id)
         Unit
     }
 
-    /** Retains the first-round UI's explicitly confirmed delete-and-cancel semantics. */
-    fun remove(id: Long): Unit = synchronized(DownloadStore.transactionLock) {
+    /** Cancel only an ongoing task. Preserve its record for a separate retry or forget. */
+    fun cancel(id: Long): Unit = synchronized(DownloadStore.transactionLock) {
         val data = load()
         check(store.writable)
         require(data.records.any { it.systemId == id })
-        val count = backend.remove(id)
-        check(count > 0 || backend.query(id) == SystemDownloadResult.Missing) { "System task removal failed" }
+        check(isActive(backend.query(id))) { "任务已结束，请刷新后操作" }
+        check(backend.remove(id) > 0) { "系统未确认取消，记录已保留" }
+        store.save(data.copy(records = data.records.map { if(it.systemId == id) it.copy(cancelled = true) else it },
+            assets = data.assets.filterNot { it.systemId == id }))
+        checks.remove(id)
+        Unit
+    }
+
+    /** Do not equate a disappeared system row with confirmed file deletion. */
+    fun deleteFile(id: Long): Unit = synchronized(DownloadStore.transactionLock) {
+        val data = load()
+        check(store.writable)
+        require(data.records.any { it.systemId == id })
+        val system = backend.query(id)
+        check(!isActive(system) && system != SystemDownloadResult.Unavailable) { "请先确认任务已结束" }
+        val uri = (data.assets.firstOrNull { it.systemId == id }?.uri ?: backend.fileUri(id))
+            ?.takeIf { DownloadRules.isOwnedDownloadUri(it, id) }
+        check(backend.removeFileAndConfirm(id,uri)) {
+            "未能确认文件已删除，记录已保留；请检查权限或在系统文件管理器中核实"
+        }
         store.save(DownloadRules.forget(data, id))
         checks.remove(id)
         Unit
     }
 
+    /** Compatibility for first-round callers; native product UI uses distinct operations above. */
+    fun remove(id: Long) { if(isActive(backend.query(id))) cancel(id) else deleteFile(id) }
+
     fun fileUri(id: Long): Uri? = synchronized(DownloadStore.transactionLock) {
-        if (load().records.none { it.systemId == id }) return@synchronized null
-        val value = backend.fileUri(id)?.takeIf { DownloadRules.isOwnedDownloadUri(it, id) } ?: return@synchronized null
-        if (backend.access(value).availability != FileAvailability.AVAILABLE) null else value.toUri()
+        val state = stateSnapshot()
+        val asset = state.assets.firstOrNull { it.systemId == id && it.format == FormatCheck.PASSED && it.availability == FileAvailability.AVAILABLE }
+            ?: return@synchronized null
+        if (!DownloadRules.isOwnedDownloadUri(asset.uri, id) || backend.access(asset.uri).availability != FileAvailability.AVAILABLE) null else asset.uri.toUri()
     }
 
     fun mimeType(id: Long): String = synchronized(DownloadStore.transactionLock) {

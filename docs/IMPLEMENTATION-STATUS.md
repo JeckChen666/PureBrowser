@@ -1,51 +1,27 @@
 # 当前实现与验证状态
 
-更新日期：2026-10-01（Asia/Shanghai）。第一轮产品化 T1–T7 已完成，完整交付证据见 T1-T7-COMPLETION.md。历史基础版记录保留于 archive/IMPLEMENTATION-STATUS-baseline-2026-10-01.md。
+**T1–T14 已完成，当前交付为 0.1.0 本地产品预览版，versionCode=2。** 第一轮历史证据见 T1-T7-COMPLETION.md，T8 历史见 ROUND-2-STATUS.md，当前完整验收见 ROUND-2-COMPLETION.md。
 
-## T8 增量进度
+## 当前能力
 
-Git 本地仓库已建立；第二轮 T8 下载记录/成品索引底座已实现。最终增量验证为 29 项单元、23 项全量仪器测试通过，另有真实旧格式迁移烟测；Lint 0 错误/19 提醒。详细证据与范围见 ROUND-2-STATUS.md；下文“最终验证”为第一轮历史记录，不代表第二轮整体完成。
+原生首页、多标签 WebView、地址与搜索、导航与错误恢复、本地书签/历史/快捷站点/主题；当前标签媒体发现、资源分区和详情、冻结来源的可编辑下载确认；系统任务分组、取消、关联的新任务重试、来源恢复；幂等本地视频库、真实元信息/异步本地缩略图、搜索排序、显示标题；实际 URI 打开/分享；记录移除与确认物理删除分开；默认网络偏好持久化和真实进程重启对账。
 
-## 已实现
+无自有云存储、云解析、账号、同步、遥测或后端。生产新增下载限 HTTPS；Debug 只允许指定本地测试地址。HLS/DASH/blob 仅识别；不转发 Cookie/Authorization/Referer，不绕过 DRM。
 
-正式首页、统一浅/深色与系统主题、本地图标、多标签（独立资源集合/三个活跃页面缓存）、标签网址与选中恢复；本地快捷站点 CRUD，书签添加/取消/搜索/编辑/删除/打开，历史时间列表/搜索/删除/清空；地址/搜索、键盘/返回、停止/刷新、错误重试、菜单、最小设置与关于。
+## 本次最终验证
 
-已有嗅探和公共直链下载仍保留：请求、下载回调、只读 DOM video/source、Resource Timing；签名 query 保留、来源合并、页面代次与容量边界、常见分片过滤；明确区分 MP4/WebM 直链、HLS/DASH/blob；实际确认、系统 DownloadManager、持久任务、删除确认、文件打开、有限容器/视频轨样本初检。关闭来源标签不取消独立下载任务。
+- 33 项本地单元测试通过。
+- API37：75 项最终全量回归通过，无跳过；另 2 项真实 MP4/WebM 跨 UID 文件分享、1 项 host 强制停止后的进程重启、1 项真实外部删除/失效展示验收通过，共 79 项功能仪器测试。
+- Lint 0 错误，22 提醒；保留报告，不将提醒说成已消除。
+- API28 专用 AVD：写入权限拒绝无假成功、允许真实保存；基线旧 APK 的真实任务/旧 XML 覆盖迁移，原浏览 JSON/旧 XML 覆盖前后字节一致；启动后旧 XML 不改，原始未知字段保持未知。小屏/导航/外部播放器烟测通过。
+- 生成样本的完整字节与 SHA-256 对照；HTML 假 MP4（故意声称视频 MIME）被初检拦截；401/403、未知计数、取消/重试、记录移除保留文件、文件删除同步和失效不冒充可播放均有证据。
 
-不增加自有云端存储、解析、同步、账号、后端或追踪。浏览本地数据与 download_records 分开，使用 IO 串行/AtomicFile 保存并防止损坏数据无备份覆盖。
+## 产物
 
-## 最终验证
+- Debug APK：`app/build/outputs/apk/debug/app-debug.apk`，沿用原 applicationId 和 Debug 签名，可覆盖安装。
+- 本机最终报告/截图：`app/build/reports/round2-product/`。33 项单元 XML 在 `app/build/test-results/testDebugUnitTest/`。
+- 执行计划：EXECUTION-PLAN-ROUND-2.md 全部勾选；变更在项目本地 Git 中，不配置/推送远端。
 
-- Debug APK/测试 APK 构建通过。
-- 单元 19 项通过；仪器 8 项通过（开启本地 fixture，0 跳过）。
-- Lint 0 错误、21 提醒。
-- 真实 force-stop/重新启动，本地分类数据一致。
-- 签名 MP4 经实际 UI 下载、初检、SHA-256 校验；关闭来源标签仍保留任务和文件。
-- 三标签页面/返回/资源隔离，书签编辑搜索、快捷站点编辑、主题保存、历史分类清理通过。
-- 小屏地址键盘/失败重试/关于页、长按网页链接新标签、成品系统打开手动检查通过。
-- 本次自生成数据与下载已清理，保留默认首页运行；目标应用未卸载。
+## 未验证或明确后置
 
-## 重跑
-
-**UI/集成测试会修改主题、书签、快捷站点并清空历史；仅在专用、可丢弃的测试模拟器执行。真实数据必须先备份并在完成后恢复。** 不以卸载目标应用进行测试重置。
-
-先启动 `python3 tools/fixtures/serve_video_fixture.py`，记录其 SHA-256，再运行：
-
-```zsh
-source "$HOME/.config/android-dev/env.zsh"
-./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
-adb -s emulator-5554 reverse tcp:8765 tcp:8765
-adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
-adb -s emulator-5554 install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb -s emulator-5554 shell am instrument -w -r \
-  -e videoFixture true \
-  -e fixtureSha256 '<服务器打印的 SHA-256>' \
-  com.example.purebrowser.test/androidx.test.runner.AndroidJUnitRunner
-```
-
-不启用 fixture 时三个集成场景会跳过；本次完整结果启用了 fixture。设备回环地址依赖 adb reverse；8766 应无监听，用于连接失败测试。系统下载服务访问 10.0.2.2 曾超时，因此下载样本使用 127.0.0.1。这不是通过放宽生产网络策略规避。
-
-## 尚未实现或验证
-
-完整资源/下载中心和本地视频库第二轮产品化；HLS/DASH 分片与合并、登录 Cookie/Authorization/逐跳凭据、无痕隔离、完整 Service Worker/iframe/MSE、手动暂停/自定义续传、长视频后台、真机与不同系统版本。假 MP4 下载拒绝的独立端到端验证、所有格式/站点覆盖未完成。
-当前只能称第一轮浏览产品骨架；完整 0.1 尚待第二轮，不能以本轮通过替代其验收。
+真机、多 OEM/版本/大字体/屏幕完整矩阵、长视频/后台可靠性、全面性能/安全审计、正式商店发行签名与政策申报；HLS/DASH 分片/封装、登录访问上下文、直播、真正无痕、内嵌高级播放器、批量/目录选择、物理文件重命名。有限格式初检不是视频完整性或安全保证。详细边界见完成记录。

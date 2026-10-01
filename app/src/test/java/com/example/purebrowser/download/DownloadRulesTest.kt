@@ -69,4 +69,14 @@ class DownloadRulesTest {
         }
     }
 
+    @Test fun unicodeNamesFitTheFileByteLimitWithoutSplittingCodePoints() {
+        val name=DownloadRules.safeFileName("视频".repeat(100)+".mp4")
+        assertTrue(name.toByteArray(Charsets.UTF_8).size<=240)
+        assertTrue(("12345678_"+name).toByteArray(Charsets.UTF_8).size<255)
+        val supplementary=String(Character.toChars(0x10400)).repeat(100)
+        val safe=DownloadRules.safeFileName(supplementary)
+        assertEquals(safe,safe.toByteArray(Charsets.UTF_8).toString(Charsets.UTF_8))
+        assertTrue(safe.length<=100)
+    }
+
 }

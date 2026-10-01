@@ -1,10 +1,10 @@
 # PureBrowser
 
-以网页视频发现与下载为核心的 Android 浏览器。当前已完成第一轮产品化（T1–T7）：可安装、可操作的浏览器产品骨架。资源/下载中心与本地视频库的完整产品化属于下一轮，还不是完整 0.1 版。
+以网页视频发现与保存为核心的 Android 浏览器。**T1–T14 已完成，当前为 0.1.0 本地产品预览版（versionCode=2）**：资源中心 → 任务 → 视频库 → 打开/分享 → 文件管理的闭环已验收，不是任意网站下载器。
 
-**产品硬约束：不做自有云端存储、云解析、云同步、账号或后端服务。** 浏览器仍正常联网访问网站。
+**产品硬约束：不做自有云端存储、云解析、云同步、账号、遥测或后端服务。** 浏览器仍正常联网访问用户选择的网站。
 
-**下一阶段**：资源中心、下载中心和本地视频库；之后实现限定范围的 HLS 与必要登录访问上下文。第一轮完成记录见 `docs/T1-T7-COMPLETION.md`。第二轮已启动，T8 下载记录/成品索引底座已实现并验证；T9–T14 尚未完成，见 `docs/ROUND-2-STATUS.md`。
+交付与完整证据见 `docs/ROUND-2-COMPLETION.md`；下一轮为限定 HLS 与必要登录访问上下文，不重新把已交付文件管理留作占位。
 
 ## 当前已实现
 
@@ -17,13 +17,15 @@
 - MP4 / WebM 等候选、HLS / DASH / blob 的明确分类；签名 query 保留、来源合并、页面切换清理、候选数量上限。
 - 忽略常见 TS / M4S 和明显 init/chunk/segment MP4 分片。复杂分片命名仍可能误报，不宣称无遗漏。
 - 公开视频直链：用户确认、默认仅 Wi-Fi、系统 DownloadManager、持久化任务记录、进度、错误、取消/删除确认、文件打开。
-- T8 增量：版本化下载元数据、旧记录非破坏性迁移、选择时的来源快照、幂等成品索引与真实可用性检查。视频库页面尚未实现。
+- 资源中心分区、来源快照、可编辑安全文件名与单次网络选项；下载分组、诚实未知状态、取消与另建关联重试。
+- 私有版本化元数据/旧格式一次迁移；本地视频库、搜索排序、真实缩略图/元信息、显示标题修改、来源恢复。
+- 实际文件打开/分享的临时只读授权；仅忘记记录保留文件，删除文件必须确认；进程重启对账与本地默认 Wi-Fi 设置。
 - 成品初检：支持的文件头、视频轨和可读取样本；不是完整的时长、声画与文件完整性校验。
 - NavigationEvent 网页历史返回；安全 URL 限制、无原生网页桥、生产版不放行明文 HTTP。
 
 ## 当前未实现
 
-完整本地视频库、资源/下载中心全面改造、HLS / DASH 下载与合并、登录态下载、逐跳 Referer / Cookie / Authorization 管理、手动暂停、自定义后台传输器、完整 Service Worker / 跨域 iframe / MSE 关联、无痕隔离、DRM。
+HLS / DASH 下载与合并、登录态下载、逐跳 Referer / Cookie / Authorization 管理、手动暂停、自定义后台传输器、完整 Service Worker / 跨域 iframe / MSE 关联、无痕隔离、DRM。
 HLS / DASH / blob 只显示候选和限制，不把清单或本地 blob 当成可直接保存的视频。
 系统 DownloadManager 只用于公开直链，不附带敏感凭据，避免其自动重定向无条件转发鉴权信息。
 
@@ -41,6 +43,7 @@ adb -s emulator-5554 install -r app/build/outputs/apk/androidTest/debug/app-debu
 adb -s emulator-5554 shell am instrument -w com.example.purebrowser.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
+版本：0.1.0（versionCode=2，替换模板默认值；沿用原包名与 Debug 签名覆盖安装）。
 应用 ID / namespace：`com.example.purebrowser`（临时）；minSdk 26，compileSdk / targetSdk 36。
 AGP 9.0.1，Gradle 9.1.0，Compose compiler 2.3.20，NavigationEvent 1.0.2。
 本机 SDK 为 `/Users/macos/Library/Android/sdk`；JDK 25 运行 Gradle，JDK 17 编译。
@@ -82,3 +85,9 @@ python3 tools/fixtures/serve_video_fixture.py
 - `.agents/ANDROID-SKILLS.md`：25 个项目级 Android 技能安装记录。
 
 只下载自有或获授权的内容，不绕过 DRM 或访问控制。本版本不能保证所有网站兼容，且尚未进行真机及大文件后台验证。
+
+## 本轮验证
+
+33 项单元测试，API37 上 75 项完整回归 + 4 项独立功能验收通过；Lint 0 错误/22 提醒。API28 另做允许/拒绝旧版权限、真实旧 APK 覆盖迁移、小屏与外部播放器烟测。真机/长视频后台/全版本矩阵不在此结论内。全量 UI 测试会修改状态，请按完成文档在专用设备或备份后运行；清理只针对测试样本 ID。
+
+APK：`app/build/outputs/apk/debug/app-debug.apk`；证据与截图：`app/build/reports/round2-product/`。构建产物不提交 Git。

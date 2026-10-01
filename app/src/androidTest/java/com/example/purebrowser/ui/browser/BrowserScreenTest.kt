@@ -36,6 +36,6 @@ class BrowserScreenTest {
     @Test fun downloadCenterExplainsEmptyState() {
         compose.onNodeWithTag("downloadsButton").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("下载中心").assertIsDisplayed()
+        compose.onNodeWithText("下载管理").assertIsDisplayed()
     }
 }

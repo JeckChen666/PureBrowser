@@ -32,6 +32,7 @@ data class DownloadRecord(
     val retryOf: String? = null,
     val sourceTabId: String? = null,
     val sourceGeneration: Long? = null,
+    val cancelled: Boolean = false,
 ) {
     override fun toString() = "DownloadRecord(recordId=$recordId, systemId=$systemId)"
 }
@@ -76,6 +77,13 @@ data class DownloadItem(
     val availability: FileAvailability = FileAvailability.UNKNOWN,
     val sourceUrl: String? = null,
     val systemRead: SystemTaskRead = SystemTaskRead.PRESENT,
+    val displayName: String = name,
+    val createdAt: Long? = null,
+    val wifiOnly: Boolean? = null,
+    val canRetry: Boolean = false,
+    val retryOf: String? = null,
+    val sourceTitle: String? = null,
+    val cancelled: Boolean = false,
 ) {
     override fun toString() = "DownloadItem(id=$id, status=$status, systemRead=$systemRead, format=$format, availability=$availability)"
 }
@@ -86,11 +94,21 @@ object DownloadRules {
     const val MAX_RECORDS = 200
     const val MAX_FILE_BYTES = 8 * 1024 * 1024
 
-    fun safeFileName(value: String): String = value
-        .replace(Regex("[^\\p{L}\\p{N}._-]"), "_")
-        .take(100)
-        .takeUnless { it.isBlank() || it == "." || it == ".." }
-        ?: "video.mp4"
+    fun safeFileName(value: String): String {
+        val filtered=value.replace(Regex("[^\\p{L}\\p{N}._-]"), "_")
+        val output=StringBuilder()
+        val points=filtered.codePoints().iterator()
+        var bytes=0
+        while(points.hasNext()) {
+            val point=points.nextInt()
+            val part=String(Character.toChars(point))
+            val size=part.toByteArray(Charsets.UTF_8).size
+            // Reserve room for the unique prefix; never split a Unicode code point.
+            if(output.length+part.length>100 || bytes+size>240) break
+            output.append(part);bytes+=size
+        }
+        return output.toString().takeUnless { it.isBlank() || it=="." || it==".." } ?: "video.mp4"
+    }
 
     fun isOwnedDownloadUri(value: String, id: Long): Boolean = runCatching {
         val uri = URI(value)

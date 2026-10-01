@@ -1,5 +1,6 @@
 package com.example.purebrowser.ui.browser
 
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -15,6 +16,7 @@ import com.example.purebrowser.MainActivity
 import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.MediaKind
 import java.security.MessageDigest
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
@@ -47,11 +49,11 @@ class BrowserDownloadFixtureTest {
         assertEquals("$base/sample.mp4?token=demo%2Bsignature", candidates.first { it.displayName == "sample.mp4" }.url)
         compose.onNodeWithTag("resourcesButton").performClick()
         compose.onNodeWithText("sample.mp4").assertIsDisplayed()
-        compose.onAllNodesWithText("下载直链").onFirst().performClick()
+        compose.onAllNodesWithText("尝试下载").onFirst().performClick()
         compose.onNodeWithText("确认下载直链").assertIsDisplayed()
         // The fixture is tiny; allow both emulator transports during this integration check.
         compose.onNode(isToggleable()).performClick()
-        val previousIds=model.downloads.value.map{it.id}.toSet()
+        val previousIds=model.repository.snapshot().map{it.id}.toSet()
         compose.onNodeWithText("开始下载").performClick()
         try {
             compose.waitUntil(45_000) { model.downloads.value.any { it.id !in previousIds && it.name.endsWith("_sample.mp4") && it.verified } }
@@ -59,6 +61,7 @@ class BrowserDownloadFixtureTest {
             throw AssertionError("Download did not complete: ${model.downloads.value.map { "${it.id}:${it.status}:${it.detail}" }}", failure)
         }
         val completed = model.downloads.value.first { it.id !in previousIds && it.name.endsWith("_sample.mp4") && it.verified }
+        File(compose.activity.cacheDir,"round2-owned-task-ids.txt").appendText("${completed.id}\n")
         val uri = model.repository.fileUri(completed.id)
         assertNotNull(uri)
         val bytes = compose.activity.contentResolver.openInputStream(uri!!)?.use { it.readBytes() }
@@ -73,6 +76,7 @@ class BrowserDownloadFixtureTest {
         assertTrue(model.repository.snapshot().any { it.id == completed.id && it.verified })
         assertNotNull(model.repository.fileUri(completed.id))
         compose.onNodeWithTag("downloadsButton").performClick()
-        compose.onNodeWithText(completed.name).assertIsDisplayed()
+        compose.onNodeWithTag("downloadsList").performScrollToNode(hasTestTag("download-${completed.id}"))
+        compose.onNode(hasText(completed.displayName) and hasAnyAncestor(hasTestTag("download-${completed.id}"))).assertIsDisplayed()
     }
 }

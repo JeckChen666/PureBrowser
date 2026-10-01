@@ -51,6 +51,7 @@ class ProductWorkflowTest {
         compose.waitUntil(5000){model.data.value.tabs.none{it.id==b}}
         compose.onNodeWithTag("tabList").performScrollToNode(hasTestTag("tab-$c"))
         compose.onNodeWithTag("tab-$c").performClick()
+        compose.onNodeWithTag("homeScreen").performScrollToNode(hasTestTag("addShortcutButton"))
         compose.onNodeWithTag("addShortcutButton").performClick()
         val title="回归站点-${UUID.randomUUID().toString().take(4)}"
         compose.onNodeWithTag("editorName").performTextReplacement(title)
@@ -58,7 +59,9 @@ class ProductWorkflowTest {
         compose.onNodeWithTag("editorSave").performClick()
         compose.waitUntil(5000){model.data.value.shortcuts.any{it.title==title}}
         val shortcut=model.data.value.shortcuts.first{it.title==title}
-        compose.onNodeWithText(title).performTouchInput{longClick()}
+        Thread.sleep(600) // Platform IME close animation after native editor confirmation.
+        compose.onNodeWithTag("homeScreen").performScrollToNode(hasText(title))
+        compose.onNodeWithText(title).performScrollTo().assertIsDisplayed().performTouchInput{longClick()}
         compose.onNodeWithTag("editorName").performTextReplacement("$title-编辑")
         compose.onNodeWithTag("editorSave").performClick()
         compose.waitUntil(5000){model.data.value.shortcuts.any{it.id==shortcut.id && it.title.endsWith("编辑")}}
