@@ -56,7 +56,7 @@ class BrowserDownloadFixtureTest {
         try {
             compose.waitUntil(45_000) { model.downloads.value.any { it.id !in previousIds && it.name.endsWith("_sample.mp4") && it.verified } }
         } catch (failure: Exception) {
-            throw AssertionError("Download did not complete: ${model.downloads.value}", failure)
+            throw AssertionError("Download did not complete: ${model.downloads.value.map { "${it.id}:${it.status}:${it.detail}" }}", failure)
         }
         val completed = model.downloads.value.first { it.id !in previousIds && it.name.endsWith("_sample.mp4") && it.verified }
         val uri = model.repository.fileUri(completed.id)

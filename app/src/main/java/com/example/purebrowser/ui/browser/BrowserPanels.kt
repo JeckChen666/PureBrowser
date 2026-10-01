@@ -39,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
+import com.example.purebrowser.download.DownloadDraft
 import com.example.purebrowser.download.DownloadItem
 import com.example.purebrowser.media.MediaCandidate
 import com.example.purebrowser.media.MediaKind
@@ -58,25 +59,26 @@ fun BrowserPanels(
     onDismissDownloads: () -> Unit,
 ) {
     val context = LocalContext.current
-    var confirmDownload by remember { mutableStateOf<MediaCandidate?>(null) }
+    var confirmDownload by remember { mutableStateOf<DownloadDraft?>(null) }
     var confirmRemoval by remember { mutableStateOf<DownloadItem?>(null) }
     var wifiOnly by rememberSaveable { mutableStateOf(true) }
-    var pendingPermission by remember { mutableStateOf<MediaCandidate?>(null) }
+    var pendingPermission by remember { mutableStateOf<DownloadDraft?>(null) }
     val userAgent = remember { WebSettings.getDefaultUserAgent(context) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val candidate = pendingPermission
         pendingPermission = null
-        if (granted && candidate != null) model.download(candidate, userAgent, wifiOnly)
+        if (granted && candidate != null) model.download(candidate, wifiOnly)
         else if (!granted) model.notify("未取得旧版 Android 的下载目录写入权限")
     }
-    if(showResources) ResourceSheet(candidates,onDismissResources) { item -> onDismissResources();confirmDownload=item }
+    if(showResources) ResourceSheet(candidates,onDismissResources) { item -> onDismissResources();confirmDownload=model.downloadDraft(item,userAgent) }
     if(showDownloads) DownloadSheet(downloads,onDismissDownloads,{item->confirmRemoval=item}) { item ->
         runCatching {
             val uri=model.repository.fileUri(item.id)?:error("文件不存在")
             context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,model.repository.mimeType(item.id)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
         }.onFailure {model.notify("无法打开文件，请确认系统安装了视频播放器")}
     }
-    confirmDownload?.let { candidate ->
+    confirmDownload?.let { draft ->
+        val candidate = draft.candidate
         AlertDialog(
             onDismissRequest = { confirmDownload = null }, title = { Text("确认下载直链") },
             text = {
@@ -91,9 +93,9 @@ fun BrowserPanels(
             confirmButton = { TextButton(onClick = {
                 confirmDownload = null
                 if (Build.VERSION.SDK_INT <= 28 && ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    pendingPermission = candidate
+                    pendingPermission = draft
                     permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                } else model.download(candidate, userAgent, wifiOnly)
+                } else model.download(draft, wifiOnly)
             }) { Text("开始下载") } },
             dismissButton = { TextButton(onClick = { confirmDownload = null }) { Text("取消") } },
         )

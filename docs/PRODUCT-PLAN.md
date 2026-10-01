@@ -2,7 +2,7 @@
 
 更新日期：2026-10-01（Asia/Shanghai）
 状态：第一轮 T1–T7 已实施；完整 0.1 仍待第二轮资源/下载/视频库产品化。第一轮证据见 T1-T7-COMPLETION.md。
-第一轮已完成清单见 EXECUTION-PLAN.md；下一轮 T8–T14 计划见 EXECUTION-PLAN-ROUND-2.md（尚未实施）。
+第一轮已完成清单见 EXECUTION-PLAN.md；第二轮 T8–T14 见 EXECUTION-PLAN-ROUND-2.md（T8 已实现，T9–T14 待实施）；增量实绩见 ROUND-2-STATUS.md。
 当前应用能力与测试实绩以 IMPLEMENTATION-STATUS.md 为准。
 
 ## 1. 本次明确的方向

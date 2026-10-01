@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.purebrowser.browser.*
 import com.example.purebrowser.data.browser.*
+import com.example.purebrowser.download.DownloadDraft
+import com.example.purebrowser.download.VideoAsset
+import com.example.purebrowser.library.VideoLibraryRepository
 import com.example.purebrowser.download.DownloadItem
 import com.example.purebrowser.download.DownloadRepository
 import com.example.purebrowser.media.MediaCandidate
@@ -34,6 +37,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val repository = DownloadRepository(application)
     private val mutableDownloads = MutableStateFlow<List<DownloadItem>>(emptyList())
     val downloads = mutableDownloads.asStateFlow()
+    private val library = VideoLibraryRepository(repository)
+    private val mutableVideoLibrary = MutableStateFlow<List<VideoAsset>>(emptyList())
+    val videoLibrary = mutableVideoLibrary.asStateFlow()
+    private var downloadReadFailureReported = false
 
     init {
         viewModelScope.launch {
@@ -94,9 +101,15 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         require(BrowserAddress.isWebUrl(value) && value.length <= 8192) { "请输入有效的 HTTP / HTTPS 网址" }
         operation(title.trim().take(180), value)
     }.onFailure { notify(it.message ?: "无法保存") }.isSuccess
-    fun download(candidate: MediaCandidate, userAgent: String, wifiOnly: Boolean) {
+    fun downloadDraft(candidate: MediaCandidate, userAgent: String): DownloadDraft {
+        val session = tabs.active.value
+        val page = session?.engine?.page?.value
+        return DownloadDraft(candidate, userAgent, page?.url?.takeIf(BrowserAddress::isWebUrl),
+            page?.title, session?.recordId, session?.engine?.generation)
+    }
+    fun download(draft: DownloadDraft, wifiOnly: Boolean) {
         viewModelScope.launch {
-            runCatching { withContext(Dispatchers.IO) { repository.enqueue(candidate, userAgent, wifiOnly) } }
+            runCatching { withContext(Dispatchers.IO) { repository.enqueue(draft, wifiOnly) } }
                 .onSuccess { notify("任务已加入下载中心") }
                 .onFailure { notify("无法创建任务，请检查存储权限和资源地址") }
             refreshDownloads()
@@ -109,7 +122,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     private suspend fun refreshDownloads() {
-        runCatching { withContext(Dispatchers.IO) { repository.snapshot() } }.onSuccess { mutableDownloads.value = it }
+        runCatching { withContext(Dispatchers.IO) { repository.stateSnapshot() } }
+            .onSuccess { state ->
+                downloadReadFailureReported = false
+                mutableDownloads.value = state.tasks
+                mutableVideoLibrary.value = library.entries(state)
+                repository.takeNotice()?.let(::notify)
+            }.onFailure {
+                if (!downloadReadFailureReported) notify("无法读取或保存下载记录，请检查本机存储")
+                downloadReadFailureReported = true
+            }
     }
     override fun onCleared() { flush(); tabs.clear(); writes.close(); super.onCleared() }
 }

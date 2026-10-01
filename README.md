@@ -4,7 +4,7 @@
 
 **产品硬约束：不做自有云端存储、云解析、云同步、账号或后端服务。** 浏览器仍正常联网访问网站。
 
-**下一阶段**：资源中心、下载中心和本地视频库；之后实现限定范围的 HLS 与必要登录访问上下文。第一轮完成记录见 `docs/T1-T7-COMPLETION.md`。
+**下一阶段**：资源中心、下载中心和本地视频库；之后实现限定范围的 HLS 与必要登录访问上下文。第一轮完成记录见 `docs/T1-T7-COMPLETION.md`。第二轮已启动，T8 下载记录/成品索引底座已实现并验证；T9–T14 尚未完成，见 `docs/ROUND-2-STATUS.md`。
 
 ## 当前已实现
 
@@ -17,6 +17,7 @@
 - MP4 / WebM 等候选、HLS / DASH / blob 的明确分类；签名 query 保留、来源合并、页面切换清理、候选数量上限。
 - 忽略常见 TS / M4S 和明显 init/chunk/segment MP4 分片。复杂分片命名仍可能误报，不宣称无遗漏。
 - 公开视频直链：用户确认、默认仅 Wi-Fi、系统 DownloadManager、持久化任务记录、进度、错误、取消/删除确认、文件打开。
+- T8 增量：版本化下载元数据、旧记录非破坏性迁移、选择时的来源快照、幂等成品索引与真实可用性检查。视频库页面尚未实现。
 - 成品初检：支持的文件头、视频轨和可读取样本；不是完整的时长、声画与文件完整性校验。
 - NavigationEvent 网页历史返回；安全 URL 限制、无原生网页桥、生产版不放行明文 HTTP。
 
@@ -73,7 +74,8 @@ python3 tools/fixtures/serve_video_fixture.py
 - `docs/IMPLEMENTATION-STATUS.md`：当前测试和功能边界。
 - `docs/PRODUCT-PLAN.md`：已确认的纯本地、产品化优先方向；协议增强后置。
 - `docs/EXECUTION-PLAN.md`：第一轮 T1–T7 的已完成执行清单。
-- `docs/EXECUTION-PLAN-ROUND-2.md`：第二轮 T8–T14 资源/下载/视频库产品化计划，尚未实施。
+- `docs/EXECUTION-PLAN-ROUND-2.md`：第二轮执行清单，T8 已完成、T9–T14 待实施。
+- `docs/ROUND-2-STATUS.md`：Git 基线、T8 增量与验证边界。
 - `docs/SECURITY-BASELINE.md`：本次安全对齐说明与 Manifest diff。
 - `docs/DEVELOPMENT-ENVIRONMENT.md`：最初环境准备的历史记录。
 - `CONTEXT.md`：资源线索、视频候选、下载任务、成品等术语。

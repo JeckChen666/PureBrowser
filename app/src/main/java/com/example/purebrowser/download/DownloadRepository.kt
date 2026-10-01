@@ -2,116 +2,181 @@ package com.example.purebrowser.download
 
 import android.app.DownloadManager
 import android.content.Context
-import android.media.MediaExtractor
-import android.media.MediaFormat
+import android.content.pm.ApplicationInfo
+import androidx.core.net.toUri
 import android.net.Uri
-import android.os.Environment
 import android.webkit.URLUtil
+import com.example.purebrowser.browser.BrowserAddress
 import com.example.purebrowser.media.MediaCandidate
 import com.example.purebrowser.media.MediaKind
-import org.json.JSONArray
-import org.json.JSONObject
+import java.net.URI
 import java.util.UUID
 
-private data class DownloadRecord(val id: Long, val name: String)
-data class DownloadItem(val id: Long, val name: String, val status: Int, val bytes: Long, val total: Long, val detail: String, val verified: Boolean = false)
+/** Metadata is private and versioned; only explicitly tracked public-file tasks are queried. */
+class DownloadRepository(
+    private val store: DownloadStore,
+    private val backend: DownloadBackend,
+    private val allowLocalHttp: Boolean = false,
+) {
+    constructor(context: Context) : this(DownloadStore(context), AndroidDownloadBackend(context),
+        context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0)
 
-/** Basic public-file transport; credentials and manifests deliberately stay out of DownloadManager. */
-class DownloadRepository(context: Context) {
-    private val app = context.applicationContext
-    private val manager = app.getSystemService(DownloadManager::class.java)
-    private val preferences = app.getSharedPreferences("download_records", Context.MODE_PRIVATE)
-    private val verification = mutableMapOf<Long, Boolean>()
-    private var records: List<DownloadRecord> = runCatching {
-        val array = JSONArray(preferences.getString("items", "[]"))
-        (0 until array.length()).map { array.getJSONObject(it).let { o -> DownloadRecord(o.getLong("id"), o.getString("name")) } }
-    }.getOrDefault(emptyList())
+    private data class CachedCheck(val uri: String, val size: Long?, val updatedAt: Long?, val result: MediaInspection)
+    private val checks = mutableMapOf<Long, CachedCheck>()
+    private val reportedNotices = mutableSetOf<String>()
+    private var notice: String? = null
 
-    @Synchronized fun enqueue(candidate: MediaCandidate, userAgent: String, wifiOnly: Boolean): Long {
-        require(candidate.kind == MediaKind.FILE) { "此格式的下载暂未实现" }
-        require(records.size < 200) { "任务记录已满，请先清理旧任务" }
-        val guessed = URLUtil.guessFileName(candidate.url, null, candidate.mimeType)
-        val safeName = guessed.replace(Regex("[^\\p{L}\\p{N}._-]"), "_").take(100).ifBlank { "video.mp4" }
-        val name = "${UUID.randomUUID().toString().take(8)}_$safeName"
-        val request = DownloadManager.Request(Uri.parse(candidate.url))
-            .setTitle(name)
-            .setDescription("PureBrowser · 公开视频直链")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
-            .addRequestHeader("User-Agent", userAgent)
-            .setAllowedOverRoaming(false)
-        if (wifiOnly) request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI)
-        // Do not attach Cookie/Authorization: DM redirects are not origin-filterable here.
-        val id = manager.enqueue(request)
-        records = listOf(DownloadRecord(id, name)) + records
-        persist()
-        return id
+    fun takeNotice(): String? = synchronized(DownloadStore.transactionLock) { notice.also { notice = null } }
+    private fun load(): DownloadData {
+        val value = store.load()
+        store.takeNotice()?.takeIf { reportedNotices.add(it) }?.let { notice = it }
+        return value
     }
 
-    @Synchronized fun snapshot(): List<DownloadItem> = records.map { record ->
-        manager.query(DownloadManager.Query().setFilterById(record.id))?.use { cursor ->
-            if (!cursor.moveToFirst()) return@use DownloadItem(record.id, record.name, DownloadManager.STATUS_FAILED, 0, -1, "系统任务不存在")
-            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-            val bytes = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-            val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-            val reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
-            val verified = status == DownloadManager.STATUS_SUCCESSFUL && verification.getOrPut(record.id) { verifyContainer(record.id) }
-            val detail = when (status) {
+    fun enqueue(candidate: MediaCandidate, userAgent: String, wifiOnly: Boolean): Long =
+        enqueue(DownloadDraft(candidate, userAgent), wifiOnly)
+
+    fun enqueue(draft: DownloadDraft, wifiOnly: Boolean, fileName: String? = null): Long = synchronized(DownloadStore.transactionLock) {
+        val data = load()
+        check(store.writable)
+        require(draft.candidate.kind == MediaKind.FILE && BrowserAddress.isWebUrl(draft.candidate.url))
+        val uri = URI(draft.candidate.url)
+        require(uri.port in -1..65535)
+        require(uri.scheme.equals("https", true) || (allowLocalHttp && uri.scheme.equals("http", true) && uri.host in setOf("127.0.0.1", "10.0.2.2")))
+        require(data.records.size < DownloadRules.MAX_RECORDS)
+        val guessed = fileName ?: URLUtil.guessFileName(draft.candidate.url, null, draft.candidate.mimeType)
+        val name = "${UUID.randomUUID().toString().take(8)}_${DownloadRules.safeFileName(guessed)}"
+        val agent = draft.userAgent.filterNot { it.isISOControl() }.take(1024)
+        val proposed = DownloadRecord(systemId = 1, name = name, mediaUrl = draft.candidate.url,
+            sourceUrl = draft.sourceUrl?.takeIf(BrowserAddress::isWebUrl), sourceTitle = draft.sourceTitle?.take(180),
+            createdAt = System.currentTimeMillis(), userAgent = agent, wifiOnly = wifiOnly,
+            mimeType = draft.candidate.mimeType?.take(120), sourceTabId = draft.sourceTabId?.take(100),
+            sourceGeneration = draft.sourceGeneration)
+        DownloadRules.validate(DownloadData(records = listOf(proposed)))
+        val id = backend.enqueue(draft.candidate.url, name, agent, wifiOnly)
+        require(id > 0)
+        val record = proposed.copy(systemId = id)
+        try { store.save(data.copy(records = listOf(record) + data.records)) }
+        catch (failure: Exception) {
+            // Cross-system creation isn't atomic: roll back ONLY the task created by this call.
+            runCatching { check(backend.remove(id) > 0 || backend.query(id) == SystemDownloadResult.Missing) }.onFailure { notice = "记录保存失败；本次系统任务可能仍存在，请检查系统下载通知" }
+            throw failure
+        }
+        id
+    }
+
+    fun snapshot(): List<DownloadItem> = stateSnapshot().tasks
+
+    fun stateSnapshot(): DownloadState = synchronized(DownloadStore.transactionLock) {
+        val original = load()
+        val assets = original.assets.associateBy { it.recordId }.toMutableMap()
+        val records = original.records.toMutableList()
+        val tasks = original.records.mapIndexed { index, initial ->
+            val system = backend.query(initial.systemId)
+            var record = initial
+            if (system is SystemDownloadResult.Present) {
+                // Recover only actual system data; source page, creation time, UA and policy stay unknown for legacy rows.
+                record = initial.copy(mediaUrl = initial.mediaUrl ?: system.mediaUrl?.takeIf(BrowserAddress::isWebUrl),
+                    mimeType = initial.mimeType ?: system.mimeType?.take(120))
+                records[index] = record
+            }
+            var asset = assets[record.recordId]
+            if (system is SystemDownloadResult.Present && system.status == DownloadManager.STATUS_SUCCESSFUL) {
+                val uri = backend.fileUri(record.systemId)?.takeIf { DownloadRules.isOwnedDownloadUri(it, record.systemId) } ?: asset?.uri
+                if (uri != null) {
+                    val access = backend.access(uri)
+                    var inspection = MediaInspection(asset?.format ?: FormatCheck.NOT_CHECKED, asset?.mimeType, asset?.durationMillis)
+                    if (access.availability == FileAvailability.AVAILABLE) {
+                        val cached = checks[record.systemId]
+                        inspection = if (cached?.uri == uri && cached.size == access.sizeBytes && cached.updatedAt == system.updatedAt) cached.result
+                            else backend.inspect(uri).also { checks[record.systemId] = CachedCheck(uri, access.sizeBytes, system.updatedAt, it) }
+                    } else checks.remove(record.systemId)
+                    asset = VideoAsset(record.recordId, record.systemId, uri, record.name, record.displayName,
+                        indexedAt = asset?.indexedAt ?: System.currentTimeMillis(), systemUpdatedAt = system.updatedAt,
+                        sizeBytes = access.sizeBytes ?: asset?.sizeBytes, mimeType = inspection.mimeType ?: asset?.mimeType ?: record.mimeType?.takeIf { it.startsWith("video/") },
+                        format = inspection.format, availability = access.availability, durationMillis = inspection.durationMillis)
+                    assets[record.recordId] = asset
+                } else if (asset != null) {
+                    asset = asset.copy(availability = FileAvailability.UNKNOWN)
+                    assets[record.recordId] = asset
+                }
+            } else if (asset != null) {
+                // A disappeared system row does not prove that the saved file is still usable.
+                asset = asset.copy(availability = backend.access(asset.uri).availability)
+                assets[record.recordId] = asset
+            }
+            toItem(record, system, asset)
+        }
+        val next = original.copy(records = records, assets = original.records.mapNotNull { assets[it.recordId] })
+        if (next != original && store.writable) store.save(next)
+        DownloadState(tasks, next.assets)
+    }
+
+    private fun toItem(record: DownloadRecord, system: SystemDownloadResult, asset: VideoAsset?): DownloadItem {
+        val current = system as? SystemDownloadResult.Present
+        val usable = current?.status == DownloadManager.STATUS_SUCCESSFUL && asset?.format == FormatCheck.PASSED && asset.availability == FileAvailability.AVAILABLE
+        val detail = when (system) {
+            SystemDownloadResult.Missing -> "系统任务不存在，记录已保留"
+            SystemDownloadResult.Unavailable -> "暂时无法读取系统任务，状态未确认"
+            is SystemDownloadResult.Present -> when (system.status) {
                 DownloadManager.STATUS_PENDING -> "排队中"
                 DownloadManager.STATUS_RUNNING -> "下载中"
                 DownloadManager.STATUS_PAUSED -> "等待网络 / 系统重试"
-                DownloadManager.STATUS_SUCCESSFUL -> if (verified) "已保存 · 格式初检通过" else "文件已保存，但格式初检失败（可能是登录页）"
-                else -> when (reason) {
+                DownloadManager.STATUS_SUCCESSFUL -> when (asset?.availability) {
+                    FileAvailability.MISSING -> "已下载的文件已丢失"
+                    FileAvailability.UNREADABLE -> "文件暂时无法读取，请检查访问权限"
+                    FileAvailability.UNKNOWN, null -> "传输已完成，文件可用性尚未确认"
+                    FileAvailability.AVAILABLE -> when (asset!!.format) {
+                        FormatCheck.PASSED -> "已保存 · 格式初检通过"
+                        FormatCheck.INVALID -> "文件已保存，但格式初检失败（可能是登录页）"
+                        FormatCheck.UNCONFIRMED -> "文件已保存，但无法完成格式初检"
+                        FormatCheck.NOT_CHECKED -> "文件已保存，等待格式初检"
+                    }
+                }
+                else -> when (system.reason) {
                     DownloadManager.ERROR_INSUFFICIENT_SPACE -> "存储空间不足"
                     DownloadManager.ERROR_CANNOT_RESUME -> "服务器不支持继续下载"
                     DownloadManager.ERROR_HTTP_DATA_ERROR -> "网络传输失败"
                     401, 403 -> "无权访问：可能需要登录或链接已过期"
-                    else -> "下载失败（$reason）"
+                    else -> "下载失败（${system.reason}）"
                 }
             }
-            DownloadItem(record.id, record.name, status, bytes, total, detail, verified)
-        } ?: DownloadItem(record.id, record.name, DownloadManager.STATUS_FAILED, 0, -1, "无法读取任务")
+        }
+        return DownloadItem(record.systemId, record.name, current?.status ?: DownloadManager.STATUS_FAILED,
+            current?.bytes ?: 0, current?.total ?: -1, detail, usable, record.recordId,
+            asset?.format ?: FormatCheck.NOT_CHECKED, asset?.availability ?: FileAvailability.UNKNOWN, record.sourceUrl,
+            when(system) { SystemDownloadResult.Missing -> SystemTaskRead.MISSING; SystemDownloadResult.Unavailable -> SystemTaskRead.UNAVAILABLE; else -> SystemTaskRead.PRESENT })
     }
 
-    @Synchronized fun remove(id: Long) {
-        manager.remove(id)
-        records = records.filterNot { it.id == id }
-        verification.remove(id)
-        persist()
+    /** Forget metadata only. Never remove a system task or a device file. T12 will expose a distinct UI action. */
+    fun forgetRecord(id: Long): Unit = synchronized(DownloadStore.transactionLock) {
+        val data = load()
+        store.save(DownloadRules.forget(data, id))
+        checks.remove(id)
+        Unit
     }
-    fun fileUri(id: Long): Uri? = manager.getUriForDownloadedFile(id)
-    fun mimeType(id: Long): String = manager.getMimeTypeForDownloadedFile(id)?.takeIf { it.startsWith("video/") } ?: "video/*"
 
-    private fun verifyContainer(id: Long): Boolean = runCatching {
-        val uri = fileUri(id) ?: return false
-        app.contentResolver.openInputStream(uri)?.use { stream ->
-            val prefix = ByteArray(12)
-            var count = 0
-            while (count < prefix.size) {
-                val n = stream.read(prefix, count, prefix.size - count)
-                if (n < 0) break
-                count += n
-            }
-            val supportedHeader = (count >= 8 && String(prefix, 4, 4, Charsets.US_ASCII) == "ftyp") ||
-                (count >= 4 && prefix.take(4).map { it.toInt() and 0xff } == listOf(0x1a, 0x45, 0xdf, 0xa3))
-            if (!supportedHeader) return@use false
-            val extractor = MediaExtractor()
-            try {
-                extractor.setDataSource(app, uri, null)
-                val track = (0 until extractor.trackCount).firstOrNull {
-                    extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true
-                } ?: return@use false
-                extractor.selectTrack(track)
-                extractor.sampleTime >= 0 // Reject empty init segments; this is not a full integrity audit.
-            } finally {
-                extractor.release()
-            }
-        } ?: false
-    }.getOrDefault(false)
+    /** Retains the first-round UI's explicitly confirmed delete-and-cancel semantics. */
+    fun remove(id: Long): Unit = synchronized(DownloadStore.transactionLock) {
+        val data = load()
+        check(store.writable)
+        require(data.records.any { it.systemId == id })
+        val count = backend.remove(id)
+        check(count > 0 || backend.query(id) == SystemDownloadResult.Missing) { "System task removal failed" }
+        store.save(DownloadRules.forget(data, id))
+        checks.remove(id)
+        Unit
+    }
 
-    private fun persist() {
-        val array = JSONArray()
-        records.forEach { array.put(JSONObject().put("id", it.id).put("name", it.name)) }
-        preferences.edit().putString("items", array.toString()).apply()
+    fun fileUri(id: Long): Uri? = synchronized(DownloadStore.transactionLock) {
+        if (load().records.none { it.systemId == id }) return@synchronized null
+        val value = backend.fileUri(id)?.takeIf { DownloadRules.isOwnedDownloadUri(it, id) } ?: return@synchronized null
+        if (backend.access(value).availability != FileAvailability.AVAILABLE) null else value.toUri()
+    }
+
+    fun mimeType(id: Long): String = synchronized(DownloadStore.transactionLock) {
+        val record = load().records.firstOrNull { it.systemId == id }
+        val type = checks[id]?.result?.mimeType ?: record?.mimeType
+        type?.takeIf { it.startsWith("video/") } ?: "video/*"
     }
 }

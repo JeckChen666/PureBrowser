@@ -78,3 +78,13 @@ WebView 隔离、Safe Intent Redirection、最小权限、凭据与备份隔离�
 - Manifest 仅为 Launcher Activity 增加 `launchMode="singleTask"`，避免重复 Activity 持有不同数据写入器；未增加导出 IPC 组件、权限或三方依赖。
 - 原 DownloadManager 和 download_records 边界保留；关闭浏览标签不删除独立任务，删除记录/文件需确认。没有增加 Cookie / Authorization 转发，也没有放宽生产网络安全策略。
 - 本轮测试与数据恢复证据见 T1-T7-COMPLETION.md；这不是完整安全审计、真机后台保证或 DRM 绕过能力。
+
+
+## T8 追加：私有下载记录与源上下文保护
+
+- 新下载元数据写入私有 AtomicFile，与浏览文件/旧下载 XML 分开；容量及关系校验在提交前执行。未来 schema 只读，损坏备份失败不覆盖。
+- 仓储只查询本应用记录的系统 ID，不枚举其他下载或扫描手机文件；成品 URI 限制为对应系统下载 ID 的 downloads 内容 URI。
+- 选择时冻结来源/UA/页面代次；签名 query 原样保存，DTO 日志表示及测试失败诊断不输出敏感地址或 UA。
+- 本轮新增任务明确限制为 HTTPS；Debug 仅允许已有本地 fixture 主机的 HTTP，不放行生产明文下载。仍不附带 Cookie/Authorization，也不保证系统下载器每跳可控。
+- 文件缺失/读取拒绝/系统状态不可确认分别处理；格式初检不等同于完整媒体或安全保证。迁移不调用 enqueue/remove，存储提交失败的回滚只针对本次创建的任务。
+- 未新增 Manifest 导出组件、权限、后台服务、运行时依赖或云端接口。受控故障、真实系统样本与迁移证据见 ROUND-2-STATUS.md；不是完整安全审计或 API26–28 真机保证。

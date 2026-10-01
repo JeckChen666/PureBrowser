@@ -27,6 +27,7 @@ class BrowserEngine(
     private val pageEpoch = AtomicLong(0)
     private val mutablePage = MutableStateFlow(BrowserPage(url = initialUrl))
     val page = mutablePage.asStateFlow()
+    val generation: Long get() = pageEpoch.get()
     private var view: WebView? = null
     private var domScanRunning = false
 
