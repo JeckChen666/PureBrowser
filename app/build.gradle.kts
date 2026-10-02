@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.jeckchen666.purebrowser"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.1.1"
+        versionCode = 7
+        versionName = "0.1.2-rc.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -62,6 +62,9 @@ dependencies {
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)
+
+  implementation("androidx.media3:media3-extractor:1.11.1")
+  implementation("androidx.media3:media3-muxer:1.11.1")
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)

@@ -1,0 +1,8 @@
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-INDEPENDENT-SEGMENTS
+# Two aliases of the same synthetic rendition, not a genuine ABR ladder.
+#EXT-X-STREAM-INF:BANDWIDTH=600000,RESOLUTION=320x180,FRAME-RATE=24.000,CODECS="avc1.64000c,mp4a.40.2",NAME="alias-one"
+video.m3u8?variant=one&sig=fixture%2Bv012
+#EXT-X-STREAM-INF:BANDWIDTH=600000,RESOLUTION=320x180,FRAME-RATE=24.000,CODECS="avc1.64000c,mp4a.40.2",NAME="alias-two"
+video.m3u8?variant=two&sig=fixture%2Bv012

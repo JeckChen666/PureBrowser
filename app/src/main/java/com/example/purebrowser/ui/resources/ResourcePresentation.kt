@@ -8,7 +8,7 @@ import java.net.URI
 import java.util.Locale
 
 /** Presentation only: no requests, probing, or changes to the original candidate URL. */
-internal fun MediaCandidate.canTryDownload(): Boolean = kind in setOf(MediaKind.FILE,MediaKind.UNKNOWN) && runCatching {
+internal fun MediaCandidate.canTryDownload(): Boolean = kind in setOf(MediaKind.FILE,MediaKind.UNKNOWN,MediaKind.HLS) && runCatching {
     val uri = URI(url)
     uri.scheme?.lowercase(Locale.ROOT) in setOf("http", "https") &&
         !uri.host.isNullOrBlank() && uri.rawUserInfo == null && uri.port in -1..65535
@@ -18,7 +18,7 @@ internal fun MediaCandidate.unsupportedExplanation(): String = when {
     url.startsWith("blob:", ignoreCase = true) || kind == MediaKind.LOCAL ->
         "这是播放器在当前页面中创建的本地媒体地址，不是独立文件直链。请播放视频后，再查看是否发现底层视频直链。"
     kind == MediaKind.HLS ->
-        "这是 HLS 播放清单，不是完整视频文件。目前不支持下载分片并合并；保存清单也不会得到完整视频。"
+        "这是 HLS 播放清单。可显式解析未加密的固定点播 MPEG-TS（H.264 / AAC），选择受支持档位并准备后保存为 MP4；不支持直播、DRM、独立音轨或 fMP4。"
     kind == MediaKind.DASH ->
         "这是 DASH 播放清单，音频和视频可能分开传输。目前不支持分片下载与音视频合并。"
     kind == MediaKind.FILE ->

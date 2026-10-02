@@ -129,7 +129,7 @@ class ControlledTransferTest {
         repo.store.file.writeText(v2)
         val state=repo.store.load();assertNull(state.records.single().sourceUrl);assertNull(state.records.single().wifiOnly)
         assertEquals(TransferType.SYSTEM,state.records.single().transfer)
-        assertTrue(repo.store.file.readText().contains("\"schemaVersion\":3"))
+        assertTrue(repo.store.file.readText().contains("\"schemaVersion\":${DownloadStore.SCHEMA_VERSION}"))
         assertTrue(repo.store.file.parentFile!!.listFiles()!!.any { it.name.startsWith("download-v2-") && it.readText()==v2 })
     }
     @Test fun futureSchemaRemainsReadOnlyAndUnchanged()=test { repo ->

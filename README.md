@@ -1,6 +1,6 @@
 # PureBrowser
 
-以网页视频发现与授权保存为核心的纯本地 Android 浏览器。**当前 v0.1.1，正式签名的小范围 Pre-release**：浏览 → 发现 → 受控下载 → 视频库 → 打开/分享 → 文件管理。
+以网页视频发现与授权保存为核心的纯本地 Android 浏览器。**当前开发分支为 v0.1.2 候选；最新已发布版本仍为 v0.1.1，小范围 Pre-release**：浏览 → 发现 → 受控下载 → 视频库 → 打开/分享 → 文件管理。
 
 不提供自有云存储、云解析、云同步、账号、遥测或后端；仍可联网访问用户选择的网站。
 
@@ -11,6 +11,15 @@
 - 正式包：`io.github.jeckchen666.purebrowser`；Debug 包：`io.github.jeckchen666.purebrowser.debug`。最低 Android 8.0 / API26。
 - **v0.1.0 的 `com.example.purebrowser` 不会被覆盖，也不自动迁移其私有数据/网站登录。** 后续正式版本沿同包同签名升级。
 - [实现与验收](docs/V0.1.1-COMPLETION.md) · [后续版本路线图](docs/VERSION-ROADMAP-0.1.md)。
+
+## v0.1.2 候选新增（尚未完成正式发布门槛）
+
+- 未加密、已结束的 MPEG-TS / H.264 + 同组 AAC HLS 点播：显式解析、选择档位、下载并本地封装为独立 MP4。
+- 默认优先不超过1080p；清单和每个分片均由现有受控请求策略联网，不转发跨源网站 Cookie。
+- 每任务2片并发，临时网络错误有限重试；分片进度与封装阶段分开，不把100%分片当成已保存。
+- schema v4 备份迁移、任务私有工作目录、完整校验后公共发布、取消/进程终止对账。
+- 仅必要 Media3 extractor/muxer组件，无FFmpeg运行时、无新播放器/云服务。
+- 实绩与未满足门槛见 [候选验收](docs/V0.1.2-CANDIDATE.md)；测试站点见 [HLS fixtures](docs/HLS-FIXTURES.md)。不把候选称为已发布v0.1.2。
 
 ## v0.1.1 新增
 
@@ -41,8 +50,8 @@
 
 ## 当前未实现
 
-HLS / DASH 成品、直播、DRM、复杂跨站/分区会话和 JS Token、手动暂停/续传、完整 Service Worker / 跨域 iframe / MSE 关联、真正无痕。
-HLS / DASH / blob 只显示候选和限制，不把清单或本地 blob 当成可直接保存的视频。
+加密HLS、直播/未结束清单、fMP4/CMAF、BYTERANGE、独立音轨/字幕合并、时间轴不连续、DASH、DRM、复杂跨站/分区会话和 JS Token、手动暂停/续传、完整 Service Worker / 跨域 iframe / MSE 关联、真正无痕。
+受支持的HLS可转换为MP4；不支持的HLS、DASH和blob说明限制，不直接保存清单或blob冒充视频。
 历史 DownloadManager 任务只对账与管理；新任务不交给系统下载器。正式版仅 HTTPS，Debug 仅指定回环测试地址例外。
 
 ## 构建与测试

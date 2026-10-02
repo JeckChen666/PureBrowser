@@ -37,6 +37,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.download.DownloadItem
+import com.example.purebrowser.download.DownloadProtocol
+import com.example.purebrowser.download.TaskStatus
 import com.example.purebrowser.download.FileAvailability
 import com.example.purebrowser.download.FormatCheck
 import com.example.purebrowser.download.SystemTaskRead
@@ -150,7 +152,8 @@ fun DownloadsScreen(
                 DownloadAction.CANCEL -> "取消此下载任务，并清理它的临时文件；已传输的数据不会保留用于续传。保留已取消记录，之后可单独移除。不会取消其他任务。"
                 DownloadAction.FORGET -> "只从本应用的下载管理和视频库移除这条记录。不会删除设备文件，也不会取消系统任务；如文件仍存在，可在系统文件管理器中查找。本应用不会自动重新导入它。"
                 DownloadAction.DELETE -> "这会实际删除设备上此任务保存的文件，不只是隐藏列表记录。删除成功后才移除本应用的相关记录；删除失败或未获授权会保留记录。此操作无法撤销。"
-                DownloadAction.RETRY, DownloadAction.RETRY_PUBLIC -> "重新下载会创建新的受控任务，不是暂停后续传。旧任务记录和已有文件会保留，并关联到新记录。原链接可能过期或需要登录；不会补算签名；适用会话会重新读取，不沿用保存的凭据，建议先返回来源网页重新发现资源。"
+                DownloadAction.RETRY, DownloadAction.RETRY_PUBLIC -> "重新下载会创建新的受控任务，不是暂停后续传。旧任务记录和已有文件会保留，并关联到新记录。原链接可能过期或需要登录；不会补算签名；适用会话会重新读取，不沿用保存的凭据，建议先返回来源网页重新发现资源。" +
+                    if (actionItem.protocol == DownloadProtocol.HLS) " HLS 会重新解析原来所选档位；档位消失或不再支持时会明确失败，请返回来源重新选择，不会自动更换画质。" else ""
             },
             confirmLabel = when (action) {
                 DownloadAction.CANCEL -> "取消下载并清理临时文件"
@@ -210,10 +213,13 @@ private fun DownloadTaskCard(
             if (item.systemRead == SystemTaskRead.PRESENT && !item.cancelled) {
                 Text(item.byteSummary(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("download-bytes-${item.id}"))
             }
+            if (item.protocol == DownloadProtocol.HLS && item.taskStatus == TaskStatus.RUNNING && item.isActiveTask()) {
+                Text(item.segmentSummary(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("download-segments-${item.id}"))
+            }
             if (group == DownloadUiGroup.ACTIVE) {
                 val fraction = item.progressFraction()
                 val progressModifier = Modifier.fillMaxWidth().testTag("download-progress-${item.id}").semantics {
-                    stateDescription = if (fraction == null) "传输进度未确认，不显示百分比" else "已传输 ${(fraction * 100).toInt()}%"
+                    stateDescription = item.progressDescription()
                 }
                 if (fraction == null) LinearProgressIndicator(modifier = progressModifier)
                 else LinearProgressIndicator(progress = { fraction }, modifier = progressModifier)

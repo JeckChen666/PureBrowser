@@ -16,14 +16,28 @@ class DownloadRuntime private constructor(private val app:Context) {
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
     private val running=ConcurrentHashMap<TaskId,Pair<TransferCancellation,Job>>()
     private val transfer=ControlledTransfer(repository,UrlConnectionTransport(),WebsiteAccessContext())
+    private val hlsTransfer=com.example.purebrowser.download.hls.HlsTransfer(repository,UrlConnectionTransport(),WebsiteAccessContext())
+    private val deferredWake=mutableSetOf<TaskId>()
     private var recovered=false
-    init { repository.stopTransfer={ id -> running[id]?.let { (token,job)->token.cancel();job.cancel() } } }
+    init { repository.transferInFlight={ id -> running[id]?.second?.isCompleted==false };repository.stopTransfer={ id -> running[id]?.let { (token,job)->token.cancel();job.cancel() } } }
     @Synchronized fun recover() {
         if(recovered)return
         recovered=true
-        repository.records().filter { it.transfer==TransferType.CONTROLLED && it.taskStatus in setOf(TaskStatus.RUNNING,TaskStatus.VERIFYING,TaskStatus.PUBLISHING) }.forEach { r ->
-            runCatching { repository.files?.cleanupPending(r);repository.files?.removeStage(r.recordId) }
-            repository.change(r.recordId) { it.copy(taskStatus=TaskStatus.INTERRUPTED,failure=FailureKind.INTERRUPTED) }
+        repository.records().filter { it.transfer==TransferType.CONTROLLED }.forEach { r ->
+            if(r.taskStatus in setOf(TaskStatus.RUNNING,TaskStatus.MUXING,TaskStatus.VERIFYING,TaskStatus.PUBLISHING)) {
+                repository.change(r.recordId) { old -> if(old.taskStatus==r.taskStatus)old.copy(taskStatus=TaskStatus.INTERRUPTED,failure=FailureKind.INTERRUPTED) else old }
+            }
+            if(r.taskStatus==TaskStatus.SUCCEEDED)runCatching {
+                // Completion may precede process death: clean only private copies, never the asset.
+                repository.files?.removeStage(r.recordId);repository.files?.hlsWorkspace?.delete(r.recordId)
+            }
+            // Reconcile even cancelled/failed tasks whose process died before finally.
+            if(r.taskStatus!=TaskStatus.SUCCEEDED)runCatching {
+                repository.files?.cleanupPending(r);repository.files?.removeStage(r.recordId)
+                if(r.taskStatus==TaskStatus.WAITING_WIFI || r.taskStatus==TaskStatus.QUEUED)repository.files?.hlsWorkspace?.cleanSegments(r.recordId)
+                else repository.files?.hlsWorkspace?.delete(r.recordId)
+                repository.change(r.recordId) { it.copy(pendingUri=null) }
+            }
         }
     }
     fun wifiAvailable():Boolean {
@@ -47,24 +61,46 @@ class DownloadRuntime private constructor(private val app:Context) {
         running.entries.toList().forEach { (id,value) ->
             val r=repository.record(id)
             if(r==null || r.taskStatus !in DownloadRepository.activeStatuses) { value.first.cancel();value.second.cancel() }
-            else if(r.wifiOnly==true && !wifiAvailable()) {
-                repository.change(id) { it.copy(taskStatus=TaskStatus.WAITING_WIFI) };value.first.cancel();value.second.cancel()
+            else if(r.taskStatus==TaskStatus.RUNNING && r.wifiOnly==true && !wifiAvailable()) {
+                var waiting=false
+                repository.change(id) { old ->if(old.taskStatus==TaskStatus.RUNNING) { waiting=true;old.copy(taskStatus=TaskStatus.WAITING_WIFI) } else old }
+                if(waiting) { value.first.cancel();value.second.cancel() }
             }
         }
         running.entries.removeIf { it.value.second.isCompleted }
+        applyDeferredWake()
         val queue=repository.records().filter { it.transfer==TransferType.CONTROLLED && it.taskStatus==TaskStatus.QUEUED }.reversed()
         for(r in queue) {
-            if(r.wifiOnly==true && !wifiAvailable()) { repository.change(r.recordId) { it.copy(taskStatus=TaskStatus.WAITING_WIFI) };continue }
+            if(running.containsKey(r.recordId))continue
+            if(r.wifiOnly==true && !wifiAvailable()) { repository.change(r.recordId) { old ->if(old.taskStatus==TaskStatus.QUEUED)old.copy(taskStatus=TaskStatus.WAITING_WIFI) else old };continue }
             if(running.size>=2)break
             val token=TransferCancellation()
-            repository.change(r.recordId) { it.copy(taskStatus=TaskStatus.RUNNING,failure=null) }
-            val job=scope.launch(start=CoroutineStart.LAZY) { transfer.run(r.recordId,token) }
-            running[r.recordId]=token to job;job.start()
+            var claimed=false
+            repository.change(r.recordId) { old ->if(old.taskStatus==TaskStatus.QUEUED) { claimed=true;old.copy(taskStatus=TaskStatus.RUNNING,failure=null,safeFailure=null) } else old }
+            if(!claimed)continue
+            val job=scope.launch(start=CoroutineStart.LAZY) { if(r.protocol==DownloadProtocol.HLS)hlsTransfer.run(r.recordId,token) else transfer.run(r.recordId,token) }
+            running[r.recordId]=token to job
+            if(repository.record(r.recordId)?.taskStatus==TaskStatus.RUNNING)job.start() else { token.cancel();job.cancel() }
         }
         return running.isNotEmpty() || repository.records().any { it.transfer==TransferType.CONTROLLED && it.taskStatus==TaskStatus.QUEUED }
     }
-    fun wakeWaiting() { repository.records().filter { it.transfer==TransferType.CONTROLLED && it.taskStatus==TaskStatus.WAITING_WIFI && (it.wifiOnly!=true || wifiAvailable()) }.forEach { repository.change(it.recordId) { old ->if(old.taskStatus==TaskStatus.WAITING_WIFI)old.copy(taskStatus=TaskStatus.QUEUED) else old } } }
+    /** Preserve only the wake intent authorized by an explicit foreground service start. */
+    @Synchronized fun wakeWaiting() {
+        repository.records().filter { it.transfer==TransferType.CONTROLLED && it.taskStatus==TaskStatus.WAITING_WIFI &&
+            (it.wifiOnly!=true || wifiAvailable()) }.forEach { deferredWake.add(it.recordId) }
+        applyDeferredWake()
+    }
+    private fun applyDeferredWake() {
+        for(id in deferredWake.toList()) {
+            val r=repository.record(id)
+            if(r==null || r.taskStatus!=TaskStatus.WAITING_WIFI || (r.wifiOnly==true && !wifiAvailable())) { deferredWake.remove(id);continue }
+            if(running[id]?.second?.isCompleted==false)continue
+            repository.change(id) { old ->if(old.taskStatus==TaskStatus.WAITING_WIFI)old.copy(taskStatus=TaskStatus.QUEUED) else old }
+            deferredWake.remove(id)
+        }
+    }
     @Synchronized fun interruptAll() {
+        deferredWake.clear()
         running.forEach { (id,pair) -> repository.change(id) { if(it.taskStatus in DownloadRepository.activeStatuses)it.copy(taskStatus=TaskStatus.INTERRUPTED,failure=FailureKind.INTERRUPTED) else it };pair.first.cancel();pair.second.cancel() }
     }
     fun limit() {

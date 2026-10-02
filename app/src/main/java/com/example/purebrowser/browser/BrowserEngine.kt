@@ -33,6 +33,8 @@ class BrowserEngine(
     private var view: WebView? = null
     private var domScanRunning = false
     private var scanToken = 0L
+    private var documentTimeOrigin:Double?=null
+    private var sameDocumentUpdate=false
     private var navigationStartedMs=0L
     private var scanningActive = false
     private val handler = Handler(Looper.getMainLooper())
@@ -70,6 +72,7 @@ class BrowserEngine(
         }
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String?, favicon: Bitmap?) {
+                sameDocumentUpdate=false
                 navigationStartedMs=System.currentTimeMillis()
                 pageEpoch.set(sniffer.beginPage())
                 publish(BrowserPage(url = url ?: "about:blank", progress = 0))
@@ -132,7 +135,7 @@ class BrowserEngine(
     private fun updateNavigation() {
         view?.let {
             val nextUrl = it.url ?: "about:blank"
-            if (nextUrl != mutablePage.value.url) { navigationStartedMs=System.currentTimeMillis();pageEpoch.set(sniffer.beginPage()) }
+            if (nextUrl != mutablePage.value.url) { sameDocumentUpdate=true;navigationStartedMs=System.currentTimeMillis();pageEpoch.set(sniffer.beginPage()) }
             publish(mutablePage.value.copy(url = nextUrl, canGoBack = it.canGoBack(), canGoForward = it.canGoForward())) }
     }
 
@@ -150,9 +153,17 @@ class BrowserEngine(
             runCatching {
                 val decoded = JSONArray("[$result]").getString(0)
                 val data = JSONArray(decoded)
+                val timeOrigin=data.optJSONObject(0)?.optDouble("documentTimeOrigin",Double.NaN)
+                if(timeOrigin!=null && timeOrigin.isFinite() && timeOrigin>0 && timeOrigin!=documentTimeOrigin) {
+                    val newDocument=documentTimeOrigin!=null || !sameDocumentUpdate
+                    documentTimeOrigin=timeOrigin
+                    // History-cache entries belong to their restored document; SPA changes still use the floor.
+                    if(newDocument && navigationStartedMs!=0L) { sameDocumentUpdate=false;navigationStartedMs=0;handler.post { if(epoch==pageEpoch.get() && current===view)scanMedia() } }
+                }
                 val playingUrls=mutableSetOf<String>()
-                for (i in 0 until minOf(data.length(), 250)) {
+                for (i in 0 until minOf(data.length(), 251)) {
                     val item = data.getJSONObject(i)
+                    if(item.has("documentTimeOrigin"))continue
                     if(item.optBoolean("video") && item.optBoolean("playing"))playingUrls+=item.optString("url").substringBefore('#')
                     sniffer.observe(epoch, item.optString("url"), if (item.optBoolean("video")) Evidence.DOM else Evidence.TIMING,
                         item.optString("mime").takeIf { it.isNotBlank() }, videoElement = item.optBoolean("video"),
@@ -182,7 +193,7 @@ class BrowserEngine(
         val MEDIA_SCAN = """
             (function() {
               try {
-                var out = [], frames = 0, videos = 0, timing = 0, origin = location.origin, budget = 0;
+                var out = [{documentTimeOrigin:performance.timeOrigin}], frames = 0, videos = 0, timing = 0, origin = location.origin, budget = 0;
                 function add(item) { var cost=JSON.stringify(item).length;if(budget+cost>90000)return;budget+=cost;out.push(item); }
                 function walk(w, depth) {
                   if (w.location.origin !== origin) return;

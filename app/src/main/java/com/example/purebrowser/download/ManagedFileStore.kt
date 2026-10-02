@@ -16,6 +16,7 @@ import java.security.MessageDigest
 
 /** All public outputs are minted here; never accepts webpage file paths. */
 class ManagedFileStore(private val app: Context) {
+    val hlsWorkspace=com.example.purebrowser.download.hls.HlsWorkspace(File(app.filesDir,"hls"))
     private val stages=File(app.filesDir,"transfers").apply { mkdirs() }
     fun stage(id:TaskId):File {
         require(Regex("[a-zA-Z0-9-]{1,100}").matches(id))
@@ -35,6 +36,34 @@ class ManagedFileStore(private val app: Context) {
             val format=extractor.getTrackFormat(i)
             val duration=if(format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION)/1000 else null
             MediaInspection(FormatCheck.PASSED,mime,duration)
+        } catch(_:Exception) { MediaInspection(FormatCheck.UNCONFIRMED) } finally { extractor.release() }
+    }
+    /** HLS requires both tracks, reliable duration and readable beginning/middle/end samples. */
+    fun inspectHls(file:File,expectedDurationUs:Long):MediaInspection {
+        val base=inspect(file)
+        if(base.format!=FormatCheck.PASSED || base.mimeType!="video/mp4")return MediaInspection(FormatCheck.INVALID)
+        val extractor=MediaExtractor()
+        return try {
+            extractor.setDataSource(file.path)
+            val tracks=(0 until extractor.trackCount).map { it to extractor.getTrackFormat(it) }
+            if(tracks.size!=2 || tracks.count { it.second.getString(MediaFormat.KEY_MIME)=="video/avc" }!=1 ||
+                tracks.count { it.second.getString(MediaFormat.KEY_MIME)=="audio/mp4a-latm" }!=1)return MediaInspection(FormatCheck.INVALID)
+            val tolerance=maxOf(2_000_000L,minOf(5_000_000L,expectedDurationUs/1000))
+            val duration=tracks.maxOf { (_,format)->if(format.containsKey(MediaFormat.KEY_DURATION))format.getLong(MediaFormat.KEY_DURATION) else -1L }
+            if(duration<=0 || kotlin.math.abs(duration-expectedDurationUs)>tolerance)return MediaInspection(FormatCheck.INVALID)
+            tracks.forEach { (index,format)->
+                extractor.selectTrack(index)
+                val ownDuration=if(format.containsKey(MediaFormat.KEY_DURATION))format.getLong(MediaFormat.KEY_DURATION) else -1L
+                if(ownDuration<=0 || kotlin.math.abs(ownDuration-expectedDurationUs)>tolerance)return MediaInspection(FormatCheck.INVALID)
+                val buffer=java.nio.ByteBuffer.allocate(1024*1024)
+                for(point in listOf(0L,duration/2,(duration-1_000_000L).coerceAtLeast(0))) {
+                    extractor.seekTo(point,MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+                    if(extractor.sampleTime<0 || extractor.readSampleData(buffer,0)<=0)return MediaInspection(FormatCheck.INVALID)
+                    buffer.clear()
+                }
+                extractor.unselectTrack(index)
+            }
+            MediaInspection(FormatCheck.PASSED,"video/mp4",duration/1000)
         } catch(_:Exception) { MediaInspection(FormatCheck.UNCONFIRMED) } finally { extractor.release() }
     }
     private fun legacyFile(name:String):File {

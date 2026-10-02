@@ -15,6 +15,7 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -44,31 +45,33 @@ class ResourceUiTest {
     val compose = createComposeRule()
 
     @Test(timeout = 30_000)
-    fun fileIsSelectable_otherProtocolsExpandWithoutFakeDownloadButtons() {
+    fun fileAndHlsAreSelectable_otherProtocolsExpandWithoutFakeDownloadButtons() {
         val file = fileCandidate()
+        val hls = MediaCandidate("https://media.example/playlist.m3u8?token=hls-secret", MediaKind.HLS, setOf(Evidence.REQUEST))
+        assertTrue(hls.canTryDownload())
         val others = listOf(
-            MediaCandidate("https://media.example/playlist.m3u8?token=hls-secret", MediaKind.HLS, setOf(Evidence.REQUEST)),
             MediaCandidate("https://media.example/manifest.mpd?token=dash-secret", MediaKind.DASH, setOf(Evidence.REQUEST)),
             MediaCandidate("blob:https://page.example/local-id", MediaKind.LOCAL, setOf(Evidence.DOM), mimeType = "video/mp4"),
         )
         val explanations = listOf(
-            "这是 HLS 播放清单，不是完整视频文件。目前不支持下载分片并合并；保存清单也不会得到完整视频。",
             "这是 DASH 播放清单，音频和视频可能分开传输。目前不支持分片下载与音视频合并。",
             "这是播放器在当前页面中创建的本地媒体地址，不是独立文件直链。请播放视频后，再查看是否发现底层视频直链。",
         )
         val selected = mutableListOf<MediaCandidate>()
         compose.setContent {
             PureBrowserTheme {
-                ResourceSheet(listOf(file) + others, onDismiss = {}, onSelect = { selected.add(it) }, onSource = {})
+                ResourceSheet(listOf(file, hls) + others, onDismiss = {}, onSelect = { selected.add(it) }, onSource = {})
             }
         }
 
-        compose.onNodeWithText("1 个可尝试的直链 · 3 个其他媒体资源").assertExists()
+        compose.onNodeWithText("1 个可尝试的直链 · 1 个 HLS 清单 · 2 个其他媒体资源").assertExists()
         scrollSheetTo(file.displayName)
         cardFor(file).assert(hasAnyDescendant(hasText("尝试下载") and hasClickAction()))
+        scrollSheetTo(hls.displayName)
+        cardFor(hls).assert(hasAnyDescendant(hasText("尝试下载") and hasClickAction()))
         others.forEach { compose.onAllNodesWithText(it.displayName).assertCountEquals(0) }
 
-        clickSheetText("其他媒体资源（3） · 展开")
+        clickSheetText("其他媒体资源（2） · 展开")
         others.zip(explanations).forEach { (candidate, explanation) ->
             scrollSheetTo(candidate.displayName)
             compose.onNodeWithText(candidate.displayName).assertIsDisplayed()
@@ -83,9 +86,11 @@ class ResourceUiTest {
         }
         compose.runOnIdle { assertTrue("Expansion must not select/download anything", selected.isEmpty()) }
 
-        clickSheetText("其他媒体资源（3） · 收起")
+        clickSheetText("其他媒体资源（2） · 收起")
         others.forEach { compose.onAllNodesWithText(it.displayName).assertCountEquals(0) }
-        clickSheetText("尝试下载")
+        scrollSheetTo(file.displayName)
+        compose.onNode(hasText("尝试下载") and hasClickAction() and
+            hasAnyAncestor(hasTestTag("resource-card-${file.displayName}"))).performScrollTo().performClick()
         compose.runOnIdle { assertEquals(listOf(file), selected) }
     }
 
@@ -145,7 +150,7 @@ class ResourceUiTest {
             }
         }
 
-        compose.onNodeWithText("2 个可尝试的直链 · 1 个其他媒体资源").assertExists()
+        compose.onNodeWithText("2 个可尝试的直链 · 1 个 HLS 清单 · 0 个其他媒体资源").assertExists()
         // Start at the top and select the first real action, not a named candidate's action.
         // This checks visible order instead of reimplementing the production sort in the test.
         scrollSheetTo("尝试下载")
@@ -154,7 +159,8 @@ class ResourceUiTest {
         compose.runOnIdle { assertEquals(listOf(domFile), selected) }
         scrollSheetTo(requestFile.displayName)
         compose.onNodeWithText(requestFile.displayName).assertIsDisplayed()
-        compose.onAllNodesWithText(domManifest.displayName).assertCountEquals(0)
+        scrollSheetTo(domManifest.displayName)
+        cardFor(domManifest).assert(hasAnyDescendant(hasText("尝试下载") and hasClickAction()))
     }
 
     @Test(timeout = 30_000)

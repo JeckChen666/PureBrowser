@@ -6,8 +6,9 @@ import java.net.URI
 import java.util.UUID
 
 typealias TaskId = String
+enum class DownloadProtocol { DIRECT, HLS }
 enum class TransferType { SYSTEM, CONTROLLED }
-enum class TaskStatus { QUEUED, WAITING_WIFI, RUNNING, VERIFYING, PUBLISHING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
+enum class TaskStatus { QUEUED, WAITING_WIFI, RUNNING, MUXING, VERIFYING, PUBLISHING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
 enum class FailureKind { NETWORK, HTTP_REJECTED, ACCESS_CONDITION, NOT_VIDEO, UNSUPPORTED, STORAGE, SYSTEM_LIMIT, INTERRUPTED }
 enum class AssetLocation { SYSTEM_DOWNLOAD, MEDIASTORE_DOWNLOAD, LEGACY_PUBLIC_FILE }
 
@@ -51,6 +52,15 @@ data class DownloadRecord(
     val frameUrl: String? = null,
     val reliableSource: Boolean = false,
     val pendingUri: String? = null,
+    val protocol: DownloadProtocol = DownloadProtocol.DIRECT,
+    val hlsPlaylistUrl: String? = null,
+    val hlsWidth: Int? = null,
+    val hlsHeight: Int? = null,
+    val hlsBandwidth: Long? = null,
+    val plannedDurationUs: Long? = null,
+    val segmentCount: Int? = null,
+    val completedSegments: Int = 0,
+    val safeFailure: String? = null,
 ) {
     override fun toString() = "DownloadRecord(recordId=$recordId, systemId=$systemId)"
 }
@@ -106,6 +116,9 @@ data class DownloadItem(
     val taskStatus: TaskStatus? = null,
     val failure: FailureKind? = null,
     val useAccessContext: Boolean = false,
+    val protocol: DownloadProtocol = DownloadProtocol.DIRECT,
+    val segmentCount: Int? = null,
+    val completedSegments: Int = 0,
 ) {
     override fun toString() = "DownloadItem(id=$id, status=$status, systemRead=$systemRead, format=$format, availability=$availability)"
 }
@@ -155,6 +168,15 @@ object DownloadRules {
         data.records.forEach { r ->
             require(r.recordId.isNotBlank() && r.recordId.length <= 100 && (r.systemId == null || r.systemId > 0))
             require((r.transfer == TransferType.SYSTEM) == (r.systemId != null))
+            require(r.protocol != DownloadProtocol.HLS || r.transfer == TransferType.CONTROLLED)
+            require(r.hlsPlaylistUrl == null || (r.hlsPlaylistUrl.length<=8192 && BrowserAddress.isWebUrl(r.hlsPlaylistUrl)))
+            require(r.segmentCount == null || r.segmentCount in 1..10000)
+            require(r.completedSegments >= 0 && r.completedSegments <= (r.segmentCount ?: 0))
+            require(r.plannedDurationUs == null || r.plannedDurationUs in 1..86_400_000_000L)
+            require(r.hlsWidth == null || r.hlsWidth in 1..16384)
+            require(r.hlsHeight == null || r.hlsHeight in 1..16384)
+            require(r.hlsBandwidth == null || r.hlsBandwidth > 0)
+            require(r.safeFailure == null || (r.safeFailure.length <= 180 && !r.safeFailure.contains("://") && r.safeFailure.none { it.isISOControl() }))
             require(r.received >= 0 && (r.expected == null || r.expected >= 0))
             require(r.frameUrl == null || BrowserAddress.isWebUrl(r.frameUrl))
             require(r.pendingUri == null || (r.transfer == TransferType.CONTROLLED && URI(r.pendingUri).scheme == "content"))

@@ -26,14 +26,18 @@ class ProductWorkflowTest {
         // Work in newly created owned tabs, not whatever pages existed before the test.
         val aUrl="$base/?product=${UUID.randomUUID()}"
         onMain{model.newTab(aUrl)}
-        compose.waitUntil(15000){model.sniffer?.candidates?.value?.size==4}
+        fun hasExpectedSources():Boolean {
+            val urls=model.sniffer?.candidates?.value?.map { java.net.URI(it.url).path }?.toSet().orEmpty()
+            return setOf("/sample.mp4","/sample.m3u8","/manifest.mpd").all { it in urls }
+        }
+        compose.waitUntil(15000){hasExpectedSources()}
         val a=model.data.value.selectedId
         menu("添加书签")
         compose.waitUntil(5000){model.data.value.bookmarks.any{it.url==aUrl}}
         onMain{model.navigate("$base/second.html")}
-        compose.waitUntil(15000){model.engine?.page?.value?.canGoBack==true && model.sniffer?.candidates?.value?.singleOrNull()?.displayName=="second.mp4"}
+        compose.waitUntil(15000){model.engine?.page?.value?.canGoBack==true && model.sniffer?.candidates?.value?.singleOrNull()?.url=="$base/second.mp4"}
         onMain{model.newTab("$base/second.html")}
-        compose.waitUntil(15000){model.sniffer?.candidates?.value?.singleOrNull()?.displayName=="second.mp4"}
+        compose.waitUntil(15000){model.sniffer?.candidates?.value?.singleOrNull()?.url=="$base/second.mp4"}
         val b=model.data.value.selectedId
         onMain{model.newTab()}
         val c=model.data.value.selectedId
@@ -44,7 +48,7 @@ class ProductWorkflowTest {
         compose.onNodeWithTag("tab-$a").performClick()
         compose.waitUntil(5000){model.data.value.selectedId==a && model.engine?.page?.value?.canGoBack==true}
         compose.onNodeWithTag("backButton").performClick()
-        compose.waitUntil(15000){model.sniffer?.candidates?.value?.size==4 && model.engine?.page?.value?.url==aUrl}
+        compose.waitUntil(15000){hasExpectedSources() && model.engine?.page?.value?.url==aUrl}
         compose.onNodeWithTag("tabsButton").performClick()
         compose.onNodeWithTag("tabList").performScrollToNode(hasTestTag("tab-$b"))
         compose.onNodeWithTag("close-$b").performClick()

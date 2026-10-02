@@ -45,6 +45,8 @@ object RequestPolicy {
         val next=runCatching { URI(current).resolve(location).toString() }.getOrElse {
             throw TransferFailure(FailureKind.HTTP_REJECTED,"服务器返回了无效跳转") }
         validateUrl(next,allowLocalHttp)
+        if(URI(current).scheme.equals("https",true) && !URI(next).scheme.equals("https",true))
+            throw TransferFailure(FailureKind.UNSUPPORTED,"不允许 HTTPS 降级跳转")
         if(credentialUsed && !sameOrigin(current,next)) throw TransferFailure(FailureKind.ACCESS_CONDITION,"网站会话下载遇到跨源跳转，请返回来源重新发现")
         return next
     }

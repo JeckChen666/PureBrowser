@@ -10,6 +10,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.purebrowser.browser.*
 import com.example.purebrowser.data.browser.*
 import com.example.purebrowser.download.DownloadDraft
+import com.example.purebrowser.download.UrlConnectionTransport
+import com.example.purebrowser.download.WebsiteAccessContext
+import com.example.purebrowser.download.hls.HlsDownloadPlan
+import com.example.purebrowser.download.hls.HlsResolver
 import com.example.purebrowser.download.VideoAsset
 import com.example.purebrowser.library.VideoLibraryRepository
 import com.example.purebrowser.download.DownloadItem
@@ -42,6 +46,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val sniffer get() = tabs.active.value?.sniffer
     private val runtime = com.example.purebrowser.download.DownloadRuntime.get(application)
     val repository = runtime.repository
+    // Same request/access policy as queue execution; constructing this never fetches a playlist.
+    val hlsResolver by lazy { HlsResolver(UrlConnectionTransport(), WebsiteAccessContext(), repository.allowLocalHttp) }
     private val mutableDownloads = MutableStateFlow<List<DownloadItem>>(emptyList())
     val downloads = mutableDownloads.asStateFlow()
     private val library = VideoLibraryRepository(repository)
@@ -136,7 +142,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             finally { preferenceWrite = false }
         }
     }
-    fun download(draft: DownloadDraft, wifiOnly: Boolean, fileName: String? = null) {
+    fun download(draft: DownloadDraft, wifiOnly: Boolean, fileName: String? = null, plan: HlsDownloadPlan? = null) {
         if(mutableSubmitting.value) return
         if (draft.sourceTabId != tabs.active.value?.recordId || draft.sourceGeneration != engine?.generation ||
             sniffer?.candidates?.value?.none { it.url == draft.candidate.url } != false) {
@@ -145,7 +151,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         mutableSubmitting.value = true
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { repository.enqueue(draft, wifiOnly, fileName) }
+                withContext(Dispatchers.IO) { repository.enqueue(draft, wifiOnly, fileName, hlsPlan = plan) }
                 runtime.kick()
                 notify("任务已加入下载中心")
             } catch (_: Exception) { notify("无法创建任务，请检查存储权限和资源地址") }

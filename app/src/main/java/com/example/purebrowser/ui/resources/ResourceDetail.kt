@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.MediaCandidate
+import com.example.purebrowser.media.MediaKind
 import java.net.URI
 
 @Composable
@@ -34,8 +35,11 @@ internal fun ResourceDetail(
         Text(readableResourceName(candidate.displayName), style = MaterialTheme.typography.titleMedium)
         ResourceMetadata(candidate)
         Text(
-            if (candidate.canTryDownload()) "这是可尝试的文件直链，不代表已验证为完整视频。仅支持公开资源，不转发登录凭据。"
-            else candidate.unsupportedExplanation(),
+            when {
+                candidate.kind == MediaKind.HLS -> candidate.unsupportedExplanation()
+                candidate.canTryDownload() -> "这是可尝试的文件直链，不代表已验证为完整视频。仅支持公开资源，不转发登录凭据。"
+                else -> candidate.unsupportedExplanation()
+            },
             style = MaterialTheme.typography.bodyMedium,
         )
         HorizontalDivider()

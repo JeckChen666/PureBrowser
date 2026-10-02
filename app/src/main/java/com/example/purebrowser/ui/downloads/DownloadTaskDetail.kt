@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.download.DownloadItem
+import com.example.purebrowser.download.DownloadProtocol
 import com.example.purebrowser.download.SystemTaskRead
 
 @Composable
@@ -50,7 +51,12 @@ internal fun DownloadTaskDetail(item: DownloadItem, onDismiss: () -> Unit) {
                         else -> "未知"
                     }
                 })
+                if (item.protocol == DownloadProtocol.HLS) DetailField("下载协议", "HLS 固定点播 · 分片下载后封装 MP4")
                 DetailField("传输大小", item.byteSummary())
+                if (item.protocol == DownloadProtocol.HLS) {
+                    DetailField("分片进度", item.segmentSummary())
+                    DetailField("成品保存", "分片完成不等于 MP4 已保存；封装、校验和写入公共目录均完成后才进入视频库。总大小未知，不显示整体百分比。")
+                }
                 DetailField("格式初检", localFormatLabel(item.format))
                 DetailField("文件可用性", localAvailabilityLabel(item.availability))
                 DetailField("状态说明", localSafeLabel(item.detail).ifBlank { "暂无补充说明" })
@@ -68,7 +74,9 @@ internal fun DownloadTaskDetail(item: DownloadItem, onDismiss: () -> Unit) {
                     "此任务由旧记录 $it 重新下载创建；不是续传，旧记录保留"
                 } ?: "未记录关联的旧任务")
                 DetailField("重新下载规则", if (item.canRetry) {
-                    "仅在需处理状态可操作。创建新系统任务，不续传，不删除旧记录或旧文件。链接仍可能过期或要求登录。"
+                    if (item.protocol == DownloadProtocol.HLS) {
+                        "仅在需处理状态可操作。另建任务并重新解析所选档位，不续传，不删除旧记录或旧文件。档位仍存在时无需重新选择；档位消失或不再支持会明确失败，请返回来源网页，不会自动改选其他画质。"
+                    } else "仅在需处理状态可操作。创建新系统任务，不续传，不删除旧记录或旧文件。链接仍可能过期或要求登录。"
                 } else {
                     "当前没有可用的重新下载操作，不会伪造媒体地址。请从来源网页重新发现资源。"
                 })

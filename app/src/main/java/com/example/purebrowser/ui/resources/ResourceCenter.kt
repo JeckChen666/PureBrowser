@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.MediaCandidate
+import com.example.purebrowser.media.MediaKind
 import com.example.purebrowser.ui.components.EmptyContent
 
 /** Selection and source navigation belong to the caller; this sheet never starts a download. */
@@ -52,7 +53,8 @@ fun ResourceSheet(
     // Re-evaluate incoming observations without retaining a stale list. Equal URLs may carry
     // different evidence, so do not use URL alone as a lazy-list key or silently deduplicate.
     val downloadable = candidates.filter { it.canTryDownload() }
-        .sortedWith(compareByDescending<MediaCandidate> { it.playing && Evidence.DOM in it.sources }.thenByDescending { Evidence.DOM in it.sources })
+        .sortedWith(compareByDescending<MediaCandidate> { it.playing && Evidence.DOM in it.sources }
+            .thenByDescending { Evidence.DOM in it.sources }.thenBy { it.kind == MediaKind.HLS })
     val unsupported = candidates.filterNot { it.canTryDownload() }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<MediaCandidate?>(null) }
@@ -74,12 +76,18 @@ fun ResourceSheet(
                         modifier = Modifier.semantics { heading() },
                     )
                     Text(
-                        "${downloadable.size} 个可尝试的直链 · ${unsupported.size} 个其他媒体资源",
+                        if (downloadable.none { it.kind == MediaKind.HLS }) {
+                            "${downloadable.size} 个可尝试的直链 · ${unsupported.size} 个其他媒体资源"
+                        } else {
+                            "${downloadable.count { it.kind != MediaKind.HLS }} 个可尝试的直链 · ${downloadable.count { it.kind == MediaKind.HLS }} 个 HLS 清单 · ${unsupported.size} 个其他媒体资源"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "优先展示视频元素关联的直链。仅支持公开文件；登录态、签名过期或文件格式可能导致下载失败。",
+                        if (downloadable.any { it.kind == MediaKind.HLS }) {
+                            "优先展示视频元素关联的直链与 HLS。HLS 只在确认面板显式解析和准备，不自动请求；访问条件、签名过期或不支持的格式可能导致失败。"
+                        } else "优先展示视频元素关联的直链。仅支持公开文件；登录态、签名过期或文件格式可能导致下载失败。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -214,6 +222,9 @@ internal fun ResourceMetadata(candidate: MediaCandidate) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        Text(candidate.reliableSizeLabel(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            if (candidate.kind == MediaKind.HLS) "成品大小未知（清单响应不代表视频大小）" else candidate.reliableSizeLabel(),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

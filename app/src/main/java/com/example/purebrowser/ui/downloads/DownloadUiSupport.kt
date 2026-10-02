@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.download.DownloadItem
+import com.example.purebrowser.download.DownloadProtocol
+import com.example.purebrowser.download.TaskStatus
 import com.example.purebrowser.download.FileAvailability
 import com.example.purebrowser.download.FormatCheck
 import com.example.purebrowser.download.SystemTaskRead
@@ -30,7 +32,10 @@ internal enum class DownloadUiGroup(val title: String, val tag: String) {
 
 /** A stale transport integer must never turn an unread system task into an active one. */
 internal fun DownloadItem.isActiveTask(): Boolean =
-    systemRead == SystemTaskRead.PRESENT && !cancelled && status in setOf(
+    systemRead == SystemTaskRead.PRESENT && !cancelled && if (protocol == DownloadProtocol.HLS && taskStatus != null) {
+        taskStatus in setOf(TaskStatus.QUEUED, TaskStatus.WAITING_WIFI, TaskStatus.RUNNING,
+            TaskStatus.MUXING, TaskStatus.VERIFYING, TaskStatus.PUBLISHING)
+    } else status in setOf(
         DownloadManager.STATUS_PENDING, DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PAUSED,
     )
 
@@ -46,6 +51,10 @@ internal fun DownloadItem.stateLabel(): String = when {
     cancelled -> "已取消下载"
     systemRead == SystemTaskRead.UNAVAILABLE -> "系统任务暂时无法读取"
     systemRead == SystemTaskRead.MISSING -> "系统任务不存在 · 记录已保留"
+    taskStatus == TaskStatus.MUXING -> "正在封装 MP4 · 尚未保存"
+    protocol == DownloadProtocol.HLS && taskStatus == TaskStatus.RUNNING -> "正在下载分片"
+    protocol == DownloadProtocol.HLS && taskStatus == TaskStatus.VERIFYING -> "正在校验 MP4 · 尚未保存"
+    protocol == DownloadProtocol.HLS && taskStatus == TaskStatus.PUBLISHING -> "正在保存至公共下载目录"
     status == DownloadManager.STATUS_PENDING -> "排队中"
     status == DownloadManager.STATUS_RUNNING -> "正在传输"
     status == DownloadManager.STATUS_PAUSED -> "等待网络 / 系统重试"
@@ -67,7 +76,9 @@ internal fun DownloadItem.stateLabel(): String = when {
 /** Missing is a confirmed absent task; UNAVAILABLE and unknown transport integers are not ended. */
 internal fun DownloadItem.hasConfirmedEndedTask(): Boolean = systemRead != SystemTaskRead.UNAVAILABLE && (
     cancelled || systemRead == SystemTaskRead.MISSING ||
-        (systemRead == SystemTaskRead.PRESENT && status in setOf(
+        (systemRead == SystemTaskRead.PRESENT && if (protocol == DownloadProtocol.HLS && taskStatus != null) {
+            taskStatus in setOf(TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.INTERRUPTED)
+        } else status in setOf(
             DownloadManager.STATUS_SUCCESSFUL, DownloadManager.STATUS_FAILED,
         ))
     )
@@ -80,13 +91,37 @@ internal fun DownloadItem.canForgetRecord(): Boolean = hasConfirmedEndedTask()
 internal fun DownloadItem.canDeleteSavedFile(): Boolean = hasConfirmedEndedTask() && !cancelled &&
     availability in setOf(FileAvailability.AVAILABLE, FileAvailability.UNREADABLE)
 
-/** No percentage is fabricated for unknown totals or inconsistent byte counters. */
-internal fun DownloadItem.progressFraction(): Float? =
-    if (total > 0 && bytes in 0..total) (bytes.toDouble() / total).toFloat() else null
+/** HLS fractions describe only completed segments during transfer, never overall/save progress. */
+internal fun DownloadItem.progressFraction(): Float? = when {
+    taskStatus == TaskStatus.MUXING -> null
+    protocol == DownloadProtocol.HLS -> {
+        val count = segmentCount
+        if (taskStatus == TaskStatus.RUNNING && isActiveTask() && count != null && count > 0 && completedSegments in 0..count)
+            completedSegments.toFloat() / count else null
+    }
+    total > 0 && bytes in 0..total -> (bytes.toDouble() / total).toFloat()
+    else -> null
+}
+
+internal fun DownloadItem.segmentSummary(): String {
+    val count = segmentCount
+    val reliable = count != null && count > 0 && completedSegments in 0..count
+    return if (reliable) "已下载分片 $completedSegments / $count（不是整体保存进度）"
+    else "分片进度未确认，不推测总分片数"
+}
+
+internal fun DownloadItem.progressDescription(): String = when {
+    taskStatus == TaskStatus.MUXING -> "正在封装 MP4，尚未保存成品，不显示整体百分比"
+    protocol == DownloadProtocol.HLS && taskStatus == TaskStatus.RUNNING -> segmentSummary()
+    protocol == DownloadProtocol.HLS -> "${stateLabel()}，整体进度未知"
+    else -> progressFraction()?.let { "已传输 ${(it * 100).toInt()}%" } ?: "传输进度未确认，不显示百分比"
+}
 
 internal fun DownloadItem.byteSummary(): String {
     val transferred = if (bytes >= 0) "${localFileSize(bytes)} 已传输" else "已传输大小未知"
     return when {
+        // A playlist's Content-Length/declared bitrate must never become the MP4's size or percent.
+        protocol == DownloadProtocol.HLS -> "$transferred · 总大小未知"
         total <= 0 -> "$transferred · 总大小未知"
         progressFraction() == null -> "$transferred · 总大小 ${localFileSize(total)} · 进度待确认"
         else -> "$transferred / ${localFileSize(total)} · ${(progressFraction()!! * 100).toInt()}%"

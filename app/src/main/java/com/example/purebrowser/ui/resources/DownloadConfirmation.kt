@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.download.DownloadDraft
 import com.example.purebrowser.download.DownloadRules
+import com.example.purebrowser.media.MediaKind
 
 /**
  * Pure confirmation UI. The caller keeps the selected draft for enqueue/permission handling
@@ -58,7 +59,7 @@ fun DownloadConfirmation(
     var submitted by remember(frozen) { mutableStateOf(false) }
     val safeName = DownloadRules.safeFileName(fileName)
     val canConfirm = fileName.isNotBlank() && fileName.trim() !in setOf(".", "..") &&
-        frozen.candidate.canTryDownload() && !submitted
+        frozen.candidate.canTryDownload() && frozen.candidate.kind != MediaKind.HLS && !submitted
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -116,7 +117,7 @@ fun DownloadConfirmation(
             }
         }
         Text(
-            if (frozen.candidate.canTryDownload()) "仅支持 MP4/WebM 文件直链；会话不写入任务记录，不跨源转发。签名可能过期，格式初检不等于完整播放保证。"
+            if (frozen.candidate.canTryDownload() && frozen.candidate.kind != MediaKind.HLS) "仅支持 MP4/WebM 文件直链；会话不写入任务记录，不跨源转发。签名可能过期，格式初检不等于完整播放保证。"
             else frozen.candidate.unsupportedExplanation(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

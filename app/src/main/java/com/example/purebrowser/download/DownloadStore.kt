@@ -51,10 +51,11 @@ class DownloadStore(
                 result.toString("UTF-8")
             }
             val data = decode(raw)
-            if (JSONObject(raw).getInt("schemaVersion") == 2) {
+            if (JSONObject(raw).getInt("schemaVersion") in setOf(2, 3)) {
                 val bytes = raw.toByteArray(Charsets.UTF_8)
                 val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).take(8).joinToString("") { "%02x".format(it) }
-                val backup = File(file.parentFile, "download-v2-$hash.json")
+                val oldVersion = JSONObject(raw).getInt("schemaVersion")
+                val backup = File(file.parentFile, "download-v$oldVersion-$hash.json")
                 val protected = runCatching {
                     if (!backup.exists()) backup.writeBytes(bytes)
                     check(backup.readBytes().contentEquals(bytes))
@@ -102,10 +103,15 @@ class DownloadStore(
     companion object {
         // Covers read-modify-save across repository instances, not only atomic file writes.
         internal val transactionLock = Any()
-        const val SCHEMA_VERSION = 3
+        const val SCHEMA_VERSION = 4
 
         private fun JSONObject.nullableString(key: String): String? = if (isNull(key)) null else getString(key)
-        private fun JSONObject.nullableLong(key: String): Long? = if (isNull(key)) null else getLong(key)
+        private fun JSONObject.exactLong(key:String):Long {
+            val n=get(key);require(n is Number)
+            return java.math.BigDecimal(n.toString()).longValueExact()
+        }
+        private fun JSONObject.exactInt(key:String):Int = Math.toIntExact(exactLong(key))
+        private fun JSONObject.nullableLong(key: String): Long? = if (isNull(key)) null else exactLong(key)
         private fun JSONObject.nullableBoolean(key: String): Boolean? = if (isNull(key)) null else getBoolean(key)
         private fun JSONObject.field(key: String, value: Any?): JSONObject = put(key, value ?: JSONObject.NULL)
 
@@ -119,7 +125,11 @@ class DownloadStore(
                     .field("sourceTabId", r.sourceTabId).field("sourceGeneration", r.sourceGeneration).put("cancelled", r.cancelled)
                     .put("transfer",r.transfer.name).put("taskStatus",r.taskStatus.name).put("received",r.received)
                     .field("expected",r.expected).field("failure",r.failure?.name).put("useAccessContext",r.useAccessContext)
-                    .field("frameUrl",r.frameUrl).put("reliableSource",r.reliableSource).field("pendingUri",r.pendingUri))
+                    .field("frameUrl",r.frameUrl).put("reliableSource",r.reliableSource).field("pendingUri",r.pendingUri)
+                    .put("protocol",r.protocol.name).field("hlsPlaylistUrl",r.hlsPlaylistUrl)
+                    .field("hlsWidth",r.hlsWidth).field("hlsHeight",r.hlsHeight).field("hlsBandwidth",r.hlsBandwidth)
+                    .field("plannedDurationUs",r.plannedDurationUs).field("segmentCount",r.segmentCount)
+                    .put("completedSegments",r.completedSegments).field("safeFailure",r.safeFailure))
             } }
             val assets = JSONArray().apply { data.assets.forEach { a ->
                 put(JSONObject().put("recordId", a.recordId).field("systemId", a.systemId).put("uri", a.uri)
@@ -135,7 +145,8 @@ class DownloadStore(
         fun decode(raw: String): DownloadData {
             require(raw.toByteArray(Charsets.UTF_8).size <= DownloadRules.MAX_FILE_BYTES)
             val obj = JSONObject(raw)
-            if (obj.getInt("schemaVersion") !in setOf(2, SCHEMA_VERSION)) throw FutureSchemaException()
+            val version=runCatching { obj.exactLong("schemaVersion") }.getOrElse { throw FutureSchemaException() }
+            if(version !in setOf(2L,3L,SCHEMA_VERSION.toLong()))throw FutureSchemaException()
             require(obj.getBoolean("legacyMigrationDone"))
             val records = obj.getJSONArray("records").let { a ->
                 require(a.length() <= DownloadRules.MAX_RECORDS)
@@ -148,12 +159,21 @@ class DownloadStore(
                         mimeType = r.nullableString("mimeType"), retryOf = r.nullableString("retryOf"),
                         sourceTabId = r.nullableString("sourceTabId"), sourceGeneration = r.nullableLong("sourceGeneration"), cancelled = r.optBoolean("cancelled", false),
                         transfer=TransferType.valueOf(r.optString("transfer","SYSTEM")),
-                        taskStatus=TaskStatus.valueOf(r.optString("taskStatus","QUEUED")),received=r.optLong("received",0),
+                        taskStatus=TaskStatus.valueOf(r.optString("taskStatus","QUEUED")),received=if(r.has("received"))r.exactLong("received") else 0,
                         expected=if(r.has("expected")) r.nullableLong("expected") else null,
                         failure=if(r.has("failure")) r.nullableString("failure")?.let(FailureKind::valueOf) else null,
                         useAccessContext=r.optBoolean("useAccessContext",false),reliableSource=r.optBoolean("reliableSource",false),
                         frameUrl=if(r.has("frameUrl")) r.nullableString("frameUrl") else null,
-                        pendingUri=if(r.has("pendingUri")) r.nullableString("pendingUri") else null)
+                        pendingUri=if(r.has("pendingUri")) r.nullableString("pendingUri") else null,
+                        protocol=DownloadProtocol.valueOf(r.optString("protocol","DIRECT")),
+                        hlsPlaylistUrl=if(r.has("hlsPlaylistUrl"))r.nullableString("hlsPlaylistUrl") else null,
+                        hlsWidth=if(r.has("hlsWidth") && !r.isNull("hlsWidth"))r.exactInt("hlsWidth") else null,
+                        hlsHeight=if(r.has("hlsHeight") && !r.isNull("hlsHeight"))r.exactInt("hlsHeight") else null,
+                        hlsBandwidth=if(r.has("hlsBandwidth"))r.nullableLong("hlsBandwidth") else null,
+                        plannedDurationUs=if(r.has("plannedDurationUs"))r.nullableLong("plannedDurationUs") else null,
+                        segmentCount=if(r.has("segmentCount") && !r.isNull("segmentCount"))r.exactInt("segmentCount") else null,
+                        completedSegments=if(r.has("completedSegments"))r.exactInt("completedSegments") else 0,
+                        safeFailure=if(r.has("safeFailure"))r.nullableString("safeFailure") else null)
                 } }
             }
             val assets = obj.getJSONArray("assets").let { a ->

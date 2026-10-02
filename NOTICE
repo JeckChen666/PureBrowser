@@ -26,3 +26,9 @@ research, not copied or bundled. Their licenses are not replaced by this license
 
 This notice records attribution and does not imply endorsement by upstream
 projects, Google, Android, or Gradle.
+
+PureBrowser v0.1.2 uses AndroidX Media3 extractor/muxer 1.11.1 (including
+common/container/decoder dependencies) under Apache-2.0.
+Upstream: https://github.com/androidx/media/tree/1.11.1
+Media networking remains PureBrowser-owned. FFmpeg is used only by a developer
+fixture generator; no FFmpeg binaries or runtime libraries are bundled.

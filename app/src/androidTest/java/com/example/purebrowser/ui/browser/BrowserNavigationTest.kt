@@ -19,7 +19,8 @@ class BrowserNavigationTest {
         compose.activityRule.scenario.onActivity { model = ViewModelProvider(it)[BrowserViewModel::class.java] }
         compose.waitUntil(10000) { model.ready.value }
         compose.activityRule.scenario.onActivity { model.newTab() }
-        compose.onNodeWithTag("addressInput").performClick().performTextReplacement("http://127.0.0.1:8766/")
+        val unreachable = java.net.ServerSocket(0).use { "http://127.0.0.1:${it.localPort}/" }
+        compose.onNodeWithTag("addressInput").performClick().performTextReplacement(unreachable)
         compose.onNodeWithTag("addressInput").performImeAction()
         compose.waitUntil(15000) { model.engine?.page?.value?.error != null }
         compose.waitUntil(10000) {
