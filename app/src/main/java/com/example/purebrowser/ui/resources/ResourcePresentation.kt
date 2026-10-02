@@ -60,3 +60,7 @@ internal fun suggestedFileName(candidate: MediaCandidate): String {
 internal fun readableResourceName(value: String): String = value
     .filterNot { it.isISOControl() || it in '\u202a'..'\u202e' || it in '\u2066'..'\u2069' }
     .ifBlank { "未命名媒体" }
+
+/** Stable action identity, independent of duplicate page titles, without putting signed URLs in tags. */
+internal fun resourceSaveTag(url:String):String = "resource-save-"+java.security.MessageDigest.getInstance("SHA-256")
+    .digest(url.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it.toInt() and 255) }

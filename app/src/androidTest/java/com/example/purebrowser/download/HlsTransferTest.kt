@@ -130,6 +130,32 @@ class HlsTransferTest {
             assertFalse(repo.files!!.stage(id).exists())
             assertFalse(File(app.filesDir, "hls/$id").exists())
             assertNull(repo.record(id)!!.pendingUri)
+            assertFalse(repo.record(id)!!.resumeAvailable)
+        }
+        fun assertRecoverableWorkspace(id: TaskId) {
+            val record = repo.record(id)!!
+            val workspace = repo.files!!.hlsWorkspace
+            val directory = File(app.filesDir, "hls/$id")
+            assertTrue(File(directory, "plan.json").isFile)
+            assertTrue(File(directory, "checkpoint.json").isFile)
+            val plan = workspace.load(id)
+            assertEquals(record.mediaUrl, plan.entryUrl)
+            assertEquals(record.hlsPlaylistUrl, plan.variant?.url ?: plan.playlistUrl)
+            assertEquals(record.segmentCount, plan.media.segments.size)
+            assertEquals(record.plannedDurationUs, plan.media.durationUs)
+            assertTrue(record.resumeAvailable)
+            assertTrue(workspace.hasResumeData(id)) // Valid known plan also permits resuming from zero.
+            assertEquals(if (record.failure == FailureKind.STORAGE) PauseReason.STORAGE else PauseReason.NETWORK, record.pauseReason)
+            assertFalse(repo.files!!.stage(id).exists())
+            assertNull(record.pendingUri)
+            assertTrue("All partial writers must join and leave no .part files", directory.listFiles().orEmpty().none { it.name.endsWith(".part") })
+            val complete = workspace.verifiedPieces(id, plan)
+            val segments = directory.listFiles().orEmpty().filter { Regex("segment-[0-9]+\\.ts").matches(it.name) }
+            assertEquals(complete.keys.map { "segment-$it.ts" }.toSet(), segments.map { it.name }.toSet())
+            assertEquals(complete.size, record.completedSegments)
+            val cacheBytes = complete.values.sumOf { it.size }
+            assertEquals(cacheBytes, record.received)
+            assertEquals(cacheBytes, workspace.cacheBytes(id))
         }
         fun assertFailed(id: TaskId, kind: FailureKind) {
             val record = repo.record(id)!!
@@ -140,7 +166,8 @@ class HlsTransferTest {
             assertTrue(repo.stateSnapshot().assets.none { it.recordId == id })
             assertNull(repo.fileUri(id))
             assertFalse(repo.snapshot().single { it.id == id }.verified)
-            assertClean(id)
+            if (kind in setOf(FailureKind.NETWORK, FailureKind.STORAGE)) assertRecoverableWorkspace(id)
+            else assertClean(id)
         }
         fun assertSucceeded(id: TaskId) {
             val record = repo.record(id)!!
@@ -350,7 +377,8 @@ class HlsTransferTest {
         val id = h.enqueue(fake)
         gatedTransfer(h, fake, id, gate) { cancel ->
             assertTrue(h.repo.record(id)!!.received > 0)
-            assertTrue(h.repo.files!!.hlsWorkspace.segment(id, 0).length() > 0)
+            assertTrue(h.repo.files!!.hlsWorkspace.segmentPart(id, 0).length() > 0)
+            assertFalse("A partial response must not be marked COMPLETE", h.repo.files!!.hlsWorkspace.segment(id, 0).exists())
             h.repo.cancel(id)
             cancel.cancel()
         }

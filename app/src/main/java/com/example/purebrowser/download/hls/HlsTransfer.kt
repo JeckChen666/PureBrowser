@@ -16,15 +16,34 @@ class HlsTransfer(private val repository:DownloadRepository,transport:HttpTransp
         var published:VideoAsset?=null
         try {
             val initial=repository.record(id) ?: return
-            if(initial.protocol!=DownloadProtocol.HLS || initial.taskStatus !in DownloadRepository.activeStatuses || initial.taskStatus==TaskStatus.WAITING_WIFI)return
-            val plan=try { workspace.load(id) } catch(_:Exception) { throw TransferFailure(FailureKind.INTERRUPTED,"清单计划无法读取，请重新下载") }
-            if(plan.entryUrl!=initial.mediaUrl || plan.media.segments.size!=initial.segmentCount || plan.media.durationUs!=initial.plannedDurationUs)
+            if(initial.protocol!=DownloadProtocol.HLS || !canUpdate(initial))return
+            var plan=try { workspace.load(id) } catch(_:Exception) { throw TransferFailure(FailureKind.INTERRUPTED,"清单计划无法读取，请重新下载") }
+            if(plan.entryUrl!=initial.mediaUrl || plan.media.segments.size!=initial.segmentCount || plan.media.durationUs!=initial.plannedDurationUs ||
+                (plan.variant?.url ?: plan.playlistUrl)!=initial.hlsPlaylistUrl ||
+                plan.variant?.width!=initial.hlsWidth || plan.variant?.height!=initial.hlsHeight || plan.variant?.bandwidth!=initial.hlsBandwidth)
                 throw TransferFailure(FailureKind.UNSUPPORTED,"清单计划与任务不一致")
             plan.media.segments.forEach { RequestPolicy.validateUrl(it.url,repository.allowLocalHttp) }
-            workspace.cleanSegments(id);workspace.requireSpace(id)
-            update(id) { it.copy(taskStatus=TaskStatus.RUNNING,received=0,expected=null,completedSegments=0,safeFailure=null) }
-            downloadSegments(id,initial,plan,cancel,workspace)
-            cancel.check();update(id) { it.copy(taskStatus=TaskStatus.MUXING) }
+            val started=workspace.started(id,plan)
+            val sequenceKnown=workspace.mediaSequenceKnown(id)
+            workspace.discardIncomplete(id)
+            val reusable=workspace.verifiedPieces(id,plan)
+            // Fresh plans already carry the parser-verified ended playlist/sequence. A one-use
+            // signed manifest must not be fetched a second time just to start its pieces.
+            if(started || reusable.isNotEmpty() || !sequenceKnown)
+                plan=validatePlaylist(initial,plan,cancel,workspace,id,sequenceKnown)
+            cancel.check();workspace.requireSpace(id)
+            if(!workspace.start(id,plan,plan.media.mediaSequence))throw SourceChanged()
+            val pieces=workspace.verifiedPieces(id,plan)
+            cancel.check()
+            update(id) { it.copy(taskStatus=TaskStatus.RUNNING,received=pieces.values.sumOf { p->p.size },expected=null,
+                completedSegments=pieces.size,safeFailure=null,failure=null,pauseReason=null,resumeAvailable=true) }
+                ?: throw CancellationException()
+            downloadSegments(id,initial,plan,cancel,workspace,pieces)
+            // Check again before muxing: no altered local plan or COMPLETE piece is trusted.
+            if(workspace.verifiedPieces(id,plan).size!=plan.media.segments.size)
+                throw TransferFailure(FailureKind.INTERRUPTED,"本机分片校验失败，请重新下载")
+            cancel.check();update(id) { it.copy(taskStatus=TaskStatus.MUXING) } ?: throw CancellationException()
+            files.removeStage(id) // A partial MP4 is never resumed, even when all TS pieces are COMPLETE.
             val stage=files.stage(id)
             val lengths=plan.media.segments.sumOf { workspace.segment(id,it.index).length() }
             workspace.requireSpace(id,lengths+lengths/20)
@@ -36,7 +55,7 @@ class HlsTransfer(private val repository:DownloadRepository,transport:HttpTransp
             catch(e:CancellationException) { throw e }
             catch(_:IOException) { throw TransferFailure(FailureKind.STORAGE,"MP4 封装文件无法完整写入") }
             catch(_:Exception) { throw TransferFailure(FailureKind.NOT_VIDEO,"音视频封装失败，未保存成品") }
-            cancel.check();update(id) { it.copy(taskStatus=TaskStatus.VERIFYING) }
+            cancel.check();update(id) { it.copy(taskStatus=TaskStatus.VERIFYING) } ?: throw CancellationException()
             val inspection=files.inspectHls(stage,plan.media.durationUs)
             if(inspection.format!=FormatCheck.PASSED)throw TransferFailure(FailureKind.NOT_VIDEO,"MP4 轨道、时长或采样未通过校验")
             workspace.requireSpace(id,stage.length())
@@ -51,52 +70,105 @@ class HlsTransfer(private val repository:DownloadRepository,transport:HttpTransp
             published=null
         } catch(_:CancellationException) {
             // User/coordinator has already committed the appropriate terminal/waiting state.
+        } catch(_:SourceChanged) {
+            update(id) { it.copy(taskStatus=TaskStatus.FAILED,failure=FailureKind.UNSUPPORTED,pauseReason=PauseReason.SOURCE_CHANGED,
+                resumeAvailable=false,safeFailure="来源清单已变化，请返回来源重新发现") }
         } catch(e:TransferFailure) {
-            update(id) { it.copy(taskStatus=TaskStatus.FAILED,failure=e.kind,safeFailure=e.safeMessage.take(180)) }
+            update(id) { it.copy(taskStatus=TaskStatus.FAILED,failure=e.kind,
+                pauseReason=if(e.kind==FailureKind.STORAGE)PauseReason.STORAGE else if(e.kind==FailureKind.NETWORK)PauseReason.NETWORK else null,
+                safeFailure=e.safeMessage.take(180)) }
         } catch(_:IOException) {
-            update(id) { it.copy(taskStatus=TaskStatus.FAILED,failure=FailureKind.NETWORK,safeFailure="网络中断，请重新下载或返回来源") }
+            update(id) { it.copy(taskStatus=TaskStatus.FAILED,failure=FailureKind.NETWORK,pauseReason=PauseReason.NETWORK,safeFailure="网络中断，可继续下载或返回来源") }
         } catch(_:Exception) {
-            update(id) { it.copy(taskStatus=TaskStatus.FAILED,failure=FailureKind.STORAGE,safeFailure="任务无法完成，请检查本机存储") }
+            update(id) { it.copy(taskStatus=TaskStatus.FAILED,failure=FailureKind.STORAGE,pauseReason=PauseReason.STORAGE,safeFailure="任务无法完成，请检查本机存储") }
         } finally {
             published?.let { runCatching { files.delete(it) } }
+            // The scheduler has joined every writer before reaching this cleanup.
             val record=repository.record(id)
-            runCatching {
-                if(record!=null && record.taskStatus!=TaskStatus.SUCCEEDED)files.cleanupPending(record)
-                files.removeStage(id)
-                if(record?.taskStatus==TaskStatus.WAITING_WIFI)workspace.cleanSegments(id) else workspace.delete(id)
-            }.onSuccess {
-                if(record!=null)runCatching { repository.change(id) { old ->
-                    if(old.taskStatus in DownloadRepository.activeStatuses && old.taskStatus!=TaskStatus.WAITING_WIFI)
-                        old.copy(taskStatus=TaskStatus.INTERRUPTED,failure=FailureKind.INTERRUPTED,pendingUri=null)
-                    else old.copy(pendingUri=null)
-                } }
+            runCatching { if(record!=null && record.taskStatus!=TaskStatus.SUCCEEDED)files.cleanupPending(record) }
+            runCatching { files.removeStage(id) }
+            val preserve=record!=null && (record.taskStatus in preservedStates ||
+                record.taskStatus==TaskStatus.FAILED && record.failure in setOf(FailureKind.NETWORK,FailureKind.STORAGE) ||
+                canUpdate(record))
+            val retained=if(preserve)runCatching {
+                workspace.discardIncomplete(id)
+                val plan=workspace.load(id)
+                val pieces=workspace.verifiedPieces(id,plan)
+                Triple(!workspace.started(id,plan) || workspace.mediaSequenceKnown(id),pieces.size,pieces.values.sumOf { it.size })
+            }.getOrDefault(Triple(false,0,0L)) else Triple(false,0,0L)
+            val (resumable,completeCount,cache)=retained
+            if(!preserve)runCatching { workspace.delete(id) }
+            if(record!=null)runCatching { repository.change(id) { old ->
+                if(old.taskStatus==TaskStatus.CANCELLED || old.taskStatus==TaskStatus.SUCCEEDED)
+                    old.copy(pendingUri=null,resumeAvailable=false)
+                else if(canUpdate(old))
+                    old.copy(taskStatus=TaskStatus.INTERRUPTED,failure=FailureKind.INTERRUPTED,pauseReason=PauseReason.RECOVERY,
+                        pendingUri=null,resumeAvailable=resumable,received=cache,completedSegments=completeCount)
+                else old.copy(pendingUri=null,resumeAvailable=resumable,received=cache,completedSegments=completeCount)
+            } }
+            // A concurrent cancellation committed during cleanup must still remove this workspace.
+            if(repository.record(id)?.taskStatus==TaskStatus.CANCELLED)runCatching { workspace.delete(id) }
+        }
+    }
+    private class SourceChanged : Exception("来源清单已变化")
+    private fun validatePlaylist(record:DownloadRecord,plan:HlsDownloadPlan,cancel:TransferCancellation,workspace:HlsWorkspace,id:TaskId,sequenceKnown:Boolean):HlsDownloadPlan {
+        // Resume re-GETs only the selected frozen media URL; never re-resolve a master/variant.
+        val (text,finalUrl)=playlistText(record,plan.playlistUrl,cancel)
+        val media=try { HlsPlaylistParser.parse(text,finalUrl) as? HlsPlaylist.Media }
+            catch(_:HlsParseException) { throw SourceChanged() }
+        if(media==null || finalUrl!=plan.playlistUrl)throw SourceChanged()
+        val expected=if(sequenceKnown)plan.media else HlsPlaylist.Media(plan.media.segments,
+            plan.media.durationUs,plan.media.targetDurationUs,media.mediaSequence)
+        if(media!=expected)throw SourceChanged()
+        return if(sequenceKnown)plan else workspace.bindLegacySequence(id,plan,media.mediaSequence)
+    }
+    private fun playlistText(record:DownloadRecord,url:String,cancel:TransferCancellation):Pair<String,String> {
+        var attempt=0
+        while(true) {
+            cancel.check()
+            try { return client.text(record,url,cancel) }
+            catch(e:IOException) {
+                if(e is javax.net.ssl.SSLException || attempt>=2)throw e
+                attempt++
+                val end=System.currentTimeMillis()+if(attempt==1)1000 else 3000
+                while(System.currentTimeMillis()<end) { cancel.check();Thread.sleep(100) }
             }
         }
     }
-    private fun downloadSegments(id:TaskId,record:DownloadRecord,plan:HlsDownloadPlan,cancel:TransferCancellation,workspace:HlsWorkspace) {
+
+    private fun downloadSegments(id:TaskId,record:DownloadRecord,plan:HlsDownloadPlan,cancel:TransferCancellation,workspace:HlsWorkspace,pieces:Map<Int,HlsCheckpointPiece>) {
         val pool=Executors.newFixedThreadPool(2)
         val completed=ExecutorCompletionService<Int>(pool)
         val tokens=java.util.Collections.synchronizedSet(mutableSetOf<TransferCancellation>())
-        val received=AtomicLong();val retries=AtomicInteger();val lastPublish=AtomicLong()
+        val cachedBytes=pieces.values.sumOf { it.size }
+        if(cachedBytes>8L*1024*1024*1024)throw TransferFailure(FailureKind.UNSUPPORTED,"累计传输超过 8 GiB 上限")
+        val received=AtomicLong(cachedBytes);val retries=AtomicInteger();val lastPublish=AtomicLong()
         val futures=mutableSetOf<Future<Int>>()
         cancel.bind { synchronized(tokens) { tokens.forEach { it.cancel() } } }
         fun submit(index:Int) {
             val token=TransferCancellation();tokens.add(token)
             val future=completed.submit(Callable {
                 try {
-                    val segment=plan.media.segments[index];val file=workspace.segment(id,index)
+                    val segment=plan.media.segments[index];val file=workspace.segmentPart(id,index)
                     var attempt=0
+                    var attemptBytes=0L
                     while(true) {
                         cancel.check();token.check()
                         try {
                             fetchSegment(record,segment.url,file,token,workspace,id) { bytes ->
+                                attemptBytes+=bytes
                                 val sum=received.addAndGet(bytes)
                                 if(sum>8L*1024*1024*1024)throw TransferFailure(FailureKind.UNSUPPORTED,"累计传输超过 8 GiB 上限")
                                 val now=System.currentTimeMillis();val old=lastPublish.get()
                                 if(now-old>500 && lastPublish.compareAndSet(old,now))update(id) { it.copy(received=sum) }
                             }
+                            cancel.check();token.check()
+                            try { workspace.completeSegment(id,plan,index) { cancel.check();token.check() } }
+                            catch(e:CancellationException) { throw e }
+                            catch(_:Exception) { throw TransferFailure(FailureKind.STORAGE,"分片校验记录无法保存") }
                             break
                         } catch(e:IOException) {
+                            received.addAndGet(-attemptBytes);attemptBytes=0L
                             file.delete()
                             // TLS identity failures are not transient. We never loosen certificate validation.
                             if(e is javax.net.ssl.SSLException || attempt>=2 || retries.incrementAndGet()>20)throw e
@@ -108,23 +180,30 @@ class HlsTransfer(private val repository:DownloadRepository,transport:HttpTransp
                 } finally { tokens.remove(token);token.clear() }
             });futures.add(future)
         }
-        var next=0;var done=0
+        val missing=plan.media.segments.indices.filter { it !in pieces }
+        var next=0;var done=pieces.size
         try {
-            repeat(minOf(2,plan.media.segments.size)) { submit(next++) }
+            repeat(minOf(2,missing.size)) { submit(missing[next++]) }
             while(done<plan.media.segments.size) {
                 cancel.check()
                 val future=completed.poll(250,TimeUnit.MILLISECONDS) ?: continue
                 futures.remove(future)
                 try { future.get() } catch(e:ExecutionException) { throw (e.cause as? Exception ?: IOException("分片传输失败")) }
-                done++;update(id) { it.copy(completedSegments=done,received=received.get()) }
-                if(next<plan.media.segments.size)submit(next++)
+                done++;update(id) { it.copy(completedSegments=done,received=received.get(),resumeAvailable=true) }
+                if(next<missing.size)submit(missing[next++])
             }
         } finally {
             synchronized(tokens) { tokens.forEach { it.cancel() } }
             futures.forEach { it.cancel(true) };pool.shutdownNow()
             // Do not clear/delete a directory until all writers have actually stopped.
-            while(!pool.awaitTermination(250,TimeUnit.MILLISECONDS)) { synchronized(tokens) { tokens.forEach { it.cancel() } } }
+            var interrupted=false
+            while(true) {
+                try { if(pool.awaitTermination(250,TimeUnit.MILLISECONDS))break }
+                catch(_:InterruptedException) { interrupted=true }
+                synchronized(tokens) { tokens.forEach { it.cancel() } }
+            }
             cancel.clear()
+            if(interrupted)Thread.currentThread().interrupt()
         }
     }
     private fun fetchSegment(record:DownloadRecord,url:String,file:File,cancel:TransferCancellation,workspace:HlsWorkspace,id:TaskId,onBytes:(Long)->Unit) {
@@ -143,7 +222,7 @@ class HlsTransfer(private val repository:DownloadRepository,transport:HttpTransp
                     workspace.requireSpace(id,n.toLong())
                     try { output.write(buffer,0,n) } catch(_:IOException) { throw TransferFailure(FailureKind.STORAGE,"临时分片写入失败") }
                     onBytes(n.toLong())
-                };output.fd.sync()
+                };try { output.fd.sync() } catch(_:IOException) { throw TransferFailure(FailureKind.STORAGE,"临时分片无法完整保存") }
             } }
             if(length!=null && count!=length)throw HlsTransientFailure()
             if(count<188*5 || count%188!=0L)throw TransferFailure(FailureKind.NOT_VIDEO,"分片不是完整 MPEG-TS 视频")
@@ -152,10 +231,13 @@ class HlsTransfer(private val repository:DownloadRepository,transport:HttpTransp
             }
         }
     }
+    private val writingStates=setOf(TaskStatus.QUEUED,TaskStatus.RUNNING,TaskStatus.MUXING,TaskStatus.VERIFYING,TaskStatus.PUBLISHING)
+    private val preservedStates=setOf(TaskStatus.PAUSING,TaskStatus.PAUSED,TaskStatus.WAITING_WIFI,TaskStatus.WAITING_NETWORK,TaskStatus.INTERRUPTED)
+    private fun canUpdate(record:DownloadRecord)=!record.cancelled && record.taskStatus in writingStates
     private fun update(id:TaskId,block:(DownloadRecord)->DownloadRecord):DownloadRecord? {
         var changed=false
         return repository.change(id) { old ->
-            if(old.taskStatus in DownloadRepository.activeStatuses && old.taskStatus!=TaskStatus.WAITING_WIFI) { changed=true;block(old) } else old
+            if(canUpdate(old)) { changed=true;block(old) } else old
         }?.takeIf { changed }
     }
 }

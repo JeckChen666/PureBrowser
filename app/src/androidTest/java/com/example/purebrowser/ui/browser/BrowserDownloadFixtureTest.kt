@@ -41,18 +41,19 @@ class BrowserDownloadFixtureTest {
         compose.onNodeWithTag("navigateButton").performClick()
         compose.waitUntil(20_000) {
             val candidates = model.sniffer!!.candidates.value
-            candidates.any { it.displayName == "sample.mp4" && Evidence.DOM in it.sources } &&
+            candidates.any { it.url == "$base/sample.mp4?token=demo%2Bsignature" && Evidence.DOM in it.sources } &&
                 candidates.any { it.kind == MediaKind.HLS } && candidates.any { it.kind == MediaKind.DASH }
         }
         val candidates = model.sniffer!!.candidates.value
-        assertEquals(4, candidates.size) // Real MP4, false MP4, HLS, DASH; no TS/init fragments.
-        assertEquals("$base/sample.mp4?token=demo%2Bsignature", candidates.first { it.displayName == "sample.mp4" }.url)
+        assertTrue(candidates.any { it.url=="$base/bad.mp4" })
+        assertTrue(candidates.none { java.net.URI(it.url).path?.endsWith("/chunk.ts")==true || java.net.URI(it.url).path?.endsWith("/init.mp4")==true })
+        assertEquals("$base/sample.mp4?token=demo%2Bsignature", candidates.first { it.url == "$base/sample.mp4?token=demo%2Bsignature" }.url)
         compose.onNodeWithTag("resourcesButton").performClick()
-        compose.onNodeWithText("sample.mp4").assertIsDisplayed()
-        compose.onAllNodesWithText("尝试下载").onFirst().performClick()
+        compose.onNodeWithTag("resource-card-${candidates.first { it.url == "$base/sample.mp4?token=demo%2Bsignature" }.displayName}").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag(com.example.purebrowser.ui.resources.resourceSaveTag("$base/sample.mp4?token=demo%2Bsignature")).performScrollTo().performClick()
         compose.onNodeWithText("确认下载直链").assertIsDisplayed()
         // The fixture is tiny; allow both emulator transports during this integration check.
-        compose.onNode(isToggleable()).performClick()
+        compose.onNode(isToggleable() and hasText("仅 Wi-Fi",substring=true)).performClick()
         val previousIds=model.repository.snapshot().map{it.id}.toSet()
         compose.onNodeWithText("开始下载").performClick()
         try {

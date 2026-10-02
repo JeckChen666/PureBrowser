@@ -63,7 +63,7 @@ class HlsStoreMigrationTest {
         store.file.writeBytes(bytes)
         assertEquals(expected, store.load())
         assertTrue(store.writable)
-        assertEquals(4, JSONObject(store.file.readText()).getInt("schemaVersion"))
+        assertEquals(DownloadStore.SCHEMA_VERSION, JSONObject(store.file.readText()).getInt("schemaVersion"))
         val backups = store.file.parentFile!!.listFiles()!!.filter { it.name.startsWith("download-v$version-") }
         assertEquals(1, backups.size)
         assertArrayEquals(bytes, backups.single().readBytes())
@@ -101,7 +101,7 @@ class HlsStoreMigrationTest {
         store.save(data)
         assertEquals(data, DownloadStore(store.file.parentFile!!).load())
         val json = JSONObject(store.file.readText())
-        assertEquals(4, json.getInt("schemaVersion"))
+        assertEquals(DownloadStore.SCHEMA_VERSION, json.getInt("schemaVersion"))
         val row = json.getJSONArray("records").getJSONObject(0)
         assertEquals("HLS", row.getString("protocol"))
         assertEquals(4, row.getInt("segmentCount"))
@@ -112,8 +112,8 @@ class HlsStoreMigrationTest {
         assertNull(hlsRecord().expected)
     }
 
-    @Test fun schema5IsReadOnlyAndPreservesFutureBytesAcrossReadsAndRejectedWrites() = withStore { store ->
-        val bytes = " \n{\"schemaVersion\":5,\"valuable\":\"未来私有字段\"}\n".toByteArray(Charsets.UTF_8)
+    @Test fun futureSchemaIsReadOnlyAndPreservesFutureBytesAcrossReadsAndRejectedWrites() = withStore { store ->
+        val bytes = " \n{\"schemaVersion\":99,\"valuable\":\"未来私有字段\"}\n".toByteArray(Charsets.UTF_8)
         store.file.writeBytes(bytes)
         repeat(2) {
             assertTrue(store.load().records.isEmpty())

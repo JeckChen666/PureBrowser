@@ -33,3 +33,7 @@ local.properties
 *.p12
 *.pfx
 *.key
+
+# Development-only Python fixture bytecode
+__pycache__/
+*.pyc

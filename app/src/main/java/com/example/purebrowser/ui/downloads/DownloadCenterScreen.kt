@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -31,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -38,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.download.DownloadItem
 import com.example.purebrowser.download.DownloadProtocol
+import com.example.purebrowser.download.TaskId
 import com.example.purebrowser.download.TaskStatus
 import com.example.purebrowser.download.FileAvailability
 import com.example.purebrowser.download.FormatCheck
@@ -48,7 +51,10 @@ import com.example.purebrowser.ui.components.ToolButton
 
 private enum class DownloadAction { CANCEL, FORGET, DELETE, RETRY, RETRY_PUBLIC }
 
-/** Callback-only UI: task polling, file revalidation and mutation belong to the caller. */
+/**
+ * Callback-only UI: polling, file revalidation and mutation belong to the caller.
+ * Null pause/resume callbacks leave those controls unavailable; capabilities never create fake actions.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
@@ -64,6 +70,8 @@ fun DownloadsScreen(
     onSource: (String) -> Unit,
     onLibrary: () -> Unit,
     onRetryWithoutContext: ((String) -> Unit)? = null,
+    onPause: ((TaskId) -> Unit)? = null,
+    onResume: ((TaskId) -> Unit)? = null,
 ) {
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     var actionId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -125,6 +133,10 @@ fun DownloadsScreen(
                                 onSource = { if (item.id !in busyIds && !item.sourceUrl.isNullOrBlank()) onSource(item.id) },
                                 onAction = { request(item, it) },
                                 allowPublicRetry = onRetryWithoutContext != null,
+                                pauseConnected = onPause != null,
+                                resumeConnected = onResume != null,
+                                onPause = { if (item.id !in busyIds && item.pauseAvailable()) onPause?.invoke(item.id) },
+                                onResume = { if (item.id !in busyIds && item.resumeAvailable()) onResume?.invoke(item.id) },
                             )
                         }
                     }
@@ -132,10 +144,13 @@ fun DownloadsScreen(
             }
         }
     }
-    if (detailItem != null) DownloadTaskDetail(detailItem, onDismiss = { detailId = null })
+    if (detailItem != null) DownloadTaskDetail(
+        detailItem, onDismiss = { detailId = null },
+        pauseConnected = onPause != null, resumeConnected = onResume != null,
+    )
     if (actionItem != null && action != null) {
         val permitted = actionItem.id !in busyIds && when (action) {
-            DownloadAction.CANCEL -> actionItem.isActiveTask()
+            DownloadAction.CANCEL -> actionItem.canCancelTask()
             DownloadAction.FORGET -> actionItem.canForgetRecord()
             DownloadAction.DELETE -> actionItem.canDeleteSavedFile()
             DownloadAction.RETRY, DownloadAction.RETRY_PUBLIC -> actionItem.retryAvailable()
@@ -192,8 +207,13 @@ private fun DownloadTaskCard(
     onSource: () -> Unit,
     onAction: (DownloadAction) -> Unit,
     allowPublicRetry: Boolean,
+    pauseConnected: Boolean,
+    resumeConnected: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
 ) {
     val group = item.uiGroup()
+    val pauseExplanation = item.pauseResumeExplanation(pauseConnected, resumeConnected)
     Card(
         modifier = Modifier.fillMaxWidth().testTag("download-${item.id}").semantics {
             stateDescription = item.stateLabel() + if (busy) "，正在处理" else ""
@@ -213,17 +233,27 @@ private fun DownloadTaskCard(
             if (item.systemRead == SystemTaskRead.PRESENT && !item.cancelled) {
                 Text(item.byteSummary(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("download-bytes-${item.id}"))
             }
-            if (item.protocol == DownloadProtocol.HLS && item.taskStatus == TaskStatus.RUNNING && item.isActiveTask()) {
+            if (item.taskStatus != null || item.cacheBytes > 0) {
+                Text(item.cacheSummary(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("download-cache-${item.id}"))
+            }
+            item.stoppedReason()?.let { reason ->
+                Text("停止原因 · $reason", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("download-reason-${item.id}"))
+            }
+            if (pauseExplanation != null) {
+                Text(pauseExplanation, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("download-pause-help-${item.id}"))
+            }
+            if (item.protocol == DownloadProtocol.HLS && item.taskStatus in setOf(TaskStatus.RUNNING,TaskStatus.PAUSED,TaskStatus.PAUSING,TaskStatus.WAITING_WIFI,TaskStatus.WAITING_NETWORK,TaskStatus.INTERRUPTED,TaskStatus.FAILED)) {
                 Text(item.segmentSummary(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("download-segments-${item.id}"))
             }
-            if (group == DownloadUiGroup.ACTIVE) {
+            if (item.showsLiveProgress()) {
                 val fraction = item.progressFraction()
                 val progressModifier = Modifier.fillMaxWidth().testTag("download-progress-${item.id}").semantics {
+                    contentDescription = "下载进度，${localSafeLabel(item.displayName)}"
                     stateDescription = item.progressDescription()
                 }
                 if (fraction == null) LinearProgressIndicator(modifier = progressModifier)
                 else LinearProgressIndicator(progress = { fraction }, modifier = progressModifier)
-            } else {
+            } else if (group != DownloadUiGroup.ACTIVE) {
                 Text("${localFormatLabel(item.format)} · ${localAvailabilityLabel(item.availability)}", style = MaterialTheme.typography.bodySmall)
                 if (item.availability == FileAvailability.UNREADABLE || item.format == FormatCheck.UNCONFIRMED) {
                     Text("暂时无法确认不等于文件损坏，记录和可能有价值的文件会保留。", style = MaterialTheme.typography.bodySmall)
@@ -241,30 +271,46 @@ private fun DownloadTaskCard(
                 }
             }
             if (busy) Text("正在处理…", modifier = Modifier.testTag("download-busy-${item.id}"), style = MaterialTheme.typography.labelMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (pauseConnected && item.pauseAvailable()) {
+                    TextButton(onClick = onPause, enabled = !busy, modifier = Modifier.downloadButtonModifier("pause", "暂停下载", item)) { Text("暂停下载") }
+                }
+                if (resumeConnected && item.resumeAvailable()) {
+                    TextButton(onClick = onResume, enabled = !busy, modifier = Modifier.downloadButtonModifier("resume", "继续下载", item)) { Text("继续下载") }
+                }
                 if (group == DownloadUiGroup.COMPLETED) {
-                    TextButton(onClick = onOpen, enabled = !busy, modifier = Modifier.testTag("download-open-${item.id}")) { Text("打开文件") }
-                    TextButton(onClick = onShare, enabled = !busy, modifier = Modifier.testTag("download-share-${item.id}")) { Text("分享文件") }
+                    TextButton(onClick = onOpen, enabled = !busy, modifier = Modifier.downloadButtonModifier("open", "打开文件", item)) { Text("打开文件") }
+                    TextButton(onClick = onShare, enabled = !busy, modifier = Modifier.downloadButtonModifier("share", "分享文件", item)) { Text("分享文件") }
                 }
                 if (item.retryAvailable()) {
-                    TextButton(onClick = { onAction(DownloadAction.RETRY) }, enabled = !busy, modifier = Modifier.testTag("download-retry-${item.id}")) { Text("重新下载") }
+                    TextButton(onClick = { onAction(DownloadAction.RETRY) }, enabled = !busy, modifier = Modifier.downloadButtonModifier("retry", "重新下载，创建新任务", item)) { Text("重新下载") }
                 }
                 if (allowPublicRetry && item.retryAvailable() && item.useAccessContext) {
-                    TextButton(onClick={onAction(DownloadAction.RETRY_PUBLIC)},enabled=!busy,modifier=Modifier.testTag("download-public-retry-${item.id}")) { Text("不使用网站条件重试") }
+                    TextButton(onClick={onAction(DownloadAction.RETRY_PUBLIC)},enabled=!busy,modifier=Modifier.downloadButtonModifier("public-retry", "不使用网站条件重新下载，创建新任务", item)) { Text("不使用网站条件重试") }
                 }
                 if (!item.sourceUrl.isNullOrBlank()) {
-                    TextButton(onClick = onSource, enabled = !busy, modifier = Modifier.testTag("download-source-${item.id}")) { Text("返回来源网页") }
+                    TextButton(onClick = onSource, enabled = !busy, modifier = Modifier.downloadButtonModifier("source", "返回来源网页", item)) { Text("返回来源网页") }
                 }
-                TextButton(onClick = onDetail, modifier = Modifier.testTag("download-details-${item.id}")) { Text("任务详情") }
-                if (item.isActiveTask()) {
-                    TextButton(onClick = { onAction(DownloadAction.CANCEL) }, enabled = !busy, modifier = Modifier.testTag("download-cancel-${item.id}")) { Text("取消下载") }
+                TextButton(onClick = onDetail, modifier = Modifier.downloadButtonModifier("details", "任务详情", item)) { Text("任务详情") }
+                if (item.canCancelTask()) {
+                    TextButton(onClick = { onAction(DownloadAction.CANCEL) }, enabled = !busy, modifier = Modifier.downloadButtonModifier("cancel", "取消下载并清理缓存", item)) { Text(if (item.taskStatus in setOf(TaskStatus.PAUSED, TaskStatus.WAITING_WIFI, TaskStatus.WAITING_NETWORK, TaskStatus.INTERRUPTED)) "取消下载并清理缓存" else "取消下载") }
                 } else {
-                    TextButton(onClick = { onAction(DownloadAction.FORGET) }, enabled = !busy && item.canForgetRecord(), modifier = Modifier.testTag("download-forget-${item.id}")) { Text("移除记录，保留文件") }
+                    TextButton(onClick = { onAction(DownloadAction.FORGET) }, enabled = !busy && item.canForgetRecord(), modifier = Modifier.downloadButtonModifier("forget", "移除记录，保留文件", item)) { Text("移除记录，保留文件") }
                     if (item.canDeleteSavedFile()) {
-                        TextButton(onClick = { onAction(DownloadAction.DELETE) }, enabled = !busy, modifier = Modifier.testTag("download-delete-${item.id}")) { Text("删除文件") }
+                        TextButton(onClick = { onAction(DownloadAction.DELETE) }, enabled = !busy, modifier = Modifier.downloadButtonModifier("delete", "删除设备文件", item)) { Text("删除文件") }
                     }
                 }
             }
         }
     }
 }
+
+/** Material buttons supply role/click/disabled semantics; add the task so repeated labels are clear. */
+private fun Modifier.downloadButtonModifier(action: String, label: String, item: DownloadItem): Modifier =
+    this.heightIn(min=48.dp).testTag("download-$action-${item.id}").semantics {
+        contentDescription = "$label，${localSafeLabel(item.displayName)}"
+    }

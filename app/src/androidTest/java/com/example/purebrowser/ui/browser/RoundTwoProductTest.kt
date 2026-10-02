@@ -37,7 +37,8 @@ class RoundTwoProductTest {
     private fun submit(name: String, fileName: String): DownloadItem {
         val ids = model.repository.snapshot().map { it.id }.toSet()
         compose.onNodeWithTag("resourcesButton").performClick()
-        compose.onNode(hasText("尝试下载") and hasAnyAncestor(hasTestTag("resource-card-$name"))).performScrollTo().performClick()
+        val candidate=model.sniffer!!.candidates.value.first { java.net.URI(it.url).path.endsWith("/$name") }
+        compose.onNodeWithTag(com.example.purebrowser.ui.resources.resourceSaveTag(candidate.url)).performScrollTo().performClick()
         compose.onNodeWithTag("download-file-name").performTextReplacement(fileName)
         compose.onNodeWithText("开始下载").performScrollTo().performClick()
         compose.waitUntil(60000) { model.downloads.value.any { it.id !in ids && it.verified } }
@@ -49,8 +50,10 @@ class RoundTwoProductTest {
     }
     @Test fun twoFormatsThroughUiRenameForgetDeleteAndSourceRecovery() {
         start()
-        main { model.setDefaultWifiOnly(false); model.newTab("$base/product.html") }
-        compose.waitUntil(20000) { !model.defaultWifiOnly.value && model.sniffer?.candidates?.value?.any { it.displayName=="sample.webm" && Evidence.DOM in it.sources } == true }
+        main { model.setDefaultWifiOnly(false); model.newTab() }
+        compose.onNodeWithTag("addressInput").performClick().performTextReplacement("$base/product.html")
+        compose.onNodeWithTag("navigateButton").performClick()
+        compose.waitUntil(20000) { !model.defaultWifiOnly.value && model.sniffer?.candidates?.value?.any { java.net.URI(it.url).path.endsWith("/sample.webm") && Evidence.DOM in it.sources } == true }
         val source = model.data.value.selectedId
         val mp4 = submit("sample.mp4", "r2_saved.mp4")
         val webm = submit("sample.webm", "r2_saved.webm")
@@ -108,13 +111,16 @@ class RoundTwoProductTest {
     }
     @Test fun realHtml401403UnknownSizeAndCancelRetryAreTruthful() {
         start()
-        main { model.setDefaultWifiOnly(false); model.newTab("$base/product.html") }
-        compose.waitUntil(15000) { !model.defaultWifiOnly.value && model.sniffer?.candidates?.value?.any { it.displayName=="sample.mp4" }==true }
+        main { model.setDefaultWifiOnly(false); model.newTab() }
+        compose.onNodeWithTag("addressInput").performClick().performTextReplacement("$base/product.html")
+        compose.onNodeWithTag("navigateButton").performClick()
+        compose.waitUntil(15000) { !model.defaultWifiOnly.value && model.sniffer?.candidates?.value?.any { java.net.URI(it.url).path.endsWith("/sample.mp4") }==true }
         fun enqueue(path: String): String {
             val previous=model.repository.snapshot().map { it.id }.toSet()
             val candidate=MediaCandidate("$base/$path",MediaKind.FILE,setOf(Evidence.REQUEST))
             val draft=model.downloadDraft(candidate,"PureBrowser-Fixture")
-            main { model.download(draft,false,"r2_${path.substringBefore('?')}") }
+            model.repository.enqueue(draft.copy(useAccessContext=false),false,"r2_${path.substringBefore('?')}")
+            com.example.purebrowser.download.DownloadRuntime.get(compose.activity).kick()
             compose.waitUntil(5000) { model.downloads.value.any { it.id !in previous && model.repository.record(it.id)?.mediaUrl==candidate.url } }
             return model.downloads.value.first { it.id !in previous && model.repository.record(it.id)?.mediaUrl==candidate.url }.id.also(::track)
         }
@@ -125,12 +131,12 @@ class RoundTwoProductTest {
         val fixtureIds=setOf(html,denied,expired,unknown)
         fun describe(items:List<DownloadItem>)=items.filter { it.id in fixtureIds }.map { "${it.id}:${it.status}/${it.systemRead}/${it.format}/${it.availability}:${it.detail}" }
         try {
-            compose.waitUntil(30000) { model.downloads.value.any { it.id==html && it.format==FormatCheck.INVALID } && model.downloads.value.any { it.id==unknown && it.verified } && listOf(denied,expired).all { id -> model.downloads.value.any { it.id==id && it.status==DownloadManager.STATUS_FAILED } } }
+            compose.waitUntil(30000) { model.downloads.value.any { it.id==html && it.failure==com.example.purebrowser.download.FailureKind.NOT_VIDEO } && model.downloads.value.any { it.id==unknown && it.verified } && listOf(denied,expired).all { id -> model.downloads.value.any { it.id==id && it.status==DownloadManager.STATUS_FAILED } } }
         } catch(error:Throwable) {
             val fresh=runCatching { describe(model.repository.snapshot()).toString() }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" }
             throw AssertionError("Fixture IDs=$fixtureIds; flow=${describe(model.downloads.value)}; fresh=$fresh; message=${model.message.value}",error)
         }
-        assertEquals(FormatCheck.INVALID,model.downloads.value.first { it.id==html }.format)
+        assertEquals(FailureKind.NOT_VIDEO,model.downloads.value.first { it.id==html }.failure)
         assertTrue(model.videoLibrary.value.none { it.recordId==html })
         assertTrue(listOf(denied,expired).all { id -> model.downloads.value.first { it.id==id }.let { !it.verified && it.canRetry && it.sourceUrl != null } })
         assertTrue(model.downloads.value.first { it.id==unknown }.verified)

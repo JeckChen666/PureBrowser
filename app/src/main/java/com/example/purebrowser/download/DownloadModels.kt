@@ -8,7 +8,8 @@ import java.util.UUID
 typealias TaskId = String
 enum class DownloadProtocol { DIRECT, HLS }
 enum class TransferType { SYSTEM, CONTROLLED }
-enum class TaskStatus { QUEUED, WAITING_WIFI, RUNNING, MUXING, VERIFYING, PUBLISHING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
+enum class TaskStatus { QUEUED, WAITING_WIFI, WAITING_NETWORK, PAUSING, PAUSED, RUNNING, MUXING, VERIFYING, PUBLISHING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
+enum class PauseReason { USER, WIFI, NETWORK, SYSTEM, RECOVERY, STORAGE, ACCESS, SOURCE_CHANGED }
 enum class FailureKind { NETWORK, HTTP_REJECTED, ACCESS_CONDITION, NOT_VIDEO, UNSUPPORTED, STORAGE, SYSTEM_LIMIT, INTERRUPTED }
 enum class AssetLocation { SYSTEM_DOWNLOAD, MEDIASTORE_DOWNLOAD, LEGACY_PUBLIC_FILE }
 
@@ -61,6 +62,8 @@ data class DownloadRecord(
     val segmentCount: Int? = null,
     val completedSegments: Int = 0,
     val safeFailure: String? = null,
+    val pauseReason: PauseReason? = null,
+    val resumeAvailable: Boolean = false,
 ) {
     override fun toString() = "DownloadRecord(recordId=$recordId, systemId=$systemId)"
 }
@@ -119,6 +122,10 @@ data class DownloadItem(
     val protocol: DownloadProtocol = DownloadProtocol.DIRECT,
     val segmentCount: Int? = null,
     val completedSegments: Int = 0,
+    val pauseReason: PauseReason? = null,
+    val canPause: Boolean = false,
+    val canResume: Boolean = false,
+    val cacheBytes: Long = 0,
 ) {
     override fun toString() = "DownloadItem(id=$id, status=$status, systemRead=$systemRead, format=$format, availability=$availability)"
 }

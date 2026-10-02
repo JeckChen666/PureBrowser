@@ -35,6 +35,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val ready = mutableReady.asStateFlow()
     private val storage = LocalBrowserRepository(application)
     private val writes = Channel<BrowserData>(Channel.CONFLATED)
+    private val persistence = Mutex()
+    private val privacyLock = Mutex()
+    private var privacyBusy = false
     private val writer = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableLink = MutableStateFlow<String?>(null)
     val link = mutableLink.asStateFlow()
@@ -47,7 +50,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val runtime = com.example.purebrowser.download.DownloadRuntime.get(application)
     val repository = runtime.repository
     // Same request/access policy as queue execution; constructing this never fetches a playlist.
-    val hlsResolver by lazy { HlsResolver(UrlConnectionTransport(), WebsiteAccessContext(), repository.allowLocalHttp) }
+    val hlsResolver by lazy { HlsResolver(repository.guardedTransport(UrlConnectionTransport()), WebsiteAccessContext(), repository.allowLocalHttp) }
     private val mutableDownloads = MutableStateFlow<List<DownloadItem>>(emptyList())
     val downloads = mutableDownloads.asStateFlow()
     private val library = VideoLibraryRepository(repository)
@@ -65,17 +68,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private var preferenceWrite = false
 
     init {
-        runtime.kick()
         viewModelScope.launch {
             mutableWifiOnly.value = withContext(Dispatchers.IO) { preferences.wifiOnly() }
-            val loaded = withContext(Dispatchers.IO) { storage.load() }
+            val loaded = withContext(Dispatchers.IO) { runtime.recover();storage.load() }
             mutableData.value = loaded
             tabs.restore(loaded)
             mutableReady.value = true
             if (storage.recoveredCorruption) notify("本地数据读取失败，已使用默认配置；请检查本机存储")
             writer.launch {
                 try {
-                    for (snapshot in writes) runCatching { storage.save(snapshot) }
+                    for (snapshot in writes) runCatching { persistence.withLock { if(snapshot==mutableData.value)storage.save(snapshot) } }
                         .onFailure { notify("本地保存失败，请检查可用存储空间") }
                 } finally { writer.cancel() }
             }
@@ -95,8 +97,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun notify(value: String) { mutableMessage.value = value }
     fun consumeMessage() { mutableMessage.value = null }
     fun dismissLink() { mutableLink.value = null }
-    fun navigate(input: String) { engine?.navigate(input) }
-    fun newTab(url: String = HOME_URL) { tabs.newTab(url) }
+    fun navigate(input: String) { if(privacyBusy)return;if(engine==null)tabs.select(data.value.selectedId);engine?.navigate(input) }
+    fun newTab(url: String = HOME_URL) { if(!privacyBusy)tabs.newTab(url) }
     fun setTheme(value: ThemeMode) { change { it.copy(theme = value) } }
     fun toggleBookmark() {
         val page = engine?.page?.value ?: return
@@ -143,15 +145,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     fun download(draft: DownloadDraft, wifiOnly: Boolean, fileName: String? = null, plan: HlsDownloadPlan? = null) {
+        if(privacyBusy) { notify("本地数据正在清理，请稍后下载");return }
         if(mutableSubmitting.value) return
         if (draft.sourceTabId != tabs.active.value?.recordId || draft.sourceGeneration != engine?.generation ||
             sniffer?.candidates?.value?.none { it.url == draft.candidate.url } != false) {
             notify("页面资源已更新，请返回来源重新确认"); return
         }
+        val requestGeneration=runCatching { repository.requestGeneration() }.getOrElse { notify("网站会话已变化，请重新确认");return }
         mutableSubmitting.value = true
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { repository.enqueue(draft, wifiOnly, fileName, hlsPlan = plan) }
+                withContext(Dispatchers.IO) { repository.enqueue(draft, wifiOnly, fileName, hlsPlan = plan,expectedPrivacyGeneration=requestGeneration) }
                 runtime.kick()
                 notify("任务已加入下载中心")
             } catch (_: Exception) { notify("无法创建任务，请检查存储权限和资源地址") }
@@ -159,6 +163,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     private fun operation(id: String, success: String, action: () -> Unit) {
+        if(privacyBusy) { notify("本地数据正在清理，请稍后操作");return }
         if(id in mutableBusy.value) return
         mutableBusy.value += id
         viewModelScope.launch {
@@ -167,6 +172,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             finally { mutableBusy.value -= id; runtime.kick(); refreshDownloads() }
         }
     }
+    fun pauseDownload(id:String)=operation(id,"暂停请求已提交，等待写入停止") { runtime.pause(id) }
+    fun resumeDownload(id:String)=operation(id,"已验证恢复缓存并排队；服务器仍需确认资源一致") { runtime.resume(id) }
     fun cancelDownload(id: String) = operation(id, "已取消；可以另建任务重试") { repository.cancel(id) }
     fun forgetDownload(id: String) = operation(id, "已移除记录，设备文件未删除") { repository.forgetRecord(id) }
     fun deleteDownloadFile(id: String) = operation(id, "已确认删除文件和记录") { repository.deleteFile(id) }
@@ -202,7 +209,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             if(matching != null) tabs.select(matching.id) else newTab(url)
         }
     }
-    fun reconcileDownloads() { runtime.kick(); viewModelScope.launch { refreshDownloads() } }
+    fun reconcileDownloads() { if(!privacyBusy)runtime.kick(); viewModelScope.launch { refreshDownloads() } }
     private suspend fun refreshDownloads() = refreshMutex.withLock {
         runCatching { withContext(Dispatchers.IO) { repository.stateSnapshot() } }
             .onSuccess { state ->
@@ -214,6 +221,47 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 if (!downloadReadFailureReported) notify("无法读取或保存下载记录，请检查本机存储")
                 downloadReadFailureReported = true
             }
+    }
+    suspend fun clearLocalData(category:com.example.purebrowser.privacy.PrivacyCategory):com.example.purebrowser.privacy.PrivacyClearResult {
+        if(!privacyLock.tryLock())return com.example.purebrowser.privacy.PrivacyClearResult.BUSY
+        privacyBusy=true
+        try {
+            return withContext(NonCancellable) {
+                if(category==com.example.purebrowser.privacy.PrivacyCategory.HISTORY) {
+                    withContext(Dispatchers.Main.immediate) { clearHistory() }
+                    withContext(Dispatchers.IO) { persistence.withLock { storage.save(mutableData.value) } }
+                    com.example.purebrowser.privacy.PrivacyClearResult.COMPLETED
+                } else if(category==com.example.purebrowser.privacy.PrivacyCategory.DOWNLOAD_TEMP) {
+                    withContext(Dispatchers.IO) { repository.clearStoppedTemporary() }
+                    refreshDownloads()
+                    com.example.purebrowser.privacy.PrivacyClearResult.COMPLETED
+                } else {
+                    // Do not hold metadata locks while waiting for network/file writers.
+                    withContext(Dispatchers.IO) { runtime.quiesceAccessTasks(all=true) }
+                    withContext(Dispatchers.Main.immediate) { tabs.clear() }
+                    val stoppedView=withContext(Dispatchers.Main.immediate) {
+                        android.webkit.ServiceWorkerController.getInstance().serviceWorkerWebSettings.blockNetworkLoads=true
+                        android.webkit.WebView(getApplication<Application>()).apply { stopLoading() }
+                    }
+                    try {
+                        val controller=com.example.purebrowser.privacy.LocalPrivacyController.forWebView(stoppedView,
+                            { com.example.purebrowser.privacy.PrivacyActivityState(true,true,true) })
+                        controller.clear(category)
+                    } finally {
+                        withContext(Dispatchers.Main.immediate) {
+                            stoppedView.destroy()
+                            android.webkit.ServiceWorkerController.getInstance().serviceWorkerWebSettings.blockNetworkLoads=false
+                        }
+                    }
+                }
+            }
+        } catch(_:Exception) { return com.example.purebrowser.privacy.PrivacyClearResult.FAILED }
+        finally { runtime.endPrivacyExclusion();privacyBusy=false;privacyLock.unlock();refreshDownloads() }
+    }
+    suspend fun diagnosticReport():String {
+        val environment=com.example.purebrowser.privacy.DiagnosticReport.environment(getApplication())
+        val tasks=withContext(Dispatchers.IO) { repository.records().map(com.example.purebrowser.privacy.DiagnosticReport.TaskSnapshot::from) }
+        return com.example.purebrowser.privacy.DiagnosticReport.render(environment,tasks)
     }
     override fun onCleared() { flush(); tabs.clear(); writes.close(); super.onCleared() }
 }

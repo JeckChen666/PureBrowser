@@ -1,6 +1,6 @@
 # PureBrowser
 
-以网页视频发现与授权保存为核心的纯本地 Android 浏览器。**当前开发分支为 v0.1.2 候选；最新已发布版本仍为 v0.1.1，小范围 Pre-release**：浏览 → 发现 → 受控下载 → 视频库 → 打开/分享 → 文件管理。
+以网页视频发现与授权保存为核心的纯本地 Android 浏览器。**当前开发分支为 v0.1.3 候选；最新已发布版本仍为 v0.1.1，小范围 Pre-release**：浏览 → 发现 → 受控下载 → 视频库 → 打开/分享 → 文件管理。
 
 不提供自有云存储、云解析、云同步、账号、遥测或后端；仍可联网访问用户选择的网站。
 
@@ -11,6 +11,15 @@
 - 正式包：`io.github.jeckchen666.purebrowser`；Debug 包：`io.github.jeckchen666.purebrowser.debug`。最低 Android 8.0 / API26。
 - **v0.1.0 的 `com.example.purebrowser` 不会被覆盖，也不自动迁移其私有数据/网站登录。** 后续正式版本沿同包同签名升级。
 - [实现与验收](docs/V0.1.1-COMPLETION.md) · [后续版本路线图](docs/VERSION-ROADMAP-0.1.md)。
+
+## v0.1.3 候选新增（不是正式发行）
+
+- 有强资源身份的直链受控Range续传；完整HLS分片检查点、清单/序号核对和重新封装。
+- 暂停、取消、继续、另建下载语义分离；冷启动先对账，不静默启动下载。
+- schema v5保护迁移、停止原因/缓存反馈、通知动作、本地隐私分项清理与用户主动脱敏诊断。
+- 用户说明见 [USER-GUIDE](docs/USER-GUIDE.md)，隐私说明见 [PRIVACY](docs/PRIVACY.md)。
+- [候选验收](docs/V0.1.3-CANDIDATE.md) / [执行记录](docs/EXECUTION-PLAN-V0.1.3.md) / [发行门槛](docs/RELEASE-ACCEPTANCE-V0.1.3.md)。
+- v0.1.2真实验收欠项、两厂商真机/长任务/30授权样本/5人7日尚未满足，不创建正式v0.1.3标签。
 
 ## v0.1.2 候选新增（尚未完成正式发布门槛）
 
