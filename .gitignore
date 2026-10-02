@@ -27,3 +27,9 @@ local.properties
 !.env.example
 *.jks
 *.keystore
+
+# Private device-state backups and release staging
+/purebrowser-*-private-*/
+*.p12
+*.pfx
+*.key

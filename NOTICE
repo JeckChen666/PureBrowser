@@ -1,0 +1,28 @@
+PureBrowser
+Copyright 2026 PureBrowser contributors
+
+Original PureBrowser source code is licensed under the Apache License, Version 2.0.
+See LICENSE for the complete license text.
+
+This source repository includes Android development skills from android/skills:
+  Upstream: https://github.com/android/skills
+  Revision: 42dc2270e96032bd860bb94511e440aa00a43125
+  Location: .agents/skills/
+  License: Apache-2.0; the original license is retained at
+           .agents/skills/LICENSE.txt.
+  Installation/provenance: .agents/ANDROID-SKILLS.md.
+These development resources are not part of the Android application's runtime.
+
+The Gradle Wrapper is distributed with its upstream licensing. Gradle is licensed
+under Apache-2.0. See https://github.com/gradle/gradle for upstream notices.
+
+Third-party build and runtime dependencies retain their respective licenses;
+the project license does not replace those licenses. They are declared in
+settings.gradle.kts, build.gradle.kts, app/build.gradle.kts, and
+gradle/libs.versions.toml.
+
+The browser projects listed in docs/SOURCE-RESEARCH.md were used for design
+research, not copied or bundled. Their licenses are not replaced by this license.
+
+This notice records attribution and does not imply endorsement by upstream
+projects, Google, Android, or Gradle.

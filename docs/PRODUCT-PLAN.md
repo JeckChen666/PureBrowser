@@ -1,9 +1,11 @@
 # PureBrowser 产品化规划
 
-更新日期：2026-10-01（Asia/Shanghai）
+更新日期：2026-10-02（Asia/Shanghai）
 状态：T1–T14 已完成，限定支持范围的 0.1.0 本地产品预览版已验收。第一轮证据见 T1-T7-COMPLETION.md；第二轮见 ROUND-2-COMPLETION.md。
 第一轮已完成清单见 EXECUTION-PLAN.md；第二轮 T8–T14 见 EXECUTION-PLAN-ROUND-2.md（T8–T14 已完成）；增量实绩见 ROUND-2-STATUS.md。
 当前应用能力与测试实绩以 IMPLEMENTATION-STATUS.md 为准。
+
+后续版本范围与发布门槛以 VERSION-ROADMAP-0.1.md 为规划入口：v0.1.0 基础产品（已交付）、v0.1.1 嗅探与直链增强、v0.1.2 HLS 点播成品、v0.1.3 日常可用公开预览。后三版为建议规划，尚未实现或发布；下文批次是此前产品化方向，不将其误作后续版本已完成清单。
 
 ## 1. 本次明确的方向
 
