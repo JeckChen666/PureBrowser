@@ -5,6 +5,12 @@ import com.example.purebrowser.media.MediaCandidate
 import java.net.URI
 import java.util.UUID
 
+typealias TaskId = String
+enum class TransferType { SYSTEM, CONTROLLED }
+enum class TaskStatus { QUEUED, WAITING_WIFI, RUNNING, VERIFYING, PUBLISHING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
+enum class FailureKind { NETWORK, HTTP_REJECTED, ACCESS_CONDITION, NOT_VIDEO, UNSUPPORTED, STORAGE, SYSTEM_LIMIT, INTERRUPTED }
+enum class AssetLocation { SYSTEM_DOWNLOAD, MEDIASTORE_DOWNLOAD, LEGACY_PUBLIC_FILE }
+
 /** Frozen at resource selection, not inferred from whichever tab is active later. */
 data class DownloadDraft(
     val candidate: MediaCandidate,
@@ -13,13 +19,16 @@ data class DownloadDraft(
     val sourceTitle: String? = null,
     val sourceTabId: String? = null,
     val sourceGeneration: Long? = null,
+    val useAccessContext: Boolean = true,
+    val frameUrl: String? = candidate.frameUrl,
+    val reliableSource: Boolean = candidate.reliableSource,
 ) {
     override fun toString() = "DownloadDraft(kind=${candidate.kind}, sourceGeneration=$sourceGeneration)"
 }
 
 data class DownloadRecord(
     val recordId: String = UUID.randomUUID().toString(),
-    val systemId: Long,
+    val systemId: Long? = null,
     val name: String,
     val displayName: String = name,
     val mediaUrl: String? = null,
@@ -33,6 +42,15 @@ data class DownloadRecord(
     val sourceTabId: String? = null,
     val sourceGeneration: Long? = null,
     val cancelled: Boolean = false,
+    val transfer: TransferType = TransferType.SYSTEM,
+    val taskStatus: TaskStatus = TaskStatus.QUEUED,
+    val received: Long = 0,
+    val expected: Long? = null,
+    val failure: FailureKind? = null,
+    val useAccessContext: Boolean = false,
+    val frameUrl: String? = null,
+    val reliableSource: Boolean = false,
+    val pendingUri: String? = null,
 ) {
     override fun toString() = "DownloadRecord(recordId=$recordId, systemId=$systemId)"
 }
@@ -45,7 +63,7 @@ enum class FileAvailability { AVAILABLE, MISSING, UNREADABLE, UNKNOWN }
 /** A file index, not an extra copy of the video. Transport state is kept separately. */
 data class VideoAsset(
     val recordId: String,
-    val systemId: Long,
+    val systemId: Long? = null,
     val uri: String,
     val name: String,
     val displayName: String,
@@ -56,6 +74,7 @@ data class VideoAsset(
     val format: FormatCheck = FormatCheck.NOT_CHECKED,
     val availability: FileAvailability = FileAvailability.UNKNOWN,
     val durationMillis: Long? = null,
+    val location: AssetLocation = AssetLocation.SYSTEM_DOWNLOAD,
 )
 
 data class DownloadData(
@@ -65,14 +84,14 @@ data class DownloadData(
 )
 
 data class DownloadItem(
-    val id: Long,
+    val id: TaskId,
     val name: String,
     val status: Int,
     val bytes: Long,
     val total: Long,
     val detail: String,
     val verified: Boolean = false,
-    val recordId: String = "",
+    val recordId: String = id,
     val format: FormatCheck = FormatCheck.NOT_CHECKED,
     val availability: FileAvailability = FileAvailability.UNKNOWN,
     val sourceUrl: String? = null,
@@ -84,6 +103,9 @@ data class DownloadItem(
     val retryOf: String? = null,
     val sourceTitle: String? = null,
     val cancelled: Boolean = false,
+    val taskStatus: TaskStatus? = null,
+    val failure: FailureKind? = null,
+    val useAccessContext: Boolean = false,
 ) {
     override fun toString() = "DownloadItem(id=$id, status=$status, systemRead=$systemRead, format=$format, availability=$availability)"
 }
@@ -116,14 +138,26 @@ object DownloadRules {
             uri.rawFragment == null && uri.path in setOf("/all_downloads/$id", "/my_downloads/$id", "/public_downloads/$id")
     }.getOrDefault(false)
 
+    fun isLocalAssetUri(value:String,packageName:String):Boolean = runCatching {
+        val uri=URI(value)
+        uri.scheme=="content" && uri.rawQuery==null && uri.rawFragment==null &&
+            ((uri.authority=="downloads" && Regex("/(all_downloads|my_downloads|public_downloads)/[1-9][0-9]*").matches(uri.path)) ||
+             (uri.authority=="media" && Regex("/external_primary/downloads/[1-9][0-9]*").matches(uri.path)) ||
+             (uri.authority=="$packageName.files" && uri.path.startsWith("/downloads/") && uri.path.count { it=='/' }==2))
+    }.getOrDefault(false)
+
     fun validate(data: DownloadData) {
         require(data.legacyMigrationDone)
         require(data.records.size <= MAX_RECORDS && data.assets.size <= MAX_RECORDS)
         require(data.records.map { it.recordId }.distinct().size == data.records.size)
-        require(data.records.map { it.systemId }.distinct().size == data.records.size)
+        require(data.records.mapNotNull { it.systemId }.distinct().size == data.records.count { it.systemId != null })
         require(data.assets.map { it.recordId }.distinct().size == data.assets.size)
         data.records.forEach { r ->
-            require(r.recordId.isNotBlank() && r.recordId.length <= 100 && r.systemId > 0)
+            require(r.recordId.isNotBlank() && r.recordId.length <= 100 && (r.systemId == null || r.systemId > 0))
+            require((r.transfer == TransferType.SYSTEM) == (r.systemId != null))
+            require(r.received >= 0 && (r.expected == null || r.expected >= 0))
+            require(r.frameUrl == null || BrowserAddress.isWebUrl(r.frameUrl))
+            require(r.pendingUri == null || (r.transfer == TransferType.CONTROLLED && URI(r.pendingUri).scheme == "content"))
             require(r.name.isNotBlank() && r.name.length <= 200 && r.name !in setOf(".", "..") &&
                 r.name.none { it == '/' || it == '\\' || it.isISOControl() })
             require(r.displayName.isNotBlank() && r.displayName.length <= 180 && r.displayName.none { it.isISOControl() })
@@ -140,7 +174,8 @@ object DownloadRules {
         data.assets.forEach { a ->
             val record = data.records.firstOrNull { it.recordId == a.recordId }
             require(record != null && record.systemId == a.systemId)
-            require(isOwnedDownloadUri(a.uri, a.systemId))
+            require((record.transfer==TransferType.SYSTEM)==(a.location==AssetLocation.SYSTEM_DOWNLOAD))
+            require((if (a.location == AssetLocation.SYSTEM_DOWNLOAD) a.systemId != null && isOwnedDownloadUri(a.uri, a.systemId) else URI(a.uri).scheme == "content"))
             require(a.name == record.name && a.displayName == record.displayName)
             require(a.indexedAt >= 0 && (a.systemUpdatedAt == null || a.systemUpdatedAt >= 0))
             require(a.sizeBytes == null || a.sizeBytes >= 0)

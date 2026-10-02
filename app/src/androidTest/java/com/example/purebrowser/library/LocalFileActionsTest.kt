@@ -36,7 +36,7 @@ class LocalFileActionsTest {
     ): String? {
         var result: String? = null
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            result = LocalFileActions.launch(context, id, value, type, share)
+            result = LocalFileActions.launch(context, id.toString(), value, type, share)
         }
         return result
     }

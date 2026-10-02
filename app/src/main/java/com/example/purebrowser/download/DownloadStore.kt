@@ -50,7 +50,20 @@ class DownloadStore(
                 }
                 result.toString("UTF-8")
             }
-            decode(raw)
+            val data = decode(raw)
+            if (JSONObject(raw).getInt("schemaVersion") == 2) {
+                val bytes = raw.toByteArray(Charsets.UTF_8)
+                val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).take(8).joinToString("") { "%02x".format(it) }
+                val backup = File(file.parentFile, "download-v2-$hash.json")
+                val protected = runCatching {
+                    if (!backup.exists()) backup.writeBytes(bytes)
+                    check(backup.readBytes().contentEquals(bytes))
+                }.isSuccess
+                if (protected) {
+                    runCatching { save(data) }.onFailure { writable = false; notice = "迁移写入失败，旧记录与备份已保留" }
+                } else { writable = false; notice = "无法保护旧下载记录，已停止迁移写入" }
+            }
+            data
         } catch (_: FutureSchemaException) {
             writable = false
             notice = "下载记录版本不兼容，原始数据未改动"
@@ -89,7 +102,7 @@ class DownloadStore(
     companion object {
         // Covers read-modify-save across repository instances, not only atomic file writes.
         internal val transactionLock = Any()
-        const val SCHEMA_VERSION = 2
+        const val SCHEMA_VERSION = 3
 
         private fun JSONObject.nullableString(key: String): String? = if (isNull(key)) null else getString(key)
         private fun JSONObject.nullableLong(key: String): Long? = if (isNull(key)) null else getLong(key)
@@ -99,18 +112,21 @@ class DownloadStore(
         fun encode(data: DownloadData): String {
             DownloadRules.validate(data)
             val records = JSONArray().apply { data.records.forEach { r ->
-                put(JSONObject().put("recordId", r.recordId).put("systemId", r.systemId).put("name", r.name)
+                put(JSONObject().put("recordId", r.recordId).field("systemId", r.systemId).put("name", r.name)
                     .put("displayName", r.displayName).field("mediaUrl", r.mediaUrl).field("sourceUrl", r.sourceUrl)
                     .field("sourceTitle", r.sourceTitle).field("createdAt", r.createdAt).field("userAgent", r.userAgent)
                     .field("wifiOnly", r.wifiOnly).field("mimeType", r.mimeType).field("retryOf", r.retryOf)
-                    .field("sourceTabId", r.sourceTabId).field("sourceGeneration", r.sourceGeneration).put("cancelled", r.cancelled))
+                    .field("sourceTabId", r.sourceTabId).field("sourceGeneration", r.sourceGeneration).put("cancelled", r.cancelled)
+                    .put("transfer",r.transfer.name).put("taskStatus",r.taskStatus.name).put("received",r.received)
+                    .field("expected",r.expected).field("failure",r.failure?.name).put("useAccessContext",r.useAccessContext)
+                    .field("frameUrl",r.frameUrl).put("reliableSource",r.reliableSource).field("pendingUri",r.pendingUri))
             } }
             val assets = JSONArray().apply { data.assets.forEach { a ->
-                put(JSONObject().put("recordId", a.recordId).put("systemId", a.systemId).put("uri", a.uri)
+                put(JSONObject().put("recordId", a.recordId).field("systemId", a.systemId).put("uri", a.uri)
                     .put("name", a.name).put("displayName", a.displayName).put("indexedAt", a.indexedAt)
                     .field("systemUpdatedAt", a.systemUpdatedAt).field("sizeBytes", a.sizeBytes)
                     .field("mimeType", a.mimeType).put("format", a.format.name).put("availability", a.availability.name)
-                    .field("durationMillis", a.durationMillis))
+                    .field("durationMillis", a.durationMillis).put("location",a.location.name))
             } }
             return JSONObject().put("schemaVersion", SCHEMA_VERSION).put("legacyMigrationDone", true)
                 .put("records", records).put("assets", assets).toString()
@@ -119,29 +135,36 @@ class DownloadStore(
         fun decode(raw: String): DownloadData {
             require(raw.toByteArray(Charsets.UTF_8).size <= DownloadRules.MAX_FILE_BYTES)
             val obj = JSONObject(raw)
-            if (obj.getInt("schemaVersion") != SCHEMA_VERSION) throw FutureSchemaException()
+            if (obj.getInt("schemaVersion") !in setOf(2, SCHEMA_VERSION)) throw FutureSchemaException()
             require(obj.getBoolean("legacyMigrationDone"))
             val records = obj.getJSONArray("records").let { a ->
                 require(a.length() <= DownloadRules.MAX_RECORDS)
                 (0 until a.length()).map { a.getJSONObject(it).let { r ->
-                    DownloadRecord(recordId = r.getString("recordId"), systemId = r.getLong("systemId"),
+                    DownloadRecord(recordId = r.getString("recordId"), systemId = r.nullableLong("systemId"),
                         name = r.getString("name"), displayName = r.getString("displayName"),
                         mediaUrl = r.nullableString("mediaUrl"), sourceUrl = r.nullableString("sourceUrl"),
                         sourceTitle = r.nullableString("sourceTitle"), createdAt = r.nullableLong("createdAt"),
                         userAgent = r.nullableString("userAgent"), wifiOnly = r.nullableBoolean("wifiOnly"),
                         mimeType = r.nullableString("mimeType"), retryOf = r.nullableString("retryOf"),
-                        sourceTabId = r.nullableString("sourceTabId"), sourceGeneration = r.nullableLong("sourceGeneration"), cancelled = r.optBoolean("cancelled", false))
+                        sourceTabId = r.nullableString("sourceTabId"), sourceGeneration = r.nullableLong("sourceGeneration"), cancelled = r.optBoolean("cancelled", false),
+                        transfer=TransferType.valueOf(r.optString("transfer","SYSTEM")),
+                        taskStatus=TaskStatus.valueOf(r.optString("taskStatus","QUEUED")),received=r.optLong("received",0),
+                        expected=if(r.has("expected")) r.nullableLong("expected") else null,
+                        failure=if(r.has("failure")) r.nullableString("failure")?.let(FailureKind::valueOf) else null,
+                        useAccessContext=r.optBoolean("useAccessContext",false),reliableSource=r.optBoolean("reliableSource",false),
+                        frameUrl=if(r.has("frameUrl")) r.nullableString("frameUrl") else null,
+                        pendingUri=if(r.has("pendingUri")) r.nullableString("pendingUri") else null)
                 } }
             }
             val assets = obj.getJSONArray("assets").let { a ->
                 require(a.length() <= DownloadRules.MAX_RECORDS)
                 (0 until a.length()).map { a.getJSONObject(it).let { r ->
-                    VideoAsset(recordId = r.getString("recordId"), systemId = r.getLong("systemId"),
+                    VideoAsset(recordId = r.getString("recordId"), systemId = r.nullableLong("systemId"),
                         uri = r.getString("uri"), name = r.getString("name"), displayName = r.getString("displayName"),
                         indexedAt = r.getLong("indexedAt"), systemUpdatedAt = r.nullableLong("systemUpdatedAt"),
                         sizeBytes = r.nullableLong("sizeBytes"), mimeType = r.nullableString("mimeType"),
                         format = FormatCheck.valueOf(r.getString("format")), availability = FileAvailability.valueOf(r.getString("availability")),
-                        durationMillis = r.nullableLong("durationMillis"))
+                        durationMillis = r.nullableLong("durationMillis"), location=AssetLocation.valueOf(r.optString("location","SYSTEM_DOWNLOAD")))
                 } }
             }
             return DownloadData(records, assets).also(DownloadRules::validate)

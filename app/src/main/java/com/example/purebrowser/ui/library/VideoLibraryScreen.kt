@@ -76,36 +76,36 @@ private enum class LibraryAction { RENAME, FORGET, DELETE }
 @Composable
 fun VideoLibraryScreen(
     assets: List<VideoAsset>,
-    busyIds: Set<Long>,
+    busyIds: Set<String>,
     onBack: () -> Unit,
-    onOpen: (Long) -> Unit,
-    onShare: (Long) -> Unit,
-    onRename: (Long, String) -> Unit,
-    onForget: (Long) -> Unit,
-    onDelete: (Long) -> Unit,
-    onSource: (Long) -> Unit,
+    onOpen: (String) -> Unit,
+    onShare: (String) -> Unit,
+    onRename: (String, String) -> Unit,
+    onForget: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onSource: (String) -> Unit,
     onDownloads: () -> Unit,
     thumbnail: @Composable (VideoAsset) -> Unit = {},
-    sourceAvailableIds: Set<Long> = emptySet(),
+    sourceAvailableIds: Set<String> = emptySet(),
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var newestFirst by rememberSaveable { mutableStateOf(true) }
-    var actionId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var actionId by rememberSaveable { mutableStateOf<String?>(null) }
     var actionName by rememberSaveable { mutableStateOf<String?>(null) }
-    val actionAsset = assets.firstOrNull { it.systemId == actionId }
+    val actionAsset = assets.firstOrNull { it.recordId == actionId }
     val action = actionName?.let { name -> LibraryAction.entries.firstOrNull { it.name == name } }
     val search = query.trim()
     // Do not filter on availability: a lost or temporarily unreadable file must remain manageable.
     val matches = assets.filter {
         it.displayName.contains(search, ignoreCase = true) || it.name.contains(search, ignoreCase = true)
     }
-    val ascending = compareBy<VideoAsset> { it.indexedAt }.thenBy { it.systemId }
+    val ascending = compareBy<VideoAsset> { it.indexedAt }.thenBy { it.recordId }
     val visible = matches.sortedWith(if (newestFirst) ascending.reversed() else ascending)
-    LaunchedEffect(actionId, assets.map { it.systemId }) {
+    LaunchedEffect(actionId, assets.map { it.recordId }) {
         if (actionId != null && actionAsset == null) { actionId = null; actionName = null }
     }
     fun request(asset: VideoAsset, next: LibraryAction) {
-        if (asset.systemId !in busyIds) { actionId = asset.systemId; actionName = next.name }
+        if (asset.recordId !in busyIds) { actionId = asset.recordId; actionName = next.name }
     }
     fun dismissAction() { actionId = null; actionName = null }
 
@@ -167,13 +167,13 @@ fun VideoLibraryScreen(
                         )
                     }
                 }
-                items(visible, key = { "video-${it.systemId}" }) { asset ->
+                items(visible, key = { "video-${it.recordId}" }) { asset ->
                     VideoAssetCard(
-                        asset = asset, busy = asset.systemId in busyIds, thumbnail = thumbnail,
-                        sourceAvailable = asset.systemId in sourceAvailableIds,
-                        onSource = { if (asset.systemId !in busyIds && asset.systemId in sourceAvailableIds) onSource(asset.systemId) },
-                        onOpen = { if (asset.systemId !in busyIds && asset.isUsableVideo()) onOpen(asset.systemId) },
-                        onShare = { if (asset.systemId !in busyIds && asset.isUsableVideo()) onShare(asset.systemId) },
+                        asset = asset, busy = asset.recordId in busyIds, thumbnail = thumbnail,
+                        sourceAvailable = asset.recordId in sourceAvailableIds,
+                        onSource = { if (asset.recordId !in busyIds && asset.recordId in sourceAvailableIds) onSource(asset.recordId) },
+                        onOpen = { if (asset.recordId !in busyIds && asset.isUsableVideo()) onOpen(asset.recordId) },
+                        onShare = { if (asset.recordId !in busyIds && asset.isUsableVideo()) onShare(asset.recordId) },
                         onAction = { request(asset, it) },
                     )
                 }
@@ -181,14 +181,14 @@ fun VideoLibraryScreen(
         }
     }
     if (actionAsset != null && action != null) {
-        val enabled = actionAsset.systemId !in busyIds
+        val enabled = actionAsset.recordId !in busyIds
         if (action == LibraryAction.RENAME) {
             RenameVideoTitleDialog(
                 asset = actionAsset, enabled = enabled, onDismiss = ::dismissAction,
                 onRename = { title ->
-                    if (enabled && actionId == actionAsset.systemId && actionName == action.name) {
+                    if (enabled && actionId == actionAsset.recordId && actionName == action.name) {
                         dismissAction()
-                        onRename(actionAsset.systemId, title)
+                        onRename(actionAsset.recordId, title)
                     }
                 },
             )
@@ -203,14 +203,14 @@ fun VideoLibraryScreen(
                     "将实际删除设备上的这个视频文件，不是仅从列表隐藏。此操作无法撤销，其他应用也将无法再打开此文件。只有删除成功后才移除本应用记录；删除失败或未获得授权会保留记录。"
                 },
                 confirmLabel = if (forget) "仅移除记录" else "删除文件",
-                tag = "video-${action.name.lowercase()}-dialog-${actionAsset.systemId}",
+                tag = "video-${action.name.lowercase()}-dialog-${actionAsset.recordId}",
                 enabled = enabled && (forget || actionAsset.canDeleteVideoFile()),
                 onDismiss = ::dismissAction,
                 onConfirm = {
                     if (enabled && (forget || actionAsset.canDeleteVideoFile()) &&
-                        actionId == actionAsset.systemId && actionName == action.name) {
+                        actionId == actionAsset.recordId && actionName == action.name) {
                         dismissAction()
-                        if (forget) onForget(actionAsset.systemId) else onDelete(actionAsset.systemId)
+                        if (forget) onForget(actionAsset.recordId) else onDelete(actionAsset.recordId)
                     }
                 },
             )
@@ -250,7 +250,7 @@ private fun VideoAssetCard(
         else -> "可用 · 格式初检通过"
     }
     Card(
-        modifier = Modifier.fillMaxWidth().testTag("video-${asset.systemId}").semantics {
+        modifier = Modifier.fillMaxWidth().testTag("video-${asset.recordId}").semantics {
             stateDescription = status + if (busy) "，正在处理" else ""
         },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -260,7 +260,7 @@ private fun VideoAssetCard(
                 Box(
                     modifier = Modifier.size(width = 80.dp, height = 72.dp).clip(RoundedCornerShape(10.dp))
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .testTag("video-thumbnail-${asset.systemId}")
+                        .testTag("video-thumbnail-${asset.recordId}")
                         .semantics { contentDescription = if (usable) "本地视频封面" else "视频不可打开：$status" },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -276,7 +276,7 @@ private fun VideoAssetCard(
                     Text(
                         status, style = MaterialTheme.typography.labelMedium,
                         color = if (usable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag("video-status-${asset.systemId}"),
+                        modifier = Modifier.testTag("video-status-${asset.recordId}"),
                     )
                 }
             }
@@ -302,19 +302,19 @@ private fun VideoAssetCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            if (busy) Text("正在处理…", style = MaterialTheme.typography.labelMedium, modifier = Modifier.testTag("video-busy-${asset.systemId}"))
+            if (busy) Text("正在处理…", style = MaterialTheme.typography.labelMedium, modifier = Modifier.testTag("video-busy-${asset.recordId}"))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (usable) {
-                    TextButton(onClick = onOpen, enabled = !busy, modifier = Modifier.testTag("video-open-${asset.systemId}")) { Text("打开视频") }
-                    TextButton(onClick = onShare, enabled = !busy, modifier = Modifier.testTag("video-share-${asset.systemId}")) { Text("分享文件") }
+                    TextButton(onClick = onOpen, enabled = !busy, modifier = Modifier.testTag("video-open-${asset.recordId}")) { Text("打开视频") }
+                    TextButton(onClick = onShare, enabled = !busy, modifier = Modifier.testTag("video-share-${asset.recordId}")) { Text("分享文件") }
                 }
                 if (sourceAvailable) {
-                    TextButton(onClick = onSource, enabled = !busy, modifier = Modifier.testTag("video-source-${asset.systemId}")) { Text("返回来源网页") }
+                    TextButton(onClick = onSource, enabled = !busy, modifier = Modifier.testTag("video-source-${asset.recordId}")) { Text("返回来源网页") }
                 }
-                TextButton(onClick = { onAction(LibraryAction.RENAME) }, enabled = !busy, modifier = Modifier.testTag("video-rename-${asset.systemId}")) { Text("修改显示名称") }
-                TextButton(onClick = { onAction(LibraryAction.FORGET) }, enabled = !busy, modifier = Modifier.testTag("video-forget-${asset.systemId}")) { Text("移除记录，保留文件") }
+                TextButton(onClick = { onAction(LibraryAction.RENAME) }, enabled = !busy, modifier = Modifier.testTag("video-rename-${asset.recordId}")) { Text("修改显示名称") }
+                TextButton(onClick = { onAction(LibraryAction.FORGET) }, enabled = !busy, modifier = Modifier.testTag("video-forget-${asset.recordId}")) { Text("移除记录，保留文件") }
                 if (asset.canDeleteVideoFile()) {
-                    TextButton(onClick = { onAction(LibraryAction.DELETE) }, enabled = !busy, modifier = Modifier.testTag("video-delete-${asset.systemId}")) { Text("删除文件") }
+                    TextButton(onClick = { onAction(LibraryAction.DELETE) }, enabled = !busy, modifier = Modifier.testTag("video-delete-${asset.recordId}")) { Text("删除文件") }
                 }
             }
         }
@@ -330,12 +330,12 @@ private fun RenameVideoTitleDialog(
 ) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    var title by rememberSaveable(asset.systemId) { mutableStateOf(asset.displayName) }
+    var title by rememberSaveable(asset.recordId) { mutableStateOf(asset.displayName) }
     val trimmed = title.trim()
     val invalid = trimmed.isBlank() || trimmed.length > 180 || trimmed.any { it.isISOControl() }
     val changed = trimmed != asset.displayName
     AlertDialog(
-        modifier = Modifier.testTag("video-rename-dialog-${asset.systemId}"),
+        modifier = Modifier.testTag("video-rename-dialog-${asset.recordId}"),
         onDismissRequest = onDismiss,
         title = { Text("修改显示名称") },
         text = {
@@ -348,7 +348,7 @@ private fun RenameVideoTitleDialog(
                     value = title, onValueChange = { title = it }, enabled = enabled, singleLine = true,
                     label = { Text("显示名称") }, isError = invalid,
                     supportingText = { Text(if (invalid) "请输入 1–180 个字符，不能包含控制字符。" else "${trimmed.length} / 180") },
-                    modifier = Modifier.fillMaxWidth().testTag("video-title-input-${asset.systemId}")
+                    modifier = Modifier.fillMaxWidth().testTag("video-title-input-${asset.recordId}")
                         .semantics { stateDescription = if (invalid) "显示名称无效" else "只修改显示标题，不重命名文件" },
                 )
                 Text("实际文件名：${localSafeLabel(asset.name)}", style = MaterialTheme.typography.bodySmall)
@@ -359,7 +359,7 @@ private fun RenameVideoTitleDialog(
             TextButton(
                 onClick = { if (enabled && !invalid && changed) { focus.clearFocus(force=true);keyboard?.hide();onRename(trimmed) } },
                 enabled = enabled && !invalid && changed,
-                modifier = Modifier.testTag("video-title-save-${asset.systemId}"),
+                modifier = Modifier.testTag("video-title-save-${asset.recordId}"),
             ) { Text("保存显示名称") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("返回") } },

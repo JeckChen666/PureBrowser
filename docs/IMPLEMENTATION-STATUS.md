@@ -1,5 +1,29 @@
 # 当前实现与验证状态
 
+**当前为 v0.1.1 / versionCode=4，正式签名的小范围 Pre-release。** T15–T22 实现/验收见 V0.1.1-COMPLETION.md；远端发行身份见 Release 和 Git tag。
+
+## 新能力
+
+动态与同源 iframe 媒体发现、播放排序与代次隔离；稳定 TaskId / schema v3 / v2 原始备份迁移；全部新任务受控传输、限定网站会话与最小来源、逐跳凭据保护、2 槽队列、前台服务与中断；MP4/WebM 初检后公共发布；原产品文件管理闭环保留。
+
+正式 package 为 `io.github.jeckchen666.purebrowser`，Debug 为 `.debug` 变体；namespace 仍是 `com.example.purebrowser`。原 v0.1.0 包独立保留，不跨包接管旧数据或登录。
+
+## 最终验证
+
+57 单元、91 API37 全回归；API28 19 文件/队列 + 权限拒绝及独立进程重启；API36 真实网站条件/动态 frame + Signed Release 10 授权视频/3 HTTPS 环境 + 覆盖升级；API37 两种文件的实际跨 UID 分享和最终核心 15 分钟锁屏传输。Lint 0 错误/28 提醒，具体边界见完成记录。
+
+## 限制
+
+无云端业务、HLS/DASH 成品、直播、DRM、复杂跨站鉴权/分区会话/JS Token、暂停续传、真正无痕或完整跨域 frame/MSE 关联。格式初检不是全片解码安全保证；本次不是广泛真机/OEM或长电影后台认证。
+
+APK：`app/build/outputs/apk/release/app-release.apk`；本地证据：`app/build/reports/v0.1.1/`。私有密钥、密码、设备备份、测试 APK不发布。
+
+---
+
+## v0.1.0 历史验收（不是当前能力上限）
+
+# 当前实现与验证状态
+
 **T1–T14 已完成，当前交付为 0.1.0 本地产品预览版，versionCode=2。** 第一轮历史证据见 T1-T7-COMPLETION.md，T8 历史见 ROUND-2-STATUS.md，当前完整验收见 ROUND-2-COMPLETION.md。
 
 ## 当前能力

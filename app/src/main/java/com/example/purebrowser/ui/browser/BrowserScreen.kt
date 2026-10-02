@@ -87,7 +87,7 @@ fun BrowserScreen(model: BrowserViewModel = viewModel()) {
         if(route != destination) { routeTrail = (routeTrail.split(',').filter { it.isNotBlank() } + route.name).takeLast(12).joinToString(",");route=destination }
         model.reconcileDownloads()
     }
-    fun source(id: Long) { stopEditing();route=Destination.BROWSER;routeTrail="";model.returnToSource(id) }
+    fun source(id: String) { stopEditing();route=Destination.BROWSER;routeTrail="";model.returnToSource(id) }
     fun routeBack() {
         val trail = routeTrail.split(',').filter { it.isNotBlank() }
         route = trail.lastOrNull()?.let { runCatching { Destination.valueOf(it) }.getOrNull() } ?: Destination.BROWSER
@@ -165,7 +165,7 @@ fun BrowserScreen(model: BrowserViewModel = viewModel()) {
                         Destination.DOWNLOADS -> DownloadsScreen(downloads,busy,::routeBack,
                             {id->model.launchFile(context,id,false)},{id->model.launchFile(context,id,true)},
                             model::retryDownload,model::cancelDownload,model::forgetDownload,model::deleteDownloadFile,
-                            ::source,{open(Destination.LIBRARY)})
+                            ::source,{open(Destination.LIBRARY)},onRetryWithoutContext={ model.retryDownload(it,false) })
                         Destination.LIBRARY -> VideoLibraryScreen(assets,busy,::routeBack,
                             {id->model.launchFile(context,id,false)},{id->model.launchFile(context,id,true)},
                             model::renameVideo,model::forgetDownload,model::deleteDownloadFile,::source,

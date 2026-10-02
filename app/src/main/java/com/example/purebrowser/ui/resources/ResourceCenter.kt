@@ -52,7 +52,7 @@ fun ResourceSheet(
     // Re-evaluate incoming observations without retaining a stale list. Equal URLs may carry
     // different evidence, so do not use URL alone as a lazy-list key or silently deduplicate.
     val downloadable = candidates.filter { it.canTryDownload() }
-        .sortedByDescending { Evidence.DOM in it.sources }
+        .sortedWith(compareByDescending<MediaCandidate> { it.playing && Evidence.DOM in it.sources }.thenByDescending { Evidence.DOM in it.sources })
     val unsupported = candidates.filterNot { it.canTryDownload() }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<MediaCandidate?>(null) }

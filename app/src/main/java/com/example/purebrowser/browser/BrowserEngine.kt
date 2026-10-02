@@ -2,6 +2,8 @@ package com.example.purebrowser.browser
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
 import android.webkit.*
 import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.ResourceSniffer
@@ -30,6 +32,13 @@ class BrowserEngine(
     val generation: Long get() = pageEpoch.get()
     private var view: WebView? = null
     private var domScanRunning = false
+    private var scanToken = 0L
+    private var navigationStartedMs=0L
+    private var scanningActive = false
+    private val handler = Handler(Looper.getMainLooper())
+    private val scanner = object : Runnable {
+        override fun run() { if (scanningActive && view != null) { scanMedia(); handler.postDelayed(this, 2000) } }
+    }
 
     private fun publish(next: BrowserPage) {
         mutablePage.value = next
@@ -61,6 +70,7 @@ class BrowserEngine(
         }
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String?, favicon: Bitmap?) {
+                navigationStartedMs=System.currentTimeMillis()
                 pageEpoch.set(sniffer.beginPage())
                 publish(BrowserPage(url = url ?: "about:blank", progress = 0))
             }
@@ -102,6 +112,7 @@ class BrowserEngine(
                 true
             } else false
         }
+        resume()
         webView.loadUrl(mutablePage.value.url.takeIf(BrowserAddress::isWebUrl) ?: "about:blank")
     }
 
@@ -115,11 +126,14 @@ class BrowserEngine(
     fun reload() { view?.reload() }
     fun stop() { view?.stopLoading(); publish(mutablePage.value.copy(progress = 100)) }
     fun home() { view?.loadUrl("about:blank") }
-    fun pause() { view?.onPause() }
-    fun resume() { view?.onResume() }
+    fun pause() { scanningActive = false; handler.removeCallbacks(scanner); view?.onPause() }
+    fun resume() { view?.onResume(); scanningActive = true; handler.removeCallbacks(scanner); handler.post(scanner) }
 
     private fun updateNavigation() {
-        view?.let { publish(mutablePage.value.copy(url = it.url ?: "about:blank", canGoBack = it.canGoBack(), canGoForward = it.canGoForward())) }
+        view?.let {
+            val nextUrl = it.url ?: "about:blank"
+            if (nextUrl != mutablePage.value.url) { navigationStartedMs=System.currentTimeMillis();pageEpoch.set(sniffer.beginPage()) }
+            publish(mutablePage.value.copy(url = nextUrl, canGoBack = it.canGoBack(), canGoForward = it.canGoForward())) }
     }
 
     /** Read-only DOM + Resource Timing fallback, with bounded result size and stale-page suppression. */
@@ -128,23 +142,33 @@ class BrowserEngine(
         if (domScanRunning || !BrowserAddress.isWebUrl(current.url.orEmpty())) return
         val epoch = pageEpoch.get()
         domScanRunning = true
-        current.evaluateJavascript(MEDIA_SCAN) { result ->
+        val token = ++scanToken
+        current.evaluateJavascript(MEDIA_SCAN.replace("__NAV_TIME__",navigationStartedMs.toString())) { result ->
+            if (token != scanToken || current !== view) return@evaluateJavascript
             domScanRunning = false
-            if (epoch != pageEpoch.get() || result.length > 1_048_576) return@evaluateJavascript
+            if (epoch != pageEpoch.get() || result.length > 262_144) return@evaluateJavascript
             runCatching {
                 val decoded = JSONArray("[$result]").getString(0)
                 val data = JSONArray(decoded)
-                for (i in 0 until minOf(data.length(), 500)) {
+                val playingUrls=mutableSetOf<String>()
+                for (i in 0 until minOf(data.length(), 250)) {
                     val item = data.getJSONObject(i)
+                    if(item.optBoolean("video") && item.optBoolean("playing"))playingUrls+=item.optString("url").substringBefore('#')
                     sniffer.observe(epoch, item.optString("url"), if (item.optBoolean("video")) Evidence.DOM else Evidence.TIMING,
-                        item.optString("mime").takeIf { it.isNotBlank() }, videoElement = item.optBoolean("video"))
+                        item.optString("mime").takeIf { it.isNotBlank() }, videoElement = item.optBoolean("video"),
+                        title = item.optString("title").takeIf { it.isNotBlank() },
+                        frameUrl = item.optString("frame").takeIf(BrowserAddress::isWebUrl),
+                        playing = item.optBoolean("playing"), reliableSource = item.optBoolean("video") &&
+                            runCatching { com.example.purebrowser.download.RequestPolicy.sameOrigin(item.optString("frame"), current.url.orEmpty()) }.getOrDefault(false))
                 }
+                sniffer.updatePlayback(epoch,playingUrls)
             }
         }
     }
 
     fun detach(webView: WebView) {
         if (view === webView) {
+            pause(); scanToken++
             pageEpoch.set(sniffer.beginPage())
             view = null
             domScanRunning = false
@@ -158,16 +182,32 @@ class BrowserEngine(
         val MEDIA_SCAN = """
             (function() {
               try {
-                var out = [];
-                document.querySelectorAll('video, video source').forEach(function(v) {
-                  if (out.length >= 100) return;
-                  var u = v.currentSrc || v.src;
-                  if (u && u.length <= 8192) out.push({url: u, mime: v.type || '', video: true});
-                });
-                performance.getEntriesByType('resource').slice(-400).forEach(function(r) {
-                  if (r.name && r.name.length <= 8192) out.push({url: r.name, video: false});
-                });
-                return JSON.stringify(out);
+                var out = [], frames = 0, videos = 0, timing = 0, origin = location.origin, budget = 0;
+                function add(item) { var cost=JSON.stringify(item).length;if(budget+cost>90000)return;budget+=cost;out.push(item); }
+                function walk(w, depth) {
+                  if (w.location.origin !== origin) return;
+                  var doc = w.document;
+                  doc.querySelectorAll('video, video source').forEach(function(v) {
+                    if (videos >= 50) return;
+                    var video = v.tagName.toLowerCase() === 'video' ? v : v.parentElement;
+                    var u = v.currentSrc || v.src;
+                    if (u && u.length <= 8192) { videos++;
+                      add({url:u, mime:(v.type || '').slice(0,120), video:true,
+                        frame:w.location.href, title:(video.title || doc.title || '').slice(0,180),
+                        playing:!video.paused && !video.ended && u===video.currentSrc});
+                    }
+                  });
+                  w.performance.getEntriesByType('resource').slice(-200).forEach(function(r) {
+                    if (timing < 200 && r.name && r.name.length <= 8192 && r.startTime + w.performance.timeOrigin >= __NAV_TIME__) {
+                      timing++; add({url:r.name,video:false});
+                    }
+                  });
+                  if (depth < 2) doc.querySelectorAll('iframe').forEach(function(f) {
+                    if (frames >= 8) return; frames++;
+                    try { if (f.contentWindow) walk(f.contentWindow,depth+1); } catch(e) {}
+                  });
+                }
+                walk(window,0); return JSON.stringify(out);
               } catch(e) { return '[]'; }
             })();
         """.trimIndent()

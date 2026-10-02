@@ -282,7 +282,7 @@ class DownloadLibraryUiTest {
         compose.setContent {
             PureBrowserTheme {
                 DownloadsScreen(
-                    items = items, busyIds = busy, onBack = {},
+                    items = items, busyIds = busy.map { it.toString() }.toSet(), onBack = {},
                     onOpen = { calls += "open:$it" }, onShare = { calls += "share:$it" },
                     onRetry = { calls += "retry:$it" }, onCancel = { calls += "cancel:$it" },
                     onForget = { calls += "forget:$it" }, onDelete = { calls += "delete:$it" },
@@ -299,19 +299,19 @@ class DownloadLibraryUiTest {
         compose.setContent {
             PureBrowserTheme {
                 VideoLibraryScreen(
-                    assets = assets, busyIds = busy, onBack = {},
+                    assets = assets, busyIds = busy.map { it.toString() }.toSet(), onBack = {},
                     onOpen = { calls += "open:$it" }, onShare = { calls += "share:$it" },
                     onRename = { id, title -> calls += "rename:$id:$title" },
                     onForget = { calls += "forget:$it" }, onDelete = { calls += "delete:$it" },
                     onSource = { calls += "source:$it" }, onDownloads = {},
-                    thumbnail = { Text("cover-${it.systemId}") }, sourceAvailableIds = sourceIds,
+                    thumbnail = { Text("cover-${it.systemId}") }, sourceAvailableIds = sourceIds.map { it.toString() }.toSet(),
                 )
             }
         }
     }
 
     private fun task(id: Long = 1) = DownloadItem(
-        id = id, name = "sample-$id.mp4", status = DownloadManager.STATUS_RUNNING,
+        id = id.toString(), name = "sample-$id.mp4", status = DownloadManager.STATUS_RUNNING,
         bytes = 0, total = -1, detail = "下载中", recordId = "record-$id",
     )
 
@@ -321,7 +321,7 @@ class DownloadLibraryUiTest {
     )
 
     private fun asset(id: Long) = VideoAsset(
-        recordId = "record-$id", systemId = id, uri = "content://downloads/all_downloads/$id",
+        recordId = id.toString(), systemId = id, uri = "content://downloads/all_downloads/$id",
         name = "sample-$id.mp4", displayName = "视频 $id", indexedAt = id * 1000,
         format = FormatCheck.PASSED, availability = FileAvailability.AVAILABLE,
     )

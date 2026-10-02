@@ -28,7 +28,7 @@ fun SettingsScreen(theme: ThemeMode, select: (ThemeMode)->Unit, wifiOnly:Boolean
             Column(Modifier.weight(1f)) { Text("默认仅 Wi-Fi 下载");Text("只影响新任务，可在确认时单独更改。",style=MaterialTheme.typography.bodySmall) }
             Switch(checked=wifiOnly,onCheckedChange=setWifiOnly,modifier=Modifier.testTag("defaultWifiOnly"))
         }
-        Text("文件保存在本机公共 Download 目录；显示名称可修改，实际文件名保留唯一前缀。移除记录不会删除文件，删除文件需要另行确认。",style=MaterialTheme.typography.bodySmall)
+        Text("文件保存在本机公共 Download/PureBrowser 目录；显示名称可修改，实际文件名保留唯一前缀。移除记录不会删除文件，删除文件需要另行确认。",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         Text("本地优先",style=MaterialTheme.typography.titleMedium)
         Text("标签、书签、历史与设置保存在此设备。不提供应用账号、云同步或云端解析。",style=MaterialTheme.typography.bodyMedium)
@@ -42,10 +42,11 @@ fun AboutScreen() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         Text("PureBrowser",style=MaterialTheme.typography.headlineMedium)
         Text("本地视频浏览器 · $version")
-        Text("支持普通网页浏览和公开 MP4 / WebM 等直链保存。HLS、DASH、blob 目前仅识别，不支持分片下载或登录鉴权传递。")
+        Text("应用 ID：${context.packageName}")
+        Text("支持 MP4/WebM 直链、无后缀视频与限定同源网站会话。HLS、DASH、blob 仅识别，不支持分片保存、跨站敏感鉴权或 DRM。")
         Text("仅保存你拥有或获授权的内容。不绕过 DRM 或访问控制。")
         Text("视频库仅索引本应用保存的文件，不扫描整机媒体。文件分享通过 Android 系统选择器交给你选定的应用；不会由本应用自动上传。")
         Text("开源组件：AndroidX / Jetpack Compose（Apache 2.0）；Kotlin（Apache 2.0）。Android WebView 和 DownloadManager 由设备系统提供。资源规则参考记录见项目 docs/SOURCE-RESEARCH.md；未复制第三方下载引擎。")
-        Text("基于 Android WebView、Jetpack Compose 和系统下载服务。应用无自有后端，不上传浏览数据。")
+        Text("基于 Android WebView、Jetpack Compose 和受控下载服务。应用无自有后端，不上传浏览数据。")
     }
 }

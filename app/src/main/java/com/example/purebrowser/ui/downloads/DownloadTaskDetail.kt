@@ -29,14 +29,16 @@ internal fun DownloadTaskDetail(item: DownloadItem, onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 DetailField("显示名称", localSafeLabel(item.displayName))
+                DetailField("访问条件", if(item.useAccessContext) "使用适用网站会话与最小来源" else "不使用网站会话")
                 DetailField("实际文件名", localSafeLabel(item.name))
                 DetailField("创建时间", localSavedTime(item.createdAt))
-                DetailField("系统任务读取", when (item.systemRead) {
+                DetailField(if(item.taskStatus==null) "系统任务读取" else "传输引擎", if(item.taskStatus!=null) "应用受控下载" else when (item.systemRead) {
                     SystemTaskRead.PRESENT -> "已读取系统任务"
                     SystemTaskRead.MISSING -> "系统任务不存在，不代表文件必然已删除"
                     SystemTaskRead.UNAVAILABLE -> "暂时无法读取，不把缓存状态视为当前状态"
                 })
                 DetailField("传输状态", when {
+                    item.taskStatus!=null -> item.detail
                     item.cancelled -> "已取消"
                     item.systemRead != SystemTaskRead.PRESENT -> "当前传输状态未确认"
                     else -> when (item.status) {

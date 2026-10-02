@@ -19,7 +19,7 @@ import com.example.purebrowser.library.LocalVideoThumbnail
 import com.example.purebrowser.ui.components.*
 
 @Composable
-fun HomeScreen(data: BrowserData, assets: List<VideoAsset>, library: ()->Unit, play: (Long)->Unit, open: (String) -> Unit, add: () -> Unit, edit: (Shortcut) -> Unit, bookmarks: () -> Unit, history: () -> Unit, downloads: () -> Unit) {
+fun HomeScreen(data: BrowserData, assets: List<VideoAsset>, library: ()->Unit, play: (String)->Unit, open: (String) -> Unit, add: () -> Unit, edit: (Shortcut) -> Unit, bookmarks: () -> Unit, history: () -> Unit, downloads: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().testTag("homeScreen"), contentPadding=PaddingValues(horizontal=24.dp,vertical=24.dp), verticalArrangement=Arrangement.spacedBy(24.dp)) {
         item {
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -49,7 +49,7 @@ fun HomeScreen(data: BrowserData, assets: List<VideoAsset>, library: ()->Unit, p
             val recent = assets.filter { it.availability == FileAvailability.AVAILABLE }.sortedByDescending { it.indexedAt }.take(3)
             if(recent.isEmpty()) Text("网页中发现视频后，从资源面板保存到本机。",color=MaterialTheme.colorScheme.onSurfaceVariant)
             recent.forEach { asset ->
-                Card(onClick={play(asset.systemId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)) {
+                Card(onClick={play(asset.recordId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)) {
                     Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                         LocalVideoThumbnail(asset,Modifier.size(64.dp))
                         Column(Modifier.weight(1f)) { Text(asset.displayName,maxLines=1,overflow=TextOverflow.Ellipsis);Text("已保存到设备",style=MaterialTheme.typography.bodySmall) }

@@ -40,7 +40,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         { mutableLink.value = it })
     val engine get() = tabs.active.value?.engine
     val sniffer get() = tabs.active.value?.sniffer
-    val repository = DownloadRepository(application)
+    private val runtime = com.example.purebrowser.download.DownloadRuntime.get(application)
+    val repository = runtime.repository
     private val mutableDownloads = MutableStateFlow<List<DownloadItem>>(emptyList())
     val downloads = mutableDownloads.asStateFlow()
     private val library = VideoLibraryRepository(repository)
@@ -51,13 +52,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val preferences = DownloadPreferences(application)
     private val mutableWifiOnly = MutableStateFlow(true)
     val defaultWifiOnly = mutableWifiOnly.asStateFlow()
-    private val mutableBusy = MutableStateFlow<Set<Long>>(emptySet())
+    private val mutableBusy = MutableStateFlow<Set<String>>(emptySet())
     val busyIds = mutableBusy.asStateFlow()
     private val mutableSubmitting = MutableStateFlow(false)
     val submitting = mutableSubmitting.asStateFlow()
     private var preferenceWrite = false
 
     init {
+        runtime.kick()
         viewModelScope.launch {
             mutableWifiOnly.value = withContext(Dispatchers.IO) { preferences.wifiOnly() }
             val loaded = withContext(Dispatchers.IO) { storage.load() }
@@ -136,35 +138,40 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
     fun download(draft: DownloadDraft, wifiOnly: Boolean, fileName: String? = null) {
         if(mutableSubmitting.value) return
+        if (draft.sourceTabId != tabs.active.value?.recordId || draft.sourceGeneration != engine?.generation ||
+            sniffer?.candidates?.value?.none { it.url == draft.candidate.url } != false) {
+            notify("页面资源已更新，请返回来源重新确认"); return
+        }
         mutableSubmitting.value = true
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) { repository.enqueue(draft, wifiOnly, fileName) }
+                runtime.kick()
                 notify("任务已加入下载中心")
             } catch (_: Exception) { notify("无法创建任务，请检查存储权限和资源地址") }
             finally { mutableSubmitting.value = false; refreshDownloads() }
         }
     }
-    private fun operation(id: Long, success: String, action: () -> Unit) {
+    private fun operation(id: String, success: String, action: () -> Unit) {
         if(id in mutableBusy.value) return
         mutableBusy.value += id
         viewModelScope.launch {
             try { withContext(Dispatchers.IO) { action() }; notify(success) }
             catch (error: Exception) { notify(error.message?.takeIf { !it.contains("://") && it.any { c -> c in '\u4e00'..'\u9fff' } } ?: "操作未完成，请刷新状态后检查访问权限和可用存储") }
-            finally { mutableBusy.value -= id; refreshDownloads() }
+            finally { mutableBusy.value -= id; runtime.kick(); refreshDownloads() }
         }
     }
-    fun cancelDownload(id: Long) = operation(id, "已取消；可以另建任务重试") { repository.cancel(id) }
-    fun forgetDownload(id: Long) = operation(id, "已移除记录，设备文件未删除") { repository.forgetRecord(id) }
-    fun deleteDownloadFile(id: Long) = operation(id, "已确认删除文件和记录") { repository.deleteFile(id) }
-    fun renameVideo(id: Long, value: String) = operation(id, "显示名称已更新，设备文件名未改变") { repository.rename(id, value) }
-    fun retryDownload(id: Long) {
+    fun cancelDownload(id: String) = operation(id, "已取消；可以另建任务重试") { repository.cancel(id) }
+    fun forgetDownload(id: String) = operation(id, "已移除记录，设备文件未删除") { repository.forgetRecord(id) }
+    fun deleteDownloadFile(id: String) = operation(id, "已确认删除文件和记录") { repository.deleteFile(id) }
+    fun renameVideo(id: String, value: String) = operation(id, "显示名称已更新，设备文件名未改变") { repository.rename(id, value) }
+    fun retryDownload(id: String, useContext: Boolean? = null) {
         val agent = WebSettings.getDefaultUserAgent(getApplication())
         val policy = mutableWifiOnly.value
-        operation(id, "已另建重试任务；原记录和文件保留") { repository.retry(id, agent, policy) }
+        operation(id, "已另建重试任务；原记录和文件保留") { repository.retry(id, agent, policy, useContext) }
     }
-    fun removeDownload(id: Long) = operation(id, "操作完成") { repository.remove(id) }
-    fun launchFile(context: Context, id: Long, share: Boolean) {
+    fun removeDownload(id: String) = operation(id, "操作完成") { repository.remove(id) }
+    fun launchFile(context: Context, id: String, share: Boolean) {
         if(id in mutableBusy.value) return
         mutableBusy.value += id
         viewModelScope.launch {
@@ -175,11 +182,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 }
                 LocalFileActions.launch(context, id, file.first, file.second, share)?.let(::notify)
             } catch (_: Exception) { notify("文件无法读取或格式未确认，请刷新下载中心并检查权限") }
-            finally { mutableBusy.value -= id; refreshDownloads() }
+            finally { mutableBusy.value -= id; runtime.kick(); refreshDownloads() }
         }
     }
     /** Restore the recorded source without replacing an unrelated browsing tab. */
-    fun returnToSource(id: Long) {
+    fun returnToSource(id: String) {
         viewModelScope.launch {
             val record = runCatching { withContext(Dispatchers.IO) { repository.record(id) } }.getOrNull()
             val url = record?.sourceUrl
@@ -189,7 +196,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             if(matching != null) tabs.select(matching.id) else newTab(url)
         }
     }
-    fun reconcileDownloads() { viewModelScope.launch { refreshDownloads() } }
+    fun reconcileDownloads() { runtime.kick(); viewModelScope.launch { refreshDownloads() } }
     private suspend fun refreshDownloads() = refreshMutex.withLock {
         runCatching { withContext(Dispatchers.IO) { repository.stateSnapshot() } }
             .onSuccess { state ->

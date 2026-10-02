@@ -22,10 +22,10 @@ public class FixtureFileReceiver extends Activity {
         JSONObject report = new JSONObject();
         try {
             report.put("action",intent.getAction()).put("readable",false);
-            long id = uri == null ? -1 : Long.parseLong(uri.getLastPathSegment());
-            if(uri != null && id > 0 && "content".equals(uri.getScheme()) && "downloads".equals(uri.getAuthority()) &&
-                uri.getQuery() == null && uri.getFragment() == null &&
-                (uri.getPath().equals("/all_downloads/"+id) || uri.getPath().equals("/my_downloads/"+id) || uri.getPath().equals("/public_downloads/"+id))) {
+            if(uri != null && "content".equals(uri.getScheme()) && uri.getQuery()==null && uri.getFragment()==null &&
+                ("downloads".equals(uri.getAuthority()) || "media".equals(uri.getAuthority()) ||
+                 "io.github.jeckchen666.purebrowser.debug.files".equals(uri.getAuthority()) ||
+                 "io.github.jeckchen666.purebrowser.files".equals(uri.getAuthority()))) {
                 ByteArrayOutputStream bytes = new ByteArrayOutputStream();
                 try(InputStream input=getContentResolver().openInputStream(uri)) {
                     byte[] buffer = new byte[8192]; int count;
@@ -33,7 +33,7 @@ public class FixtureFileReceiver extends Activity {
                 }
                 StringBuilder hash = new StringBuilder();
                 for(byte b:MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray())) hash.append(String.format("%02x",b & 255));
-                report.put("readable",true).put("id",id).put("size",bytes.size()).put("sha256",hash.toString());
+                report.put("readable",true).put("uri",uri.toString()).put("size",bytes.size()).put("sha256",hash.toString());
             }
         } catch(Exception ignored) { /* Honest false report for missing or denied URI. */ }
         try(FileOutputStream output=new FileOutputStream(new File(getFilesDir(),"fixture-file-received.json"))) {

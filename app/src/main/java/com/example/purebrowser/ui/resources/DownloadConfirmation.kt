@@ -46,13 +46,15 @@ fun DownloadConfirmation(
     draft: DownloadDraft,
     defaultWifiOnly: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (fileName: String, wifiOnly: Boolean) -> Unit,
+    onConfirm: (fileName: String, wifiOnly: Boolean, useContext: Boolean) -> Unit,
 ) {
     val frozen = remember(draft) { draft.copy(candidate = draft.candidate.copy(sources = draft.candidate.sources.toSet())) }
     val suggestion = remember(frozen) { suggestedFileName(frozen.candidate) }
     var fileName by rememberSaveable(frozen) { mutableStateOf(suggestion) }
     // Defaults seed a new draft only. A settings refresh must not undo this task's choice.
     var wifiOnly by rememberSaveable(frozen) { mutableStateOf(defaultWifiOnly) }
+    val contextAvailable = com.example.purebrowser.download.RequestPolicy.canUseContext(frozen.sourceUrl,frozen.frameUrl,frozen.reliableSource)
+    var useContext by rememberSaveable(frozen) { mutableStateOf(contextAvailable && frozen.useAccessContext) }
     var submitted by remember(frozen) { mutableStateOf(false) }
     val safeName = DownloadRules.safeFileName(fileName)
     val canConfirm = fileName.isNotBlank() && fileName.trim() !in setOf(".", "..") &&
@@ -89,7 +91,7 @@ fun DownloadConfirmation(
             keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
             modifier = Modifier.fillMaxWidth().testTag("download-file-name"),
         )
-        Text("保存至系统 Download 目录。保存时会添加唯一前缀，避免覆盖同名文件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("保存至系统 Download/PureBrowser 目录。保存时会添加唯一前缀，避免覆盖同名文件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 .toggleable(value = wifiOnly, enabled = !submitted, role = Role.Checkbox, onValueChange = { wifiOnly = it }),
@@ -103,8 +105,18 @@ fun DownloadConfirmation(
                 Text(if (wifiOnly) "无 Wi-Fi 时等待连接" else "允许使用移动网络，可能产生流量费用", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        Row(Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("download-use-context")
+            .toggleable(value=useContext,enabled=contextAvailable && !submitted,role=Role.Checkbox,onValueChange={ useContext=it }),
+            verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Checkbox(checked=useContext,onCheckedChange=null,enabled=contextAvailable && !submitted)
+            Column(Modifier.weight(1f)) {
+                Text("使用当前网站访问条件")
+                Text(if(contextAvailable) "只使用适用的同源会话和最小来源；可关闭后尝试公开下载" else "没有可靠页面关联，不使用网站会话",
+                    style=MaterialTheme.typography.bodySmall)
+            }
+        }
         Text(
-            if (frozen.candidate.canTryDownload()) "仅尝试公开文件直链，不转发 Cookie 或登录凭据。签名可能过期；下载完成后仍需检查文件格式，不保证视频可播放。"
+            if (frozen.candidate.canTryDownload()) "仅支持 MP4/WebM 文件直链；会话不写入任务记录，不跨源转发。签名可能过期，格式初检不等于完整播放保证。"
             else frozen.candidate.unsupportedExplanation(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -115,7 +127,7 @@ fun DownloadConfirmation(
                     submitted = true
                     focusManager.clearFocus(force=true)
                     keyboard?.hide()
-                    onConfirm(safeName, wifiOnly)
+                    onConfirm(safeName, wifiOnly, useContext)
                 }
             },
             enabled = canConfirm,

@@ -24,6 +24,10 @@ class ResourceSniffer {
         mimeType: String? = null,
         sizeBytes: Long? = null,
         videoElement: Boolean = false,
+        title: String? = null,
+        frameUrl: String? = null,
+        playing: Boolean = false,
+        reliableSource: Boolean = false,
     ) {
         if (pageEpoch != epoch) return
         val kind = MediaClassifier.classify(url, mimeType, videoElement) ?: return
@@ -36,10 +40,25 @@ class ResourceSniffer {
             old?.sources.orEmpty() + source,
             mimeType?.takeIf { it.isNotBlank() } ?: old?.mimeType,
             sizeBytes?.takeIf { it > 0 } ?: old?.sizeBytes,
+            title?.takeIf { it.isNotBlank() }?.take(120) ?: old?.title,
+            frameUrl ?: old?.frameUrl,
+            if(source==Evidence.DOM)playing else old?.playing ?: false,
+            reliableSource || old?.reliableSource == true,
         )
         if (old != candidate) {
             entries[key] = candidate
-            mutableCandidates.value = entries.values.toList()
+            mutableCandidates.value = entries.values.sortedByDescending {
+                when { it.playing && Evidence.DOM in it.sources -> 4; Evidence.DOM in it.sources -> 3
+                    Evidence.DOWNLOAD in it.sources -> 2; else -> 1 }
+            }
+        }
+    }
+
+    @Synchronized fun updatePlayback(pageEpoch:Long,playingUrls:Set<String>) {
+        if(pageEpoch!=epoch)return
+        entries.replaceAll { url,value ->value.copy(playing=url in playingUrls) }
+        mutableCandidates.value=entries.values.sortedByDescending {
+            when { it.playing && Evidence.DOM in it.sources->4;Evidence.DOM in it.sources->3;Evidence.DOWNLOAD in it.sources->2;else->1 }
         }
     }
 }

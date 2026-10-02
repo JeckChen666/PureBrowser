@@ -25,12 +25,12 @@ object LocalFileActions {
     @MainThread
     fun launch(
         context: Context,
-        id: Long,
+        id: String,
         uri: Uri,
         mimeType: String,
         share: Boolean,
     ): String? {
-        if (id <= 0 || !DownloadRules.isOwnedDownloadUri(uri.toString(), id)) {
+        if (id.isBlank() || (id.toLongOrNull()?.let { it <= 0 || (uri.authority=="downloads" && !DownloadRules.isOwnedDownloadUri(uri.toString(),it)) } == true) || !DownloadRules.isLocalAssetUri(uri.toString(), context.packageName)) {
             return "仅支持本应用保存的视频，请返回下载中心核对记录。"
         }
         val type = mimeType.trim()

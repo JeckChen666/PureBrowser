@@ -8,7 +8,7 @@ import java.net.URI
 import java.util.Locale
 
 /** Presentation only: no requests, probing, or changes to the original candidate URL. */
-internal fun MediaCandidate.canTryDownload(): Boolean = kind == MediaKind.FILE && runCatching {
+internal fun MediaCandidate.canTryDownload(): Boolean = kind in setOf(MediaKind.FILE,MediaKind.UNKNOWN) && runCatching {
     val uri = URI(url)
     uri.scheme?.lowercase(Locale.ROOT) in setOf("http", "https") &&
         !uri.host.isNullOrBlank() && uri.rawUserInfo == null && uri.port in -1..65535
@@ -24,7 +24,7 @@ internal fun MediaCandidate.unsupportedExplanation(): String = when {
     kind == MediaKind.FILE ->
         "此地址不是可交给系统下载器的 HTTP / HTTPS 文件直链，暂时不能尝试保存。"
     else ->
-        "已发现媒体线索，但尚未确认文件类型。请播放视频后重新查看；目前不能将此线索当作完整视频下载。"
+        "已发现媒体线索，但尚未确认文件类型。请播放视频后重新查看；可尝试保存，响应不是完整 MP4/WebM 时会拒绝入库。"
 }
 
 internal fun MediaCandidate.resourceType(): String {

@@ -50,13 +50,11 @@ class ResourceUiTest {
             MediaCandidate("https://media.example/playlist.m3u8?token=hls-secret", MediaKind.HLS, setOf(Evidence.REQUEST)),
             MediaCandidate("https://media.example/manifest.mpd?token=dash-secret", MediaKind.DASH, setOf(Evidence.REQUEST)),
             MediaCandidate("blob:https://page.example/local-id", MediaKind.LOCAL, setOf(Evidence.DOM), mimeType = "video/mp4"),
-            MediaCandidate("https://media.example/mystery", MediaKind.UNKNOWN, setOf(Evidence.DOM), sizeBytes = -1),
         )
         val explanations = listOf(
             "这是 HLS 播放清单，不是完整视频文件。目前不支持下载分片并合并；保存清单也不会得到完整视频。",
             "这是 DASH 播放清单，音频和视频可能分开传输。目前不支持分片下载与音视频合并。",
             "这是播放器在当前页面中创建的本地媒体地址，不是独立文件直链。请播放视频后，再查看是否发现底层视频直链。",
-            "已发现媒体线索，但尚未确认文件类型。请播放视频后重新查看；目前不能将此线索当作完整视频下载。",
         )
         val selected = mutableListOf<MediaCandidate>()
         compose.setContent {
@@ -65,12 +63,12 @@ class ResourceUiTest {
             }
         }
 
-        compose.onNodeWithText("1 个可尝试的直链 · 4 个其他媒体资源").assertExists()
+        compose.onNodeWithText("1 个可尝试的直链 · 3 个其他媒体资源").assertExists()
         scrollSheetTo(file.displayName)
         cardFor(file).assert(hasAnyDescendant(hasText("尝试下载") and hasClickAction()))
         others.forEach { compose.onAllNodesWithText(it.displayName).assertCountEquals(0) }
 
-        clickSheetText("其他媒体资源（4） · 展开")
+        clickSheetText("其他媒体资源（3） · 展开")
         others.zip(explanations).forEach { (candidate, explanation) ->
             scrollSheetTo(candidate.displayName)
             compose.onNodeWithText(candidate.displayName).assertIsDisplayed()
@@ -85,7 +83,7 @@ class ResourceUiTest {
         }
         compose.runOnIdle { assertTrue("Expansion must not select/download anything", selected.isEmpty()) }
 
-        clickSheetText("其他媒体资源（4） · 收起")
+        clickSheetText("其他媒体资源（3） · 收起")
         others.forEach { compose.onAllNodesWithText(it.displayName).assertCountEquals(0) }
         clickSheetText("尝试下载")
         compose.runOnIdle { assertEquals(listOf(file), selected) }
@@ -189,7 +187,7 @@ class ResourceUiTest {
                         draft = draft,
                         defaultWifiOnly = wifiDefault.value,
                         onDismiss = { selection.value = null },
-                        onConfirm = { name, wifi -> submissions.add(Submission(draft, name, wifi)) },
+                        onConfirm = { name, wifi, _ -> submissions.add(Submission(draft, name, wifi)) },
                     )
                 }
             }
@@ -252,7 +250,7 @@ class ResourceUiTest {
                     draft = draft,
                     defaultWifiOnly = false,
                     onDismiss = {},
-                    onConfirm = { name, wifi -> submissions.add(Submission(draft, name, wifi)) },
+                    onConfirm = { name, wifi, _ -> submissions.add(Submission(draft, name, wifi)) },
                 )
             }
         }
@@ -274,7 +272,7 @@ class ResourceUiTest {
                     draft = DownloadDraft(fileCandidate(), "resource-test-agent"),
                     defaultWifiOnly = true,
                     onDismiss = { dismissCalls++ },
-                    onConfirm = { _, _ -> confirmCalls++ },
+                    onConfirm = { _, _, _ -> confirmCalls++ },
                 )
             }
         }
@@ -331,4 +329,12 @@ class ResourceUiTest {
     )
 
     private data class Submission(val draft: DownloadDraft, val fileName: String, val wifiOnly: Boolean)
+
+    @Test fun extensionlessDomCandidateCanBeSelectedForControlledValidation() {
+        val unknown=MediaCandidate("https://media.example/mystery?token=exact",MediaKind.UNKNOWN,setOf(Evidence.DOM))
+        val selected=mutableListOf<MediaCandidate>()
+        compose.setContent { PureBrowserTheme { ResourceSheet(listOf(unknown),{}, {selected.add(it)}, {}) } }
+        clickSheetText("尝试下载")
+        compose.runOnIdle { assertEquals(listOf(unknown),selected) }
+    }
 }

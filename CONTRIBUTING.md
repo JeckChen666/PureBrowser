@@ -1,6 +1,6 @@
 # 参与 PureBrowser
 
-感谢参与。当前版本为 v0.1.0 源码预览，后续版本计划见 `docs/VERSION-ROADMAP-0.1.md`。
+感谢参与。当前版本为 v0.1.1 正式签名小范围测试版，后续版本计划见 `docs/VERSION-ROADMAP-0.1.md`。
 
 ## 提交问题
 

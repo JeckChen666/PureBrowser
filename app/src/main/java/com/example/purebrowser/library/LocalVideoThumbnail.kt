@@ -46,8 +46,8 @@ fun LocalVideoThumbnail(asset: VideoAsset, modifier: Modifier = Modifier) {
     val key = LocalThumbnailKey.from(asset)
     val eligible = canReadLocalThumbnail(asset)
     // Replace the state synchronously on eligibility/identity changes: never flash a stale cover.
-    var bitmap by remember(key, eligible, asset.systemId) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(app, key, eligible, asset.systemId) {
+    var bitmap by remember(key, eligible, asset.recordId) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(app, key, eligible, asset.recordId) {
         if (eligible) bitmap = withContext(Dispatchers.IO) { LocalThumbnailCache.load(app, key) }
     }
 
@@ -82,9 +82,12 @@ fun LocalVideoThumbnail(asset: VideoAsset, modifier: Modifier = Modifier) {
 }
 
 internal fun canReadLocalThumbnail(asset: VideoAsset): Boolean =
-    asset.systemId > 0 && asset.format == FormatCheck.PASSED &&
+    asset.recordId.isNotBlank() && asset.format == FormatCheck.PASSED &&
         asset.availability == FileAvailability.AVAILABLE &&
-        DownloadRules.isOwnedDownloadUri(asset.uri, asset.systemId)
+        when(asset.location) {
+            com.example.purebrowser.download.AssetLocation.SYSTEM_DOWNLOAD -> asset.systemId != null && DownloadRules.isOwnedDownloadUri(asset.uri,asset.systemId)
+            else -> runCatching { java.net.URI(asset.uri).scheme=="content" && java.net.URI(asset.uri).authority in setOf("media", "io.github.jeckchen666.purebrowser.files", "io.github.jeckchen666.purebrowser.debug.files") }.getOrDefault(false)
+        }
 
 internal data class LocalThumbnailKey(val uri: String, val sizeBytes: Long?, val updatedAt: Long) {
     companion object {

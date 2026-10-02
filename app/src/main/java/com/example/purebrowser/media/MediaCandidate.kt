@@ -15,8 +15,12 @@ data class MediaCandidate(
     val sources: Set<Evidence>,
     val mimeType: String? = null,
     val sizeBytes: Long? = null,
+    val title: String? = null,
+    val frameUrl: String? = null,
+    val playing: Boolean = false,
+    val reliableSource: Boolean = false,
 ) {
-    val displayName: String get() = runCatching {
+    val displayName: String get() = title?.takeIf { it.isNotBlank() }?.take(120) ?: runCatching {
         URI(url).path?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
     }.getOrNull()?.take(120) ?: kind.label
     // Do not expose signed query strings in the normal resource panel.

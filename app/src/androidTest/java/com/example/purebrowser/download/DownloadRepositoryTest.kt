@@ -79,13 +79,13 @@ class DownloadRepositoryTest {
         val result = runCatching(action)
         assertTrue("Operation should reject unsafe/unconfirmed state", result.isFailure)
         assertTrue("Expected a validation/state rejection, not an unrelated exception",
-            result.exceptionOrNull() is IllegalArgumentException || result.exceptionOrNull() is IllegalStateException)
+            result.exceptionOrNull() is IllegalArgumentException || result.exceptionOrNull() is IllegalStateException || result.exceptionOrNull() is TransferFailure)
     }
 
     @Test fun migrationNeverCreatesOrDeletesTasksAndRetainsUnknownFields() = withState { dir, backend ->
         val store = DownloadStore(dir) { """[{"id":7,"name":"old.mp4"}]""" }
         val repository = DownloadRepository(store, backend)
-        assertEquals(7L, repository.snapshot().single().id)
+        assertEquals("legacy-7", repository.snapshot().single().id)
         val record = store.load().records.single()
         assertEquals("old.mp4", record.name); assertNull(record.createdAt); assertNull(record.sourceUrl)
         assertNull(record.mediaUrl); assertNull(record.userAgent); assertNull(record.wifiOnly)
@@ -144,12 +144,12 @@ class DownloadRepositoryTest {
         assertEquals(2, records.size); assertEquals(2, a.snapshot().size); assertEquals(2, b.snapshot().size)
         assertTrue(records.all { it.sourceUrl == "https://example.com/watch" && it.sourceTabId == "tab1" && it.sourceGeneration == 8L })
     }
-    @Test fun persistenceFailureRollsBackOnlyThisNewSystemTask() = withState { dir, backend ->
+    @Test fun persistenceFailureCreatesNoTransferAndPreservesExistingSystemTask() = withState { dir, backend ->
         val store = DownloadStore(dir); store.save(DownloadData(records = listOf(record()))); backend.completed(7)
         val repository = DownloadRepository(store, backend)
-        backend.onEnqueue = { File(store.file.path + ".new").mkdir() }
+        File(store.file.path + ".new").apply { mkdir(); File(this,"prevent-delete").writeText("failure fixture") }
         assertTrue(runCatching { repository.enqueue(draft(), true) }.isFailure)
-        assertEquals(listOf(100L), backend.removed); assertTrue(backend.rows.containsKey(7)); assertFalse(backend.rows.containsKey(100L))
+        assertTrue(backend.enqueued.isEmpty());assertTrue(backend.removed.isEmpty());assertTrue(backend.rows.containsKey(7))
         assertEquals(listOf(7L), store.load().records.map { it.systemId })
     }
     @Test fun unavailableSystemStateIsNotReportedAsConfirmedTransferFailure() = withState { dir, backend ->
@@ -175,9 +175,9 @@ class DownloadRepositoryTest {
         val id = repository.retry(7, "FallbackAgent", true)
         val after = store.load()
         val old = after.records.single { it.systemId == 7L }
-        val fresh = after.records.single { it.systemId == id }
-        assertEquals(100L, id)
-        assertNotEquals(old.systemId, fresh.systemId)
+        val fresh = after.records.single { it.recordId == id }
+        assertTrue(id.matches(Regex("[a-f0-9-]{36}")))
+        assertNull(fresh.systemId); assertEquals(TransferType.CONTROLLED,fresh.transfer)
         assertNotEquals(old.recordId, fresh.recordId)
         assertEquals(old.recordId, fresh.retryOf)
         assertEquals(persistedBefore.records.single(), old)
@@ -194,7 +194,7 @@ class DownloadRepositoryTest {
         assertEquals(original.sourceTabId, fresh.sourceTabId)
         assertEquals(original.sourceGeneration, fresh.sourceGeneration)
         assertFalse(fresh.cancelled)
-        assertEquals(EnqueueCall(original.mediaUrl!!, fresh.name, original.userAgent!!, false), backend.enqueueCalls.single())
+        assertTrue(backend.enqueueCalls.isEmpty())
         assertTrue(backend.removed.isEmpty())
         assertEquals(FileAvailability.AVAILABLE, backend.access[backend.uri(7)]!!.availability)
         val reloaded = DownloadRepository(DownloadStore(dir), backend)
@@ -217,7 +217,7 @@ class DownloadRepositoryTest {
         assertEquals(signed, fresh.mediaUrl)
         assertEquals("FallbackAgent/2.0", fresh.userAgent)
         assertEquals(true, fresh.wifiOnly)
-        assertEquals(EnqueueCall(signed, fresh.name, "FallbackAgent/2.0", true), backend.enqueueCalls.single())
+        assertTrue(backend.enqueueCalls.isEmpty())
         assertTrue(backend.removed.isEmpty())
         assertEquals(2, store.load().records.size)
     }
@@ -259,15 +259,15 @@ class DownloadRepositoryTest {
         assertTrue(cancelled.cancelled); assertTrue(cancelled.canRetry)
         assertTrue(cancelled.detail.contains("取消")); assertFalse(cancelled.verified)
         val id = reloaded.retry(7, "FallbackAgent", true)
-        assertEquals(100L, id)
+        assertTrue(id.matches(Regex("[a-f0-9-]{36}")))
         assertEquals(original.copy(cancelled = true), reloaded.record(7))
         assertEquals(original.recordId, reloaded.record(id)!!.retryOf)
         assertFalse(reloaded.record(id)!!.cancelled)
         assertEquals(2, store.load().records.size)
         assertEquals(listOf(7L), backend.removed) // Retry must not remove the old ID again.
-        assertEquals(original.mediaUrl, backend.enqueueCalls.single().url)
-        assertEquals(original.userAgent, backend.enqueueCalls.single().userAgent)
-        assertFalse(backend.enqueueCalls.single().wifiOnly)
+        assertTrue(backend.enqueueCalls.isEmpty())
+        assertTrue(backend.enqueueCalls.isEmpty())
+        assertEquals(false,reloaded.record(id)!!.wifiOnly)
     }
 
     @Test fun cancelAcceptsOnlyOngoingStatesAndDoesNotTouchAnotherTask() {
@@ -352,7 +352,7 @@ class DownloadRepositoryTest {
         assertTrue(backend.removed.isEmpty()); assertTrue(backend.enqueued.isEmpty())
         val repository = DownloadRepository(DownloadStore(dir), backend)
         val state = repository.stateSnapshot()
-        assertEquals("重命名的视频", state.tasks.single { it.id == 7L }.displayName)
+        assertEquals("重命名的视频", state.tasks.single { it.id == "r7" }.displayName)
         val entry = VideoLibraryRepository(repository).entries(state).single { it.systemId == 7L }
         assertEquals("重命名的视频", entry.displayName)
         assertEquals(original.name, entry.name); assertEquals(oldAsset.uri, entry.uri)
@@ -459,7 +459,7 @@ class DownloadRepositoryTest {
         assertEquals(otherRow, backend.rows[8]); assertEquals(otherFile, backend.access[backend.uri(8)])
         val reloaded = DownloadRepository(DownloadStore(dir), backend)
         val state = reloaded.stateSnapshot()
-        assertEquals(listOf(8L), state.tasks.map { it.id })
+        assertEquals(listOf("r8"), state.tasks.map { it.id })
         assertEquals(listOf(8L), VideoLibraryRepository(reloaded).entries(state).map { it.systemId })
         assertNull(reloaded.record(7)); assertNull(reloaded.fileUri(7))
         assertTrue(backend.enqueued.isEmpty())
@@ -521,10 +521,10 @@ class DownloadRepositoryTest {
             val repository = DownloadRepository(store, backend, allowLocalHttp = debug)
             val signed = "https://example.com:443/video.mp4?signature=a%2Bb&policy=exact%2Fone"
             val id = repository.enqueue(draft(signed), true, "signed_video.mp4")
-            assertEquals(100L, id)
+            assertTrue(id.matches(Regex("[a-f0-9-]{36}")))
             val saved = store.load().records.single()
             assertEquals(signed, saved.mediaUrl)
-            assertEquals(EnqueueCall(signed, saved.name, "agent", true), backend.enqueueCalls.single())
+            assertTrue(backend.enqueueCalls.isEmpty())
             assertTrue(saved.name.endsWith("_signed_video.mp4"))
             assertTrue(backend.removed.isEmpty())
         } }
@@ -535,10 +535,10 @@ class DownloadRepositoryTest {
             val store = DownloadStore(dir)
             val url = "http://$host:8080/video.mp4?signature=a%2Bb"
             val id = DownloadRepository(store, backend, allowLocalHttp = true).enqueue(draft(url), false)
-            assertEquals(100L, id)
+            assertTrue(id.matches(Regex("[a-f0-9-]{36}")))
             assertEquals(url, store.load().records.single().mediaUrl)
-            assertEquals(url, backend.enqueueCalls.single().url)
-            assertFalse(backend.enqueueCalls.single().wifiOnly)
+            assertEquals(url, store.load().records.single().mediaUrl)
+            assertEquals(false,store.load().records.single().wifiOnly)
             assertTrue(backend.removed.isEmpty())
         } }
     }
@@ -580,7 +580,7 @@ class DownloadRepositoryTest {
         assertTrue(backend.enqueued.isEmpty()); assertTrue(backend.removed.isEmpty())
         val debug = DownloadRepository(store, backend, allowLocalHttp = true)
         val id = debug.retry(7, "FallbackAgent", true)
-        assertEquals(100L, id)
+        assertTrue(id.matches(Regex("[a-f0-9-]{36}")))
         assertEquals(original.mediaUrl, debug.record(id)!!.mediaUrl)
         assertEquals(original.recordId, debug.record(id)!!.retryOf)
         assertEquals(original, debug.record(7))

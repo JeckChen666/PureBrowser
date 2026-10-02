@@ -6,17 +6,32 @@ plugins {
 android {
     namespace = "com.example.purebrowser"
     compileSdk = 36
+    testBuildType = if (providers.gradleProperty("releaseSmoke").orNull == "true") "release" else "debug"
     defaultConfig {
-        applicationId = "com.example.purebrowser"
+        applicationId = "io.github.jeckchen666.purebrowser"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.0"
+        versionCode = 4
+        versionName = "0.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("releaseLocal") {
+            val file = System.getenv("PB_SIGNING_STORE_FILE")
+            if (!file.isNullOrBlank()) {
+                storeFile = rootProject.file(file)
+                storePassword = System.getenv("PB_SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("PB_SIGNING_KEY_ALIAS") ?: "purebrowser-release"
+                keyPassword = System.getenv("PB_SIGNING_KEY_PASSWORD")
+                storeType = "PKCS12"
+            }
+        }
+    }
     buildTypes {
+        debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug" }
         release {
+            signingConfig = signingConfigs.getByName("releaseLocal")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -79,4 +94,13 @@ dependencies {
 
   // WebView history is handled by NavigationEvent, not the template Nav3 demo.
   implementation(libs.androidx.navigationevent.compose)
+}
+
+// Never silently publish an unsigned or Debug-signed Release.
+tasks.matching { it.name == "validateSigningRelease" }.configureEach {
+    doFirst {
+        require(!System.getenv("PB_SIGNING_STORE_FILE").isNullOrBlank() &&
+            !System.getenv("PB_SIGNING_STORE_PASSWORD").isNullOrBlank() &&
+            !System.getenv("PB_SIGNING_KEY_PASSWORD").isNullOrBlank()) { "Release signing requires PB_SIGNING_* environment values; no Debug fallback." }
+    }
 }

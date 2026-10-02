@@ -61,7 +61,7 @@ class DownloadRulesTest {
     @Test fun incidentalLoggingCannotExposeSignedUrlsOrRequestContext() {
         val secret = "https://example.com/video.mp4?signature=private-token"
         val r = record().copy(mediaUrl = secret, sourceUrl = secret, userAgent = "private-agent")
-        val item = DownloadItem(1, "video.mp4", 8, 100, 100, "saved", sourceUrl = secret)
+        val item = DownloadItem("1", "video.mp4", 8, 100, 100, "saved", sourceUrl = secret)
         val draft = DownloadDraft(com.example.purebrowser.media.MediaCandidate(secret,
             com.example.purebrowser.media.MediaKind.FILE, emptySet()), "private-agent", secret)
         listOf(r.toString(), item.toString(), draft.toString()).forEach {

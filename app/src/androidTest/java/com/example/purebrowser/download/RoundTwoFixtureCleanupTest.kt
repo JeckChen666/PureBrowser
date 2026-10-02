@@ -21,7 +21,7 @@ class RoundTwoFixtureCleanupTest {
         if(inventory.exists()) ids+=inventory.readLines().mapNotNull { it.toLongOrNull() }
         ids+=args.getString("extraOwnedIds").orEmpty().split(',').mapNotNull { it.toLongOrNull() }
         // Records not forgotten are also validated against the synthetic endpoint before removal.
-        ids+=DownloadStore(app).load().records.filter { it.createdAt!=null }.map { it.systemId }
+        ids+=DownloadStore(app).load().records.filter { it.createdAt!=null }.mapNotNull { it.systemId }
         val paths=setOf("/sample.mp4","/sample.webm","/second.mp4","/bad.mp4","/private.mp4","/expired.mp4","/unknown.mp4","/slow.mp4")
         var removed=0
         for(id in ids-excluded) {

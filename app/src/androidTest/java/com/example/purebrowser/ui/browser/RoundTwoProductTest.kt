@@ -27,7 +27,7 @@ class RoundTwoProductTest {
         compose.waitUntil(10000) { model.ready.value }
     }
     private fun main(action: ()->Unit) { compose.activityRule.scenario.onActivity { action() } }
-    private fun track(id: Long) {
+    private fun track(id: String) {
         // Cleanup/audit inventory contains ONLY IDs created by this test run, no original task IDs.
         File(compose.activity.cacheDir,"round2-owned-task-ids.txt").appendText("$id\n")
     }
@@ -59,7 +59,7 @@ class RoundTwoProductTest {
         args.getString("fixtureSha256")?.let { assertEquals(it, hash(mp4Uri)) }
         args.getString("fixtureWebmSha256")?.let { assertEquals(it, hash(webmUri)) }
         assertEquals(false, model.repository.record(mp4.id)!!.wifiOnly)
-        assertTrue(model.videoLibrary.value.filter { it.systemId in setOf(mp4.id,webm.id) }.all { it.durationMillis!! > 0 && it.sizeBytes!! > 0 })
+        assertTrue(model.videoLibrary.value.filter { it.recordId in setOf(mp4.id,webm.id) }.all { it.durationMillis!! > 0 && it.sizeBytes!! > 0 })
         main { model.setDefaultWifiOnly(true); model.tabs.close(source); model.newTab() }
         val unrelated = model.data.value.selectedId
         compose.waitUntil(5000) { model.defaultWifiOnly.value }
@@ -76,7 +76,7 @@ class RoundTwoProductTest {
         compose.onNodeWithTag("video-rename-${webm.id}").performClick()
         compose.onNodeWithTag("video-title-input-${webm.id}").performTextReplacement("本地 WebM 成品")
         compose.onNodeWithTag("video-title-save-${webm.id}").performClick()
-        compose.waitUntil(5000) { model.videoLibrary.value.any { it.systemId==webm.id && it.displayName=="本地 WebM 成品" } }
+        compose.waitUntil(5000) { model.videoLibrary.value.any { it.recordId==webm.id && it.displayName=="本地 WebM 成品" } }
         assertEquals(webm.name, model.repository.record(webm.id)!!.name)
         compose.waitUntil(8000) { model.message.value==null }
         Thread.sleep(400) // Let snackbar/IME close animation finish before the next tap.
@@ -90,7 +90,7 @@ class RoundTwoProductTest {
             throw e
         }
         compose.onNodeWithTag("video-forget-dialog-${mp4.id}-confirm").performClick()
-        compose.waitUntil(5000) { model.downloads.value.none { it.id==mp4.id } && model.videoLibrary.value.none { it.systemId==mp4.id } }
+        compose.waitUntil(5000) { model.downloads.value.none { it.id==mp4.id } && model.videoLibrary.value.none { it.recordId==mp4.id } }
         assertEquals(args.getString("fixtureSha256"), hash(mp4Uri)) // Forget preserved the exact file.
         assertTrue(DownloadRepository(compose.activity).snapshot().none { it.id==mp4.id })
         compose.waitUntil(8000) { model.message.value==null }
@@ -98,9 +98,9 @@ class RoundTwoProductTest {
         scrollLibrary("video-delete-${webm.id}")
         compose.onNodeWithTag("video-delete-${webm.id}").performClick()
         compose.onNodeWithTag("video-delete-dialog-${webm.id}-confirm").performClick()
-        compose.waitUntil(5000) { model.downloads.value.none { it.id==webm.id } && model.videoLibrary.value.none { it.systemId==webm.id } }
+        compose.waitUntil(5000) { model.downloads.value.none { it.id==webm.id } && model.videoLibrary.value.none { it.recordId==webm.id } }
         assertNotEquals(FileAvailability.AVAILABLE, AndroidDownloadBackend(compose.activity).access(webmUri.toString()).availability)
-        assertEquals(SystemDownloadResult.Missing, AndroidDownloadBackend(compose.activity).query(webm.id))
+        assertNull(model.repository.record(webm.id))
         File(compose.activity.cacheDir,"round2-deleted-file-name.txt").writeText(webm.name)
         File(compose.activity.cacheDir,"round2-forgotten-id.txt").writeText(mp4.id.toString())
         main { model.setDefaultWifiOnly(false);model.flush() }
@@ -110,7 +110,7 @@ class RoundTwoProductTest {
         start()
         main { model.setDefaultWifiOnly(false); model.newTab("$base/product.html") }
         compose.waitUntil(15000) { !model.defaultWifiOnly.value && model.sniffer?.candidates?.value?.any { it.displayName=="sample.mp4" }==true }
-        fun enqueue(path: String): Long {
+        fun enqueue(path: String): String {
             val previous=model.repository.snapshot().map { it.id }.toSet()
             val candidate=MediaCandidate("$base/$path",MediaKind.FILE,setOf(Evidence.REQUEST))
             val draft=model.downloadDraft(candidate,"PureBrowser-Fixture")
@@ -131,7 +131,7 @@ class RoundTwoProductTest {
             throw AssertionError("Fixture IDs=$fixtureIds; flow=${describe(model.downloads.value)}; fresh=$fresh; message=${model.message.value}",error)
         }
         assertEquals(FormatCheck.INVALID,model.downloads.value.first { it.id==html }.format)
-        assertTrue(model.videoLibrary.value.none { it.systemId==html })
+        assertTrue(model.videoLibrary.value.none { it.recordId==html })
         assertTrue(listOf(denied,expired).all { id -> model.downloads.value.first { it.id==id }.let { !it.verified && it.canRetry && it.sourceUrl != null } })
         assertTrue(model.downloads.value.first { it.id==unknown }.verified)
         val slow=enqueue("slow.mp4")

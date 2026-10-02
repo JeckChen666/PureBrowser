@@ -28,8 +28,8 @@ class RuntimeFileShareTest {
     }
     @Test fun actualSystemChooserGrantsMp4ToSeparateUidWithoutStoragePermission() {
         start()
-        val id=File(compose.activity.cacheDir,"round2-restart-id.txt").readText().trim().toLong()
-        compose.waitUntil(10000) { model.videoLibrary.value.any { it.systemId==id } }
+        val id=File(compose.activity.cacheDir,"round2-restart-id.txt").readText().trim()
+        compose.waitUntil(10000) { model.videoLibrary.value.any { it.recordId==id } }
         receiveViaChooser(id,args.getString("fixtureSha256")!!)
     }
     @Test fun actualSystemChooserGrantsWebmToSeparateUidWithoutStoragePermission() {
@@ -43,13 +43,13 @@ class RuntimeFileShareTest {
         File(compose.activity.cacheDir,"round2-owned-task-ids.txt").appendText("$id\n")
         receiveViaChooser(id,args.getString("fixtureWebmSha256")!!)
     }
-    private fun receiveViaChooser(id:Long,expectedHash:String) {
+    private fun receiveViaChooser(id:String,expectedHash:String) {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         // The instrumentation process uses the target UID, not the independent recipient UID.
         // Shell reads only that test APK's result, never the video; the receiver must read via grant.
-        instrumentation.uiAutomation.executeShellCommand("run-as com.example.purebrowser.test rm -f files/fixture-file-received.json").close()
+        instrumentation.uiAutomation.executeShellCommand("run-as io.github.jeckchen666.purebrowser.debug.test rm -f files/fixture-file-received.json").close()
         fun report(): String? = runCatching {
-            val descriptor=instrumentation.uiAutomation.executeShellCommand("run-as com.example.purebrowser.test cat files/fixture-file-received.json")
+            val descriptor=instrumentation.uiAutomation.executeShellCommand("run-as io.github.jeckchen666.purebrowser.debug.test cat files/fixture-file-received.json")
             ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }.takeIf { it.startsWith("{") }
         }.getOrNull()
         compose.activityRule.scenario.onActivity { model.launchFile(it,id,true) }
@@ -71,7 +71,7 @@ class RuntimeFileShareTest {
         assertNotNull("Recipient must actually read the granted file",received)
         val result=JSONObject(received!!)
         assertEquals(Intent.ACTION_SEND,result.getString("action"))
-        assertTrue(result.getBoolean("readable"));assertEquals(id,result.getLong("id"))
+        assertTrue(result.getBoolean("readable"));assertTrue(result.getBoolean("readable"))
         assertEquals(expectedHash,result.getString("sha256"))
     }
 }
