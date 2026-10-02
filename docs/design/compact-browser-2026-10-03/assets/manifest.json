@@ -1,0 +1,210 @@
+{
+  "design_date": "2026-10-03",
+  "timezone": "Asia/Shanghai",
+  "revision": "V4",
+  "status": "accepted_direction_not_implemented",
+  "assets": [
+    {
+      "file": "00-full-overview.png",
+      "width": 2304,
+      "height": 3072,
+      "bytes": 6307527,
+      "sha256": "b57af3f366b815fab35be82c31967dba30e084e42c6ca4eccc5c393e851bceb0",
+      "kind": "local_composite"
+    },
+    {
+      "file": "01-navigation.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1572358,
+      "sha256": "d946d2ca560eb022756f62a0ceaf657166fb411781149d6b95329bc41564fa09",
+      "kind": "ai_generated_concept"
+    },
+    {
+      "file": "02-tabs.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1319271,
+      "sha256": "c6f5b4a1df2b2fc8abbd0abcb91155b006a6578b0ca6e1ffd579cc75f477ebcc",
+      "kind": "ai_generated_concept"
+    },
+    {
+      "file": "03-downloads.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1617322,
+      "sha256": "4a3c779dfea32b42f03b9566361c6444c6d4c7dd8b6244016444eb92ce6955bf",
+      "kind": "ai_generated_concept"
+    },
+    {
+      "file": "04-library-settings.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1696187,
+      "sha256": "c3993cafc1bd65ced2fe6b67ca366878df2879d77bc846d4c212830b2aaeedaa",
+      "kind": "ai_generated_concept"
+    },
+    {
+      "file": "05-menu-bookmarks-history.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1367586,
+      "sha256": "48e83b08f49ed9923285ef7c7e54b80075ebd91a9bb345f72bf5b83fdb0a1bf0",
+      "kind": "ai_generated_concept"
+    }
+  ],
+  "overview": {
+    "source": "five approved boards, cropped and placed without resizing",
+    "columns": [
+      {
+        "board": "01-navigation.png",
+        "screens": [
+          "首页",
+          "浏览网页",
+          "输入网址"
+        ],
+        "crops_xyxy": [
+          [
+            84,
+            121,
+            494,
+            982
+          ],
+          [
+            559,
+            121,
+            975,
+            982
+          ],
+          [
+            1039,
+            121,
+            1453,
+            982
+          ]
+        ]
+      },
+      {
+        "board": "02-tabs.png",
+        "screens": [
+          "双列网格",
+          "紧凑列表",
+          "搜索结果"
+        ],
+        "crops_xyxy": [
+          [
+            94,
+            132,
+            482,
+            969
+          ],
+          [
+            559,
+            132,
+            956,
+            969
+          ],
+          [
+            1027,
+            132,
+            1436,
+            969
+          ]
+        ]
+      },
+      {
+        "board": "03-downloads.png",
+        "screens": [
+          "资源选择",
+          "下载速览",
+          "下载管理"
+        ],
+        "crops_xyxy": [
+          [
+            77,
+            132,
+            487,
+            963
+          ],
+          [
+            565,
+            132,
+            975,
+            963
+          ],
+          [
+            1049,
+            132,
+            1460,
+            963
+          ]
+        ]
+      },
+      {
+        "board": "04-library-settings.png",
+        "screens": [
+          "本地视频库",
+          "文件操作",
+          "设置"
+        ],
+        "crops_xyxy": [
+          [
+            109,
+            121,
+            498,
+            965
+          ],
+          [
+            574,
+            121,
+            968,
+            965
+          ],
+          [
+            1038,
+            121,
+            1429,
+            965
+          ]
+        ]
+      },
+      {
+        "board": "05-menu-bookmarks-history.png",
+        "screens": [
+          "页面菜单",
+          "书签",
+          "历史"
+        ],
+        "crops_xyxy": [
+          [
+            130,
+            140,
+            512,
+            961
+          ],
+          [
+            579,
+            140,
+            959,
+            961
+          ],
+          [
+            1025,
+            140,
+            1407,
+            961
+          ]
+        ]
+      }
+    ],
+    "placement": {
+      "column_origin_x": 28,
+      "column_step": 454,
+      "cell_width": 430,
+      "first_image_y": 245,
+      "row_step": 936,
+      "horizontal_alignment": "center",
+      "image_scale": 1
+    }
+  }
+}

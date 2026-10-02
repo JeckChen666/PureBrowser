@@ -122,6 +122,8 @@ python3 tools/fixtures/serve_video_fixture.py
 
 ## 项目文档
 
+- [UI 设计方向：紧凑版浏览器 V4](docs/design/compact-browser-2026-10-03/README.md)：15 个界面总览、顶部网址／底部操作、交互规则及后续验收清单；仅设计方向，尚未实施。
+
 - `docs/releases/v0.1.0.md`：首个开源源码预览的发布说明。
 - `docs/SOURCE-RESEARCH.md`：GitHub 参考项目、许可证、固定提交、采用与不采用的设计。
 - `docs/T1-T7-COMPLETION.md`：第一轮交付、验收与边界。
