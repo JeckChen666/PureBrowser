@@ -16,13 +16,19 @@ import java.security.MessageDigest
 
 /** All public outputs are minted here; never accepts webpage file paths. */
 class ManagedFileStore(private val app: Context) {
+    val directCheckpoints=DirectCheckpointStore(app.filesDir)
     val hlsWorkspace=com.example.purebrowser.download.hls.HlsWorkspace(File(app.filesDir,"hls"))
     private val stages=File(app.filesDir,"transfers").apply { mkdirs() }
     fun stage(id:TaskId):File {
         require(Regex("[a-zA-Z0-9-]{1,100}").matches(id))
-        return File(stages,"$id.part")
+        require(!java.nio.file.Files.isSymbolicLink(stages.toPath()))
+        val f=File(stages,"$id.part")
+        require(!java.nio.file.Files.isSymbolicLink(f.toPath()) && f.canonicalFile.parentFile==stages.canonicalFile)
+        return f
     }
     fun removeStage(id:TaskId) { val f=stage(id); if(f.exists()) check(f.delete()) { "临时文件暂时无法清理" } }
+    fun cacheBytes(id:TaskId):Long = runCatching { stage(id).length()+hlsWorkspace.cacheBytes(id) }.getOrDefault(0L)
+    fun clearPrivate(id:TaskId) { removeStage(id);directCheckpoints.delete(id);hlsWorkspace.delete(id) }
     fun inspect(file:File):MediaInspection {
         val header=file.inputStream().use { input -> ByteArray(4096).let { bytes -> val n=input.read(bytes); bytes.copyOf(n.coerceAtLeast(0)) } }
         val mime=MediaContainer.mime(header) ?: return MediaInspection(FormatCheck.INVALID)
@@ -176,17 +182,43 @@ class ManagedFileStore(private val app: Context) {
         }
     }
     fun cleanupPending(record:DownloadRecord) {
-        val uri=record.pendingUri ?: return
+        if(record.taskStatus==TaskStatus.SUCCEEDED)return
+        require(Regex("[a-zA-Z0-9-]{1,100}").matches(record.recordId))
+        val uri=record.pendingUri
         if(Build.VERSION.SDK_INT>=29) {
-            val parsed=Uri.parse(uri)
-            if(mediaOwned(parsed,record.name)) check(app.contentResolver.delete(parsed,null,null)>0)
+            if(uri!=null) {
+                val parsed=Uri.parse(uri)
+                if(mediaOwned(parsed,record.name)) check(app.contentResolver.delete(parsed,null,null)>0)
+            } else if(record.name.startsWith("${record.recordId.take(8)}_")) {
+                // Insert can precede the metadata callback. Only this app's exact task pending row;
+                // never published rows, arbitrary URI shapes, or a global Downloads sweep.
+                val collection=MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                val selection="${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.IS_PENDING}=1 AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME}=?"
+                val args=arrayOf(record.name,"Download/PureBrowser/",app.packageName)
+                val cursor=if(Build.VERSION.SDK_INT>=30)app.contentResolver.query(collection,arrayOf(MediaStore.MediaColumns._ID),
+                    android.os.Bundle().apply {
+                        putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION,selection)
+                        putStringArray(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,args)
+                        putInt(MediaStore.QUERY_ARG_MATCH_PENDING,MediaStore.MATCH_INCLUDE)
+                    },null)
+                else {
+                    @Suppress("DEPRECATION")
+                    val pendingCollection=MediaStore.setIncludePending(collection)
+                    app.contentResolver.query(pendingCollection,arrayOf(MediaStore.MediaColumns._ID),selection,args,null)
+                }
+                val ids=cursor?.use { cursor ->
+                    buildList { while(cursor.moveToNext())add(cursor.getLong(0)) }
+                }.orEmpty()
+                ids.forEach { id -> val row=android.content.ContentUris.withAppendedId(collection,id)
+                    if(mediaOwned(row,record.name))check(app.contentResolver.delete(row,null,null)>0)
+                }
+            }
         } else {
             val f=legacyFile(record.name)
-            if(uri==FileProvider.getUriForFile(app,"${app.packageName}.files",f).toString()) {
-                val partial=File(f.parentFile,".pb-${record.recordId}.part")
-                if(partial.exists())check(partial.delete())
-                if(f.exists())check(f.delete())
-            }
+            val partial=File(f.parentFile,".pb-${record.recordId}.part")
+            require(!java.nio.file.Files.isSymbolicLink(partial.toPath()) && partial.canonicalFile.parentFile==f.parentFile!!.canonicalFile)
+            if(partial.exists())check(partial.delete())
+            if(uri!=null && uri==FileProvider.getUriForFile(app,"${app.packageName}.files",f).toString() && f.exists())check(f.delete())
         }
     }
 }

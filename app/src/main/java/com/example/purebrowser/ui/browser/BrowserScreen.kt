@@ -160,12 +160,24 @@ fun BrowserScreen(model: BrowserViewModel = viewModel()) {
                     when(route) {
                         Destination.BOOKMARKS -> SavedPagesScreen(data.bookmarks,false,::navigate,{item->editor=Editor("编辑书签",item.title,item.url,bookmark=item)},{deletion=it})
                         Destination.HISTORY -> SavedPagesScreen(data.history,true,::navigate,{}, {deletion=it})
-                        Destination.SETTINGS -> SettingsScreen(data.theme,model::setTheme,wifiOnly,model::setDefaultWifiOnly){open(Destination.ABOUT)}
+                        Destination.SETTINGS -> SettingsScreen(data.theme,model::setTheme,wifiOnly,model::setDefaultWifiOnly,about={open(Destination.ABOUT)},
+                            privacyActions=SettingsPrivacyActions(
+                                clearHistory={model.clearLocalData(com.example.purebrowser.privacy.PrivacyCategory.HISTORY)},
+                                clearSiteData={model.clearLocalData(com.example.purebrowser.privacy.PrivacyCategory.SITE_DATA)},
+                                clearCache={model.clearLocalData(com.example.purebrowser.privacy.PrivacyCategory.CACHE)},
+                                clearDownloadTemp={model.clearLocalData(com.example.purebrowser.privacy.PrivacyCategory.DOWNLOAD_TEMP)},
+                                diagnosticReport=model::diagnosticReport,
+                                shareDiagnosticReport={text->
+                                    val share=android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                                        .putExtra(android.content.Intent.EXTRA_TEXT,text)
+                                    runCatching { context.startActivity(android.content.Intent.createChooser(share,"分享脱敏诊断")) }
+                                        .onFailure { model.notify("没有可用的分享应用") }
+                                }))
                         Destination.ABOUT -> AboutScreen()
                         Destination.DOWNLOADS -> DownloadsScreen(downloads,busy,::routeBack,
                             {id->model.launchFile(context,id,false)},{id->model.launchFile(context,id,true)},
                             model::retryDownload,model::cancelDownload,model::forgetDownload,model::deleteDownloadFile,
-                            ::source,{open(Destination.LIBRARY)},onRetryWithoutContext={ model.retryDownload(it,false) })
+                            ::source,{open(Destination.LIBRARY)},onRetryWithoutContext={ model.retryDownload(it,false) },onPause=model::pauseDownload,onResume=model::resumeDownload)
                         Destination.LIBRARY -> VideoLibraryScreen(assets,busy,::routeBack,
                             {id->model.launchFile(context,id,false)},{id->model.launchFile(context,id,true)},
                             model::renameVideo,model::forgetDownload,model::deleteDownloadFile,::source,
@@ -192,8 +204,6 @@ fun BrowserScreen(model: BrowserViewModel = viewModel()) {
 
 @Composable
 private fun PageEditor(value: Editor,onDismiss:()->Unit,save:(String,String)->Boolean,delete:(()->Unit)?) {
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
     var name by remember(value) {mutableStateOf(value.name)}
     var url by remember(value) {mutableStateOf(value.url)}
     var error by remember(value) {mutableStateOf(false)}
@@ -203,6 +213,15 @@ private fun PageEditor(value: Editor,onDismiss:()->Unit,save:(String,String)->Bo
         OutlinedTextField(value=url,onValueChange={url=it},singleLine=true,label={Text("网址")},modifier=Modifier.testTag("editorUrl"),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Uri))
         if(error) Text("请检查名称与网址；不要重复收藏或超过站点数量上限。",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
         if(delete!=null) TextButton(onClick={confirmDelete=true}) {Text("删除此站点")}
-    }},confirmButton={TextButton(onClick={focus.clearFocus(force=true);keyboard?.hide();error=!save(name,url)},modifier=Modifier.testTag("editorSave")){Text("保存")}},dismissButton={TextButton(onClick=onDismiss){Text("取消")}})
+    }},confirmButton={
+        // AlertDialog buttons run in the dialog root, unlike this function's caller.
+        val focus = LocalFocusManager.current
+        val keyboard = LocalSoftwareKeyboardController.current
+        TextButton(onClick={focus.clearFocus(force=true);keyboard?.hide();error=!save(name,url)},modifier=Modifier.testTag("editorSave")){Text("保存")}
+    },dismissButton={
+        val focus = LocalFocusManager.current
+        val keyboard = LocalSoftwareKeyboardController.current
+        TextButton(onClick={focus.clearFocus(force=true);keyboard?.hide();onDismiss()}){Text("取消")}
+    })
     if(confirmDelete && delete!=null) AlertDialog(onDismissRequest={confirmDelete=false},title={Text("删除这个常用站点？")},confirmButton={TextButton(onClick={confirmDelete=false;delete()}){Text("删除")}},dismissButton={TextButton(onClick={confirmDelete=false}){Text("取消")}})
 }

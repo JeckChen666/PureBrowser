@@ -328,8 +328,6 @@ private fun RenameVideoTitleDialog(
     onDismiss: () -> Unit,
     onRename: (String) -> Unit,
 ) {
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
     var title by rememberSaveable(asset.recordId) { mutableStateOf(asset.displayName) }
     val trimmed = title.trim()
     val invalid = trimmed.isBlank() || trimmed.length > 180 || trimmed.any { it.isISOControl() }
@@ -356,12 +354,18 @@ private fun RenameVideoTitleDialog(
             }
         },
         confirmButton = {
+            val focus = LocalFocusManager.current
+            val keyboard = LocalSoftwareKeyboardController.current
             TextButton(
                 onClick = { if (enabled && !invalid && changed) { focus.clearFocus(force=true);keyboard?.hide();onRename(trimmed) } },
                 enabled = enabled && !invalid && changed,
                 modifier = Modifier.testTag("video-title-save-${asset.recordId}"),
             ) { Text("保存显示名称") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("返回") } },
+        dismissButton = {
+            val focus = LocalFocusManager.current
+            val keyboard = LocalSoftwareKeyboardController.current
+            TextButton(onClick = { focus.clearFocus(force = true); keyboard?.hide(); onDismiss() }) { Text("返回") }
+        },
     )
 }

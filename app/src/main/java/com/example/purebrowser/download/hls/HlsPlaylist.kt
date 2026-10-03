@@ -29,12 +29,12 @@ sealed interface HlsPlaylist {
         override fun toString() = "HlsPlaylist.Master(variantCount=${variants.size})"
     }
 
-    class Media(segments: List<HlsSegment>, val durationUs: Long, val targetDurationUs: Long) : HlsPlaylist {
+    class Media(segments: List<HlsSegment>, val durationUs: Long, val targetDurationUs: Long, val mediaSequence: Long = 0) : HlsPlaylist {
         val segments: List<HlsSegment> = Collections.unmodifiableList(ArrayList(segments))
         override fun equals(other: Any?) = other is Media && segments == other.segments &&
-            durationUs == other.durationUs && targetDurationUs == other.targetDurationUs
-        override fun hashCode() = 31 * (31 * segments.hashCode() + durationUs.hashCode()) + targetDurationUs.hashCode()
-        override fun toString() = "HlsPlaylist.Media(segmentCount=${segments.size}, durationUs=$durationUs, targetDurationUs=$targetDurationUs)"
+            durationUs == other.durationUs && targetDurationUs == other.targetDurationUs && mediaSequence == other.mediaSequence
+        override fun hashCode() = 31 * (31 * (31 * segments.hashCode() + durationUs.hashCode()) + targetDurationUs.hashCode()) + mediaSequence.hashCode()
+        override fun toString() = "HlsPlaylist.Media(segmentCount=${segments.size}, durationUs=$durationUs, targetDurationUs=$targetDurationUs, mediaSequence=$mediaSequence)"
     }
 }
 

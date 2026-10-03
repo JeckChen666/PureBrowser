@@ -192,6 +192,8 @@ private fun ResourceCard(
                 overflow = TextOverflow.Ellipsis,
             )
             ResourceMetadata(candidate)
+            if(downloadable && suggestedFileName(candidate)!=candidate.displayName)
+                Text("资源文件名：${suggestedFileName(candidate)}",style=MaterialTheme.typography.bodySmall)
             if (!downloadable) {
                 Text(
                     candidate.unsupportedExplanation(),
@@ -202,7 +204,7 @@ private fun ResourceCard(
             if (downloadable) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(onClick = onDetails, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("查看详情") }
-                    Button(onClick = onSelect, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("尝试下载") }
+                    Button(onClick = onSelect, modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag(resourceSaveTag(candidate.url))) { Text("尝试下载") }
                 }
             } else {
                 OutlinedButton(onClick = onDetails, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("查看详情") }

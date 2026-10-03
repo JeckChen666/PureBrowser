@@ -78,18 +78,18 @@ class HlsBrowserJourneyTest {
             origin.rawFragment == null && origin.path.isNullOrEmpty()) { "Use only the local synthetic HLS fixture" }
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         if (Build.VERSION.SDK_INT <= 28) {
-            assumeTrue("Pre-grant legacy READ/WRITE_EXTERNAL_STORAGE for this opt-in journey",
+            assertTrue("Pre-grant legacy READ/WRITE_EXTERNAL_STORAGE for this opt-in journey",
                 listOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                     .all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED })
         }
         if (Build.VERSION.SDK_INT >= 33) {
-            assumeTrue("Pre-grant POST_NOTIFICATIONS so a system permission prompt cannot mask this journey",
+            assertTrue("Pre-grant POST_NOTIFICATIONS so a system permission prompt cannot mask this journey",
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
         }
         lateinit var model: BrowserViewModel
         compose.activityRule.scenario.onActivity { model = ViewModelProvider(it)[BrowserViewModel::class.java] }
         compose.waitUntil(10_000) { model.ready.value }
-        assumeTrue("Local HTTP fixtures require the debug request policy", model.repository.allowLocalHttp)
+        assertTrue("Local HTTP fixtures require the debug request policy", model.repository.allowLocalHttp)
         val worker = Executors.newSingleThreadExecutor()
         fun <T> io(block: () -> T): T = worker.submit(Callable { block() }).get(20, TimeUnit.SECONDS)
         val repository = model.repository

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -80,6 +81,7 @@ class HlsUiTest {
         compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithTag("download-file-name").performScrollTo().performTextReplacement("chosen.mp4")
         compose.onNodeWithTag("download-file-name").performImeAction()
+        compose.onNodeWithTag("download-file-name").assertIsNotFocused()
         compose.onNode(isToggleable() and hasText("仅 Wi-Fi")).performScrollTo().assertIsOn().performClick().assertIsOff()
         compose.runOnIdle { defaults.value = false }
         compose.runOnIdle { defaults.value = true }

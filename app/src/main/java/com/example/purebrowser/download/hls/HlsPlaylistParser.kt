@@ -67,6 +67,7 @@ object HlsPlaylistParser {
         var pendingVariant: Attributes? = null
         var pendingDuration: Long? = null
         var targetDurationUs: Long? = null
+        var mediaSequence = 0L
         var totalUs = 0L
         var ended = false
         while (lines.hasNext()) {
@@ -166,7 +167,7 @@ object HlsPlaylistParser {
                 "#EXT-X-MEDIA-SEQUENCE" -> {
                     mark(Kind.MEDIA); once(tag)
                     if (segments.isNotEmpty() || pendingDuration != null) reject("分片序号标签位置无效")
-                    integer(value(), Long.MAX_VALUE, false)
+                    mediaSequence = integer(value(), Long.MAX_VALUE, false)
                 }
                 "#EXT-X-PLAYLIST-TYPE" -> {
                     mark(Kind.MEDIA); once(tag)
@@ -217,7 +218,7 @@ object HlsPlaylistParser {
         val target = targetDurationUs ?: reject("媒体清单缺少目标分片时长")
         if (segments.any { ((it.durationUs + SECOND_US / 2) / SECOND_US) * SECOND_US > target })
             reject("分片时长超过清单目标时长")
-        return HlsPlaylist.Media(segments, totalUs, target)
+        return HlsPlaylist.Media(segments, totalUs, target, mediaSequence)
     }
 
     /** Stable order breaks metadata ties. Unknown metadata is never invented. */

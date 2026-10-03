@@ -72,6 +72,7 @@ class BrowserEngine(
         }
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String?, favicon: Bitmap?) {
+                invalidateScan()
                 sameDocumentUpdate=false
                 navigationStartedMs=System.currentTimeMillis()
                 pageEpoch.set(sniffer.beginPage())
@@ -132,10 +133,17 @@ class BrowserEngine(
     fun pause() { scanningActive = false; handler.removeCallbacks(scanner); view?.onPause() }
     fun resume() { view?.onResume(); scanningActive = true; handler.removeCallbacks(scanner); handler.post(scanner) }
 
+    private fun invalidateScan() {
+        // Navigation can discard an evaluateJavascript callback. Never wait on the
+        // old document's completion, and never let it unlock a newer scan.
+        scanToken++
+        domScanRunning = false
+    }
+
     private fun updateNavigation() {
         view?.let {
             val nextUrl = it.url ?: "about:blank"
-            if (nextUrl != mutablePage.value.url) { sameDocumentUpdate=true;navigationStartedMs=System.currentTimeMillis();pageEpoch.set(sniffer.beginPage()) }
+            if (nextUrl != mutablePage.value.url) { invalidateScan(); sameDocumentUpdate=true;navigationStartedMs=System.currentTimeMillis();pageEpoch.set(sniffer.beginPage()) }
             publish(mutablePage.value.copy(url = nextUrl, canGoBack = it.canGoBack(), canGoForward = it.canGoForward())) }
     }
 

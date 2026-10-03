@@ -22,11 +22,18 @@ class DownloadStore(
     var writable = true
         private set
     private var notice: String? = null
+    // Cache parsing, NOT disk identity: every load still reads AtomicFile and compares the entire JSON text.
+    // Stat-only caches would miss equal-length external edits and could bypass future-schema protection.
+    private var parsedRaw: String? = null
+    private var parsedData: DownloadData? = null
+    private var parsedGeneration=-1L
+    private fun invalidateParsed() { parsedRaw=null;parsedData=null }
 
     fun takeNotice(): String? = synchronized(transactionLock) { notice.also { notice = null } }
 
     fun load(): DownloadData = synchronized(transactionLock) {
         if (!file.exists() && !File(file.path + ".bak").exists()) {
+            invalidateParsed()
             val raw = legacyReader()
             val data = try { DownloadData(records = decodeLegacy(raw)) }
             catch (_: Exception) {
@@ -50,8 +57,16 @@ class DownloadStore(
                 }
                 result.toString("UTF-8")
             }
+            parsedData?.let { if(raw==parsedRaw) { parsedGeneration=transactionGeneration;return@synchronized it } }
             val data = decode(raw)
-            if (JSONObject(raw).getInt("schemaVersion") in setOf(2, 3)) {
+            val version=JSONObject(raw).getInt("schemaVersion")
+            if(version==SCHEMA_VERSION) {
+                val immutable=data.copy(records=java.util.Collections.unmodifiableList(data.records.toList()),
+                    assets=java.util.Collections.unmodifiableList(data.assets.toList()))
+                parsedRaw=raw;parsedData=immutable;parsedGeneration=transactionGeneration
+                return@synchronized immutable
+            }
+            if (version in setOf(2, 3, 4)) {
                 val bytes = raw.toByteArray(Charsets.UTF_8)
                 val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).take(8).joinToString("") { "%02x".format(it) }
                 val oldVersion = JSONObject(raw).getInt("schemaVersion")
@@ -66,10 +81,12 @@ class DownloadStore(
             }
             data
         } catch (_: FutureSchemaException) {
+            invalidateParsed()
             writable = false
             notice = "下载记录版本不兼容，原始数据未改动"
             DownloadData()
         } catch (_: Exception) {
+            invalidateParsed()
             // Do not resurrect removed records by importing the old preference file again.
             writable = runCatching {
                 file.copyTo(backupFile("state"), overwrite = false)
@@ -83,12 +100,21 @@ class DownloadStore(
 
     fun save(data: DownloadData) = synchronized(transactionLock) {
         check(writable) { "Download storage is read-only" }
+        invalidateParsed() // The next load still validates the successfully written representation.
         val bytes = encode(data).toByteArray(Charsets.UTF_8)
         require(bytes.size <= DownloadRules.MAX_FILE_BYTES)
         file.parentFile?.mkdirs()
         val stream = atomic.startWrite()
-        try { stream.write(bytes); atomic.finishWrite(stream) }
+        try { stream.write(bytes); atomic.finishWrite(stream);transactionGeneration++ }
         catch (failure: Exception) { atomic.failWrite(stream); throw failure }
+    }
+
+    /** Hot writer gate only. All app commits invalidate this view under the same transaction lock.
+     * Normal load/change still read the actual AtomicFile; coordinator/progress/final publication
+     * revalidate disk. Resume, migration and ownership never authorize from this transient view. */
+    internal fun writerRecord(id:TaskId):DownloadRecord?=synchronized(transactionLock) {
+        val data=if(parsedData!=null && parsedGeneration==transactionGeneration)parsedData!! else load()
+        if(writable)data.records.firstOrNull { it.recordId==id } else null
     }
 
     private fun backupFile(label: String) = File(file.parentFile,
@@ -103,7 +129,8 @@ class DownloadStore(
     companion object {
         // Covers read-modify-save across repository instances, not only atomic file writes.
         internal val transactionLock = Any()
-        const val SCHEMA_VERSION = 4
+        private var transactionGeneration=0L
+        const val SCHEMA_VERSION = 5
 
         private fun JSONObject.nullableString(key: String): String? = if (isNull(key)) null else getString(key)
         private fun JSONObject.exactLong(key:String):Long {
@@ -129,7 +156,7 @@ class DownloadStore(
                     .put("protocol",r.protocol.name).field("hlsPlaylistUrl",r.hlsPlaylistUrl)
                     .field("hlsWidth",r.hlsWidth).field("hlsHeight",r.hlsHeight).field("hlsBandwidth",r.hlsBandwidth)
                     .field("plannedDurationUs",r.plannedDurationUs).field("segmentCount",r.segmentCount)
-                    .put("completedSegments",r.completedSegments).field("safeFailure",r.safeFailure))
+                    .put("completedSegments",r.completedSegments).field("safeFailure",r.safeFailure).field("pauseReason",r.pauseReason?.name).put("resumeAvailable",r.resumeAvailable))
             } }
             val assets = JSONArray().apply { data.assets.forEach { a ->
                 put(JSONObject().put("recordId", a.recordId).field("systemId", a.systemId).put("uri", a.uri)
@@ -146,7 +173,7 @@ class DownloadStore(
             require(raw.toByteArray(Charsets.UTF_8).size <= DownloadRules.MAX_FILE_BYTES)
             val obj = JSONObject(raw)
             val version=runCatching { obj.exactLong("schemaVersion") }.getOrElse { throw FutureSchemaException() }
-            if(version !in setOf(2L,3L,SCHEMA_VERSION.toLong()))throw FutureSchemaException()
+            if(version !in setOf(2L,3L,4L,SCHEMA_VERSION.toLong()))throw FutureSchemaException()
             require(obj.getBoolean("legacyMigrationDone"))
             val records = obj.getJSONArray("records").let { a ->
                 require(a.length() <= DownloadRules.MAX_RECORDS)
@@ -173,7 +200,9 @@ class DownloadStore(
                         plannedDurationUs=if(r.has("plannedDurationUs"))r.nullableLong("plannedDurationUs") else null,
                         segmentCount=if(r.has("segmentCount") && !r.isNull("segmentCount"))r.exactInt("segmentCount") else null,
                         completedSegments=if(r.has("completedSegments"))r.exactInt("completedSegments") else 0,
-                        safeFailure=if(r.has("safeFailure"))r.nullableString("safeFailure") else null)
+                        safeFailure=if(r.has("safeFailure"))r.nullableString("safeFailure") else null,
+                        pauseReason=if(r.has("pauseReason"))r.nullableString("pauseReason")?.let(PauseReason::valueOf) else null,
+                        resumeAvailable=version>=5 && r.optBoolean("resumeAvailable",false))
                 } }
             }
             val assets = obj.getJSONArray("assets").let { a ->

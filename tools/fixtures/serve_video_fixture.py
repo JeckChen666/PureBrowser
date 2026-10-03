@@ -47,7 +47,7 @@ def main():
 <video controls preload="metadata" src="/sample.mp4?token=demo%2Bsignature"></video>
 <p>资源面板应有 MP4、HLS、DASH 候选；不应列出 TS 和 init 分片。</p>
 <img src="/bad.mp4" alt="格式错误响应测试" width="1" height="1">
-<script>['/sample.m3u8','/manifest.mpd','/chunk.ts','/init.mp4'].forEach(u=>fetch(u).catch(()=>{}));</script>
+<script>['/bad.mp4','/sample.m3u8','/manifest.mpd','/chunk.ts','/init.mp4'].forEach(u=>fetch(u).catch(()=>{}));</script>
 </html>''', encoding="utf-8")
         (root / "dynamic.html").write_text('''<!doctype html><meta charset="UTF-8"><title>动态视频验收</title>
         <button onclick="fetch('/login').then(()=>{document.querySelector('video').src='/session'})">模拟授权登录</button>

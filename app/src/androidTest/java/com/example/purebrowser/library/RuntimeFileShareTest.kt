@@ -26,23 +26,28 @@ class RuntimeFileShareTest {
         compose.activityRule.scenario.onActivity { model=ViewModelProvider(it)[BrowserViewModel::class.java] }
         compose.waitUntil(10000) { model.ready.value }
     }
-    @Test fun actualSystemChooserGrantsMp4ToSeparateUidWithoutStoragePermission() {
+    private fun saveAndShare(path:String,name:String,expectedHash:String) {
         start()
-        val id=File(compose.activity.cacheDir,"round2-restart-id.txt").readText().trim()
-        compose.waitUntil(10000) { model.videoLibrary.value.any { it.recordId==id } }
-        receiveViaChooser(id,args.getString("fixtureSha256")!!)
-    }
-    @Test fun actualSystemChooserGrantsWebmToSeparateUidWithoutStoragePermission() {
-        start()
-        val previous=model.repository.snapshot().map { it.id }.toSet()
         val base=args.getString("fixtureBaseUrl") ?: "http://127.0.0.1:8765"
-        val draft=model.downloadDraft(MediaCandidate("$base/sample.webm",MediaKind.FILE,setOf(Evidence.REQUEST),"video/webm"),"PureBrowser-Fixture")
-        compose.activityRule.scenario.onActivity { model.download(draft,false,"r2_share.webm") }
-        compose.waitUntil(60000) { model.downloads.value.any { it.id !in previous && it.verified } }
-        val id=model.downloads.value.first { it.id !in previous && it.verified }.id
-        File(compose.activity.cacheDir,"round2-owned-task-ids.txt").appendText("$id\n")
-        receiveViaChooser(id,args.getString("fixtureWebmSha256")!!)
+        val runtime=com.example.purebrowser.download.DownloadRuntime.get(compose.activity)
+        runtime.recover()
+        val id=model.repository.enqueue(com.example.purebrowser.download.DownloadDraft(
+            MediaCandidate("$base/$path",MediaKind.FILE,setOf(Evidence.REQUEST)),"PureBrowser-ShareAudit",useAccessContext=false),false,name)
+        try {
+            runtime.kick()
+            compose.waitUntil(60000) { model.downloads.value.any { it.id==id && it.verified } }
+            receiveViaChooser(id,expectedHash)
+        } finally {
+            val end=System.currentTimeMillis()+10000
+            while(model.repository.transferInFlight(id) && System.currentTimeMillis()<end)Thread.sleep(50)
+            if(model.repository.stateSnapshot().assets.any { it.recordId==id })model.repository.deleteFile(id)
+            else { runCatching { model.repository.cancel(id) };runCatching { model.repository.forgetRecord(id) } }
+        }
     }
+    @Test fun actualSystemChooserGrantsMp4ToSeparateUidWithoutStoragePermission() =
+        saveAndShare("sample.mp4?token=demo%2Bsignature","share-owned.mp4",args.getString("fixtureSha256")!!)
+    @Test fun actualSystemChooserGrantsWebmToSeparateUidWithoutStoragePermission() =
+        saveAndShare("sample.webm","share-owned.webm",args.getString("fixtureWebmSha256")!!)
     private fun receiveViaChooser(id:String,expectedHash:String) {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         // The instrumentation process uses the target UID, not the independent recipient UID.
@@ -53,17 +58,7 @@ class RuntimeFileShareTest {
             ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }.takeIf { it.startsWith("{") }
         }.getOrNull()
         compose.activityRule.scenario.onActivity { model.launchFile(it,id,true) }
-        val deadline=System.currentTimeMillis()+15000
-        var clicked=false
-        while(System.currentTimeMillis()<deadline && !clicked) {
-            val matches=instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("本地视频验收接收器").orEmpty()
-            for(node in matches) {
-                var target:AccessibilityNodeInfo?=node
-                while(target!=null && !target.isClickable) target=target.parent
-                if(target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)==true) { clicked=true;break }
-            }
-            Thread.sleep(300)
-        }
+        val clicked = chooseFixtureRecipient(instrumentation, 15_000)
         assertTrue("Actual chooser must expose the test-only file recipient",clicked)
         val readDeadline=System.currentTimeMillis()+10000
         var received=report()

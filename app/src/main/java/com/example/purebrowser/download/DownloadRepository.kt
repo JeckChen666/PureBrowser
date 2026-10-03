@@ -20,6 +20,41 @@ class DownloadRepository(
 ) {
     constructor(context:Context):this(DownloadStore(context),AndroidDownloadBackend(context),
         context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE!=0,ManagedFileStore(context.applicationContext))
+    @Volatile var transfersAllowed:Boolean=true
+    @Volatile private var privacyGeneration:Long=0
+    private class RequestLease(val token:TransferCancellation) {
+        val done=java.util.concurrent.CountDownLatch(1)
+    }
+    private val requestLeases=java.util.concurrent.ConcurrentHashMap<String,RequestLease>()
+    internal var retryTransport:HttpTransport=UrlConnectionTransport()
+    fun requestGeneration():Long=synchronized(DownloadStore.transactionLock) {
+        check(transfersAllowed) { "网站数据正在清理，请稍后操作" };privacyGeneration
+    }
+    fun beginPrivacyExclusion() {
+        val leases=synchronized(DownloadStore.transactionLock) {
+            transfersAllowed=false;privacyGeneration++;requestLeases.values.toList()
+        }
+        leases.forEach { it.token.cancel() }
+    }
+    fun awaitRequestQuiescence() { requestLeases.values.toList().forEach { it.done.await() } }
+    fun guardedTransport(delegate:HttpTransport):HttpTransport=HttpTransport { url,headers,token ->
+        val key=java.util.UUID.randomUUID().toString()
+        val lease=synchronized(DownloadStore.transactionLock) {
+            check(transfersAllowed) { "网站数据正在清理，请稍后请求" }
+            token.check();RequestLease(token).also { requestLeases[key]=it }
+        }
+        fun release() { requestLeases.remove(key);lease.done.countDown() }
+        try {
+            val response=delegate.open(url,headers,token)
+            object:HttpResponse {
+                override val status=response.status
+                override fun header(name:String)=response.header(name)
+                override fun body()=response.body()
+                override fun close() { try { response.close() } finally { release() } }
+            }
+        } catch(e:Exception) { release();throw e }
+    }
+    var captureStop:(TaskId)->(() -> Unit)={ id -> { stopTransfer(id) } }
     var stopTransfer:(TaskId)->Unit = {}
     var transferInFlight:(TaskId)->Boolean = { false }
     private val legacy=LegacyDownloadRepository(store,backend,allowLocalHttp)
@@ -27,7 +62,8 @@ class DownloadRepository(
     fun records():List<DownloadRecord> = synchronized(DownloadStore.transactionLock) { store.load().records }
     fun record(id:TaskId):DownloadRecord?=records().firstOrNull { it.recordId==id }
     fun enqueue(candidate:MediaCandidate,userAgent:String,wifiOnly:Boolean):TaskId=enqueue(DownloadDraft(candidate,userAgent),wifiOnly)
-    fun enqueue(draft:DownloadDraft,wifiOnly:Boolean,fileName:String?=null,retryOf:String?=null,hlsPlan:HlsDownloadPlan?=null):TaskId=synchronized(DownloadStore.transactionLock) {
+    fun enqueue(draft:DownloadDraft,wifiOnly:Boolean,fileName:String?=null,retryOf:String?=null,hlsPlan:HlsDownloadPlan?=null,expectedPrivacyGeneration:Long?=null):TaskId=synchronized(DownloadStore.transactionLock) {
+        check(transfersAllowed && (expectedPrivacyGeneration==null || expectedPrivacyGeneration==privacyGeneration)) { "网站会话已清理，请重新确认下载" }
         require(draft.candidate.kind in setOf(MediaKind.FILE,MediaKind.UNKNOWN,MediaKind.HLS))
         require((draft.candidate.kind==MediaKind.HLS)==(hlsPlan!=null)) { "HLS 需要已确认的清单计划" }
         if(hlsPlan!=null) { require(hlsPlan.entryUrl==draft.candidate.url);RequestPolicy.validateUrl(hlsPlan.playlistUrl,allowLocalHttp)
@@ -49,7 +85,7 @@ class DownloadRepository(
             frameUrl=draft.frameUrl,reliableSource=draft.reliableSource,
             protocol=if(hlsPlan==null)DownloadProtocol.DIRECT else DownloadProtocol.HLS,
             hlsPlaylistUrl=hlsPlan?.variant?.url ?: hlsPlan?.playlistUrl,hlsWidth=hlsPlan?.variant?.width,hlsHeight=hlsPlan?.variant?.height,
-            hlsBandwidth=hlsPlan?.variant?.bandwidth,plannedDurationUs=hlsPlan?.media?.durationUs,segmentCount=hlsPlan?.media?.segments?.size)
+            hlsBandwidth=hlsPlan?.variant?.bandwidth,plannedDurationUs=hlsPlan?.media?.durationUs,segmentCount=hlsPlan?.media?.segments?.size,resumeAvailable=hlsPlan!=null)
         if(hlsPlan!=null) (files?.hlsWorkspace ?: error("HLS 临时存储未配置")).save(id,hlsPlan)
         try { store.save(data.copy(records=listOf(record)+data.records)) }
         catch(e:Exception) { if(hlsPlan!=null)runCatching { files?.hlsWorkspace?.delete(id) };throw e };id
@@ -79,7 +115,7 @@ class DownloadRepository(
             val usable=asset?.format==FormatCheck.PASSED && asset.availability==FileAvailability.AVAILABLE
             val status=when(r.taskStatus) {
                 TaskStatus.QUEUED->DownloadManager.STATUS_PENDING
-                TaskStatus.WAITING_WIFI->DownloadManager.STATUS_PAUSED
+                TaskStatus.WAITING_WIFI,TaskStatus.WAITING_NETWORK,TaskStatus.PAUSING,TaskStatus.PAUSED->DownloadManager.STATUS_PAUSED
                 TaskStatus.RUNNING,TaskStatus.MUXING,TaskStatus.VERIFYING,TaskStatus.PUBLISHING->DownloadManager.STATUS_RUNNING
                 TaskStatus.SUCCEEDED->DownloadManager.STATUS_SUCCESSFUL
                 else->DownloadManager.STATUS_FAILED
@@ -89,16 +125,21 @@ class DownloadRepository(
                 sourceUrl=r.sourceUrl,displayName=r.displayName,createdAt=r.createdAt,wifiOnly=r.wifiOnly,
                 canRetry=!usable && r.taskStatus in setOf(TaskStatus.FAILED,TaskStatus.CANCELLED,TaskStatus.INTERRUPTED,TaskStatus.SUCCEEDED),
                 retryOf=r.retryOf,sourceTitle=r.sourceTitle,cancelled=r.taskStatus==TaskStatus.CANCELLED,
-                taskStatus=r.taskStatus,failure=r.failure,useAccessContext=r.useAccessContext,protocol=r.protocol,segmentCount=r.segmentCount,completedSegments=r.completedSegments)
+                taskStatus=r.taskStatus,failure=r.failure,useAccessContext=r.useAccessContext,protocol=r.protocol,segmentCount=r.segmentCount,completedSegments=r.completedSegments,pauseReason=r.pauseReason,
+                canPause=TaskControlRules.canPause(r),canResume=TaskControlRules.canResume(r) && !transferInFlight(r.recordId),
+                cacheBytes=files?.cacheBytes(r.recordId) ?: 0L)
         }
         DownloadState((new+old.tasks).sortedByDescending { it.createdAt ?: 0 },assets)
     }
     private fun detail(r:DownloadRecord,a:VideoAsset?):String=when(r.taskStatus) {
+        TaskStatus.PAUSING->"正在停止写入并保存检查点，请稍候"
+        TaskStatus.PAUSED->if(r.pauseReason==PauseReason.RECOVERY)"重新打开后已对账，请主动继续" else if(r.resumeAvailable || r.received==0L)"已暂停；可验证缓存后继续" else "已停止，没有可靠续传缓存，请重新下载"
+        TaskStatus.WAITING_NETWORK->"等待网络；恢复网络后返回应用继续"
         TaskStatus.QUEUED->"排队等待下载";TaskStatus.WAITING_WIFI->"等待 Wi-Fi；连接后返回应用可继续尝试"
         TaskStatus.RUNNING->if(r.protocol==DownloadProtocol.HLS)"正在下载分片 ${r.completedSegments}/${r.segmentCount ?: 0}" else "正在保存视频";
         TaskStatus.MUXING->"正在封装独立 MP4，尚未保存成品";TaskStatus.VERIFYING->"正在检查视频格式";TaskStatus.PUBLISHING->"正在写入公共下载目录"
         TaskStatus.SUCCEEDED->when(a?.availability) { FileAvailability.AVAILABLE->"视频已保存";FileAvailability.MISSING->"文件已丢失";else->"文件暂不可读" }
-        TaskStatus.CANCELLED->"已取消，可以重新下载";TaskStatus.INTERRUPTED->"下载已中断，请重新下载"
+        TaskStatus.CANCELLED->"已取消，可以重新下载";TaskStatus.INTERRUPTED->if(r.failure==FailureKind.SYSTEM_LIMIT)"系统未允许继续下载；返回应用后主动恢复或重新下载" else if(r.resumeAvailable)"下载已中断；可验证进度后继续" else "下载已中断，没有可靠续传检查点，请重新下载"
         TaskStatus.FAILED->r.safeFailure ?: when(r.failure) {
             FailureKind.NETWORK->"网络连接失败，请检查网络后重新下载"
             FailureKind.ACCESS_CONDITION->"当前访问条件不足，请返回来源登录或重新发现"
@@ -111,14 +152,21 @@ class DownloadRepository(
         }
     }
     fun retry(id:TaskId,fallbackAgent:String,defaultWifiOnly:Boolean,useContext:Boolean?=null):TaskId {
+        val token=TransferCancellation()
+        val key=java.util.UUID.randomUUID().toString()
+        val lease=RequestLease(token)
+        val generation=synchronized(DownloadStore.transactionLock) {
+            check(transfersAllowed) { "网站数据正在清理，请重新确认" }
+            requestLeases[key]=lease;privacyGeneration
+        }
+        try {
         check(snapshot().firstOrNull { it.id==id }?.canRetry==true) { "资源暂时不能重试，请返回来源" }
         val r=record(id) ?: error("记录不存在")
         if(r.protocol==DownloadProtocol.HLS) {
-            val token=TransferCancellation()
             val draft=DownloadDraft(MediaCandidate(r.mediaUrl ?: error("记录没有入口"),MediaKind.HLS,emptySet(),r.mimeType,frameUrl=r.frameUrl,reliableSource=r.reliableSource),
                 r.userAgent ?: fallbackAgent,r.sourceUrl,r.sourceTitle,r.sourceTabId,r.sourceGeneration,
                 useAccessContext=useContext ?: r.useAccessContext,reliableSource=r.reliableSource)
-            val resolver=HlsResolver(UrlConnectionTransport(),WebsiteAccessContext(),allowLocalHttp)
+            val resolver=HlsResolver(guardedTransport(retryTransport),WebsiteAccessContext(),allowLocalHttp)
             val options=resolver.resolveEntry(draft,token)
             val variant=when(val p=options.playlist) {
                 is HlsPlaylist.Master->p.variants.firstOrNull { it.supported && it.url==r.hlsPlaylistUrl }
@@ -126,31 +174,68 @@ class DownloadRepository(
                 is HlsPlaylist.Media->null
             }
             val plan=resolver.resolvePlan(draft,options,variant,token)
-            return enqueue(draft,r.wifiOnly ?: defaultWifiOnly,r.displayName,r.recordId,plan)
+            return enqueue(draft,r.wifiOnly ?: defaultWifiOnly,r.displayName,r.recordId,plan,expectedPrivacyGeneration=generation)
         }
         return enqueue(DownloadDraft(MediaCandidate(r.mediaUrl ?: error("旧记录没有地址"),MediaKind.FILE,emptySet(),r.mimeType,
             frameUrl=r.frameUrl,reliableSource=r.reliableSource),r.userAgent ?: fallbackAgent,r.sourceUrl,r.sourceTitle,r.sourceTabId,r.sourceGeneration,
-            useAccessContext=useContext ?: r.useAccessContext,reliableSource=r.reliableSource),r.wifiOnly ?: defaultWifiOnly,r.displayName,r.recordId)
+            useAccessContext=useContext ?: r.useAccessContext,reliableSource=r.reliableSource),r.wifiOnly ?: defaultWifiOnly,r.displayName,r.recordId,expectedPrivacyGeneration=generation)
+        } finally { requestLeases.remove(key);lease.done.countDown() }
     }
     fun rename(id:TaskId,title:String)=synchronized(DownloadStore.transactionLock) {
         val value=title.trim();require(value.isNotBlank() && value.length<=180 && value.none { it.isISOControl() }) { "请输入 1–180 字的显示名称" }
         val data=store.load();require(data.records.any { it.recordId==id })
         store.save(data.copy(records=data.records.map { if(it.recordId==id)it.copy(displayName=value) else it },assets=data.assets.map { if(it.recordId==id)it.copy(displayName=value) else it }))
     }
+    fun pause(id:TaskId,reason:PauseReason=PauseReason.USER) {
+        var stop:(()->Unit)?=null
+        change(id) { old ->
+            check(TaskControlRules.canPause(old)) { "此阶段或资源不支持暂停；可取消后重新下载" }
+            stop=captureStop(id);old.copy(taskStatus=if(transferInFlight(id))TaskStatus.PAUSING else TaskStatus.PAUSED,pauseReason=reason)
+        }
+        stop?.invoke()
+    }
+    fun queueResume(id:TaskId) {
+        val generation=requestGeneration()
+        check(transfersAllowed) { "网站数据正在清理，请稍后继续" }
+        check(!transferInFlight(id)) { "任务仍在停止，请稍后继续" }
+        val r=record(id) ?: error("记录不存在")
+        check(TaskControlRules.canResume(r)) { "没有可靠进度，请重新下载或返回来源" }
+        val storage=files ?: error("未配置临时文件存储")
+        val valid=if(r.protocol==DownloadProtocol.HLS)storage.hlsWorkspace.hasResumeData(id)
+            else (r.received==0L && !storage.stage(id).exists()) || storage.directCheckpoints.hasValid(id,storage.stage(id))
+        check(valid) { "恢复缓存已丢失或损坏，请重新下载" }
+        change(id) { old ->
+            check(transfersAllowed && generation==privacyGeneration && old==r && !transferInFlight(id) && TaskControlRules.canResume(old)) { "状态已变化，请刷新后重试" }
+            old.copy(taskStatus=TaskStatus.QUEUED,failure=null,safeFailure=null,pauseReason=null)
+        }
+    }
+    fun clearStoppedTemporary():Int=synchronized(DownloadStore.transactionLock) {
+        var count=0
+        records().filter { it.transfer==TransferType.CONTROLLED && it.taskStatus !in activeStatuses }.forEach { r ->
+            if(!transferInFlight(r.recordId)) {
+                files?.clearPrivate(r.recordId)
+                if(r.taskStatus!=TaskStatus.SUCCEEDED)change(r.recordId) { old -> old.copy(resumeAvailable=false,
+                    taskStatus=if(old.taskStatus==TaskStatus.CANCELLED)old.taskStatus else TaskStatus.INTERRUPTED,
+                    pauseReason=PauseReason.SOURCE_CHANGED,safeFailure="恢复缓存已清理，请重新下载") }
+                count++
+            }
+        }
+        count
+    }
     fun cancel(id:TaskId) {
         val r=record(id) ?: error("记录不存在")
         if(r.transfer==TransferType.SYSTEM) { legacy.cancel(r.systemId!!);return }
-        check(r.taskStatus in activeStatuses) { "任务已经结束，请刷新状态" }
+        check(TaskControlRules.canCancel(r)) { "任务已经结束，请刷新状态" }
         var cancelledNow=false
-        change(id) { old -> if(old.taskStatus in activeStatuses) { cancelledNow=true;old.copy(taskStatus=TaskStatus.CANCELLED,cancelled=true) } else old }
-        if(cancelledNow)stopTransfer(id)
+        change(id) { old -> if(TaskControlRules.canCancel(old)) { cancelledNow=true;old.copy(taskStatus=TaskStatus.CANCELLED,cancelled=true,resumeAvailable=false,pauseReason=null) } else old }
+        if(cancelledNow) { stopTransfer(id);if(!transferInFlight(id)) files?.clearPrivate(id) }
     }
     fun forgetRecord(id:TaskId)=synchronized(DownloadStore.transactionLock) {
         val r=record(id) ?: error("记录不存在")
         if(r.transfer==TransferType.SYSTEM) { legacy.forgetRecord(r.systemId!!);return@synchronized }
         check(r.taskStatus !in activeStatuses) { "请先取消正在下载的任务" }
         check(!transferInFlight(id)) { "任务正在停止，请稍后移除记录" }
-        files?.cleanupPending(r);files?.removeStage(id);files?.hlsWorkspace?.delete(id)
+        files?.cleanupPending(r);files?.clearPrivate(id)
         val d=store.load();store.save(d.copy(records=d.records.filterNot { it.recordId==id },assets=d.assets.filterNot { it.recordId==id }))
     }
     fun deleteFile(id:TaskId)=synchronized(DownloadStore.transactionLock) {
@@ -180,5 +265,5 @@ class DownloadRepository(
     @Deprecated("Only for legacy regression tools; UI uses TaskId") fun rename(id:Long,title:String)=rename(legacyId(id),title)
     @Deprecated("Only for legacy regression tools; UI uses TaskId") fun retry(id:Long,agent:String,wifi:Boolean)=retry(legacyId(id),agent,wifi)
     @Deprecated("Only for legacy regression tools; UI uses TaskId") fun fileUri(id:Long)=records().firstOrNull { it.systemId==id }?.let { fileUri(it.recordId) }
-    companion object { val activeStatuses=setOf(TaskStatus.QUEUED,TaskStatus.WAITING_WIFI,TaskStatus.RUNNING,TaskStatus.MUXING,TaskStatus.VERIFYING,TaskStatus.PUBLISHING) }
+    companion object { val activeStatuses=setOf(TaskStatus.QUEUED,TaskStatus.WAITING_WIFI,TaskStatus.WAITING_NETWORK,TaskStatus.PAUSING,TaskStatus.RUNNING,TaskStatus.MUXING,TaskStatus.VERIFYING,TaskStatus.PUBLISHING) }
 }

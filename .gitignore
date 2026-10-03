@@ -33,3 +33,10 @@ local.properties
 *.p12
 *.pfx
 *.key
+
+# Development-only Python fixture bytecode
+__pycache__/
+*.pyc
+
+# Local UI exploration drafts; approved references live in docs/design/
+/artifacts/ui-exploration/
