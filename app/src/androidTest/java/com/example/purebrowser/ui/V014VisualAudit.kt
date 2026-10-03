@@ -542,7 +542,15 @@ class V014VisualAudit(private val state: V014VisualState, private val variant: V
         try {
             service.flags = previousFlags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
             automation.serviceInfo = service
-            val active = checkNotNull(automation.rootInActiveWindow) { "Fixture window must be active" }
+            // Updating UiAutomation service flags asynchronously connects its first window.
+            // Wait only for availability; a foreign foreground window is still rejected below.
+            val windowDeadline = android.os.SystemClock.uptimeMillis() + 5_000
+            var activeWindow = automation.rootInActiveWindow
+            while (activeWindow == null && android.os.SystemClock.uptimeMillis() < windowDeadline) {
+                android.os.SystemClock.sleep(50)
+                activeWindow = automation.rootInActiveWindow
+            }
+            val active = checkNotNull(activeWindow) { "Fixture window must be active" }
             try {
                 assertEquals("Refuse foreign foreground window", instrumentation.targetContext.packageName, active.packageName?.toString())
             } finally { active.recycle() }
