@@ -5,7 +5,7 @@
     "com.example.purebrowser.browser.TabPreviewCacheTest": 4,
     "com.example.purebrowser.browser.TabPreviewCaptureTest": 2,
     "com.example.purebrowser.ui.V014AdaptiveAudit": 2,
-    "com.example.purebrowser.ui.browser.BrowserUiPerformanceAudit": 1,
+    "com.example.purebrowser.ui.browser.BrowserUiPerformanceAudit": 2,
     "com.example.purebrowser.ui.browser.V014BrowserChromeTest": 4,
     "com.example.purebrowser.ui.downloads.DownloadQuickSheetUiTest": 14,
     "com.example.purebrowser.ui.home.CompactHomeUiTest": 2,
@@ -17,6 +17,6 @@
     "com.example.purebrowser.ui.tabs.TabViewPreferencesTest": 3,
     "com.example.purebrowser.browser.BrowserPendingNavigationTest": 7
   },
-  "total": 301,
+  "total": 302,
   "visual_matrix_separate": 60
 }

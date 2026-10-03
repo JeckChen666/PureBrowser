@@ -7,6 +7,11 @@ import android.os.SystemClock
 
 /** Uses the real resolver UI; never launches an explicit recipient or skips its UID read. */
 internal fun chooseFixtureRecipient(instrument: Instrumentation, timeoutMs: Long): Boolean {
+    // Debug and signed test APKs may coexist. Select this exact independent UID,
+    // not another fixture with an identical generic label.
+    val recipientLabel = instrument.context.packageManager.getActivityInfo(
+        android.content.ComponentName(instrument.context.packageName, FixtureFileReceiver::class.java.name), 0
+    ).loadLabel(instrument.context.packageManager).toString()
     val automation = instrument.uiAutomation
     val original = automation.serviceInfo
     val flags = original.flags
@@ -21,7 +26,8 @@ internal fun chooseFixtureRecipient(instrument: Instrumentation, timeoutMs: Long
             val roots = (listOfNotNull(automation.rootInActiveWindow) + automation.windows.mapNotNull { it.root })
             lastRoots = roots.map { it.packageName.toString() }
             for (root in roots) {
-                for (match in root.findAccessibilityNodeInfosByText("本地视频验收接收器")) {
+                for (match in root.findAccessibilityNodeInfosByText(recipientLabel)) {
+                    if (match.text?.toString() != recipientLabel) continue
                     var node: AccessibilityNodeInfo? = match
                     while (node != null && !node.isClickable) node = node.parent
                     if (node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true

@@ -177,7 +177,7 @@ def main():
                   [FOCUSED[0], 'com.example.purebrowser.library.CrossUidShareAudit', 'com.example.purebrowser.library.RuntimeFileShareTest']
                   if args.scope == 'share' else
                   json.loads((Path(__file__).with_name('v014-cohort.json')).read_text()))
-        expected = {'focused': 11, 'workflow': 3, 'browser': 2, 'product': 2, 'share': 4, 'full': 301}[args.scope]
+        expected = {'focused': 11, 'workflow': 3, 'browser': 2, 'product': 2, 'share': 4, 'full': 302}[args.scope]
         command = prefix + ['shell', 'am', 'instrument', '-w', '-r', '-e', 'class', ','.join(cohort)]
         for flag in ['videoFixture', 'hlsFixture', 'crossUidShare', 'serviceFixture',
                      'resumeFixture', 'queueFixture', 'dynamicFixture', 'v014DisposableProfile']:

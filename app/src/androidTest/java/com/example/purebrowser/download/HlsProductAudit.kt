@@ -56,13 +56,7 @@ class HlsProductAudit {
                 }
                 instrument.uiAutomation.executeShellCommand("run-as $testPackage rm -f files/fixture-file-received.json").close()
                 scenario.onActivity { assertNull(LocalFileActions.launch(it,id,uri,"video/mp4",true)) }
-                val until=System.currentTimeMillis()+20000;var clicked=false
-                while(!clicked && System.currentTimeMillis()<until) {
-                    for(n in instrument.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("本地视频验收接收器").orEmpty()) {
-                        var node:AccessibilityNodeInfo?=n;while(node!=null && !node.isClickable)node=node.parent
-                        if(node?.performAction(AccessibilityNodeInfo.ACTION_CLICK)==true) { clicked=true;break }
-                    };Thread.sleep(200)
-                }
+                val clicked=com.example.purebrowser.library.chooseFixtureRecipient(instrument,20_000)
                 assertTrue("actual chooser must open a different UID",clicked)
                 var receipt:String?=null;val wait=System.currentTimeMillis()+10000
                 while(receipt==null && System.currentTimeMillis()<wait) {

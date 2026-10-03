@@ -2,7 +2,7 @@
     <application android:debuggable="true">
         <!-- Only the separate test APK is debuggable, allowing shell to read receiver evidence. -->
         <!-- Test APK only: controlled cross-UID receiver to verify real temporary file grants. -->
-        <activity android:name="com.example.purebrowser.library.FixtureFileReceiver" android:exported="true" android:label="本地视频验收接收器">
+        <activity android:name="com.example.purebrowser.library.FixtureFileReceiver" android:exported="true" android:label="本地视频验收接收器 ${applicationId}">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <action android:name="android.intent.action.VIEW" />
