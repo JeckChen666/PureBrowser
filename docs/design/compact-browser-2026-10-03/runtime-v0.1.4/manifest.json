@@ -2,9 +2,9 @@
   {
     "state": "HOME",
     "file": "01-home.png",
-    "sha256": "4301b51add07594b9b48f7ab05a04f53cd7e2e5c54c72f3cce12c7e4c5b4636c",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "10b1c6f3845bedd89feb0100945e7a0ad324ece04de286a5a3e401619ce15cba",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -12,28 +12,28 @@
       "fixtureOnly": true,
       "scenario": "HOME",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:18:19.017Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:20:45.725371Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -54,39 +54,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "homeScreen",
       "productionBoundsInWindowPx": {
         "left": 0,
-        "top": 270,
-        "right": 1080,
-        "bottom": 1655
+        "top": 227,
+        "right": 720,
+        "bottom": 1464
       },
       "modalUsesNativeWindow": false,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "4301b51add07594b9b48f7ab05a04f53cd7e2e5c54c72f3cce12c7e4c5b4636c",
+      "screenshotSha256": "10b1c6f3845bedd89feb0100945e7a0ad324ece04de286a5a3e401619ce15cba",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "WEB",
     "file": "02-web.png",
-    "sha256": "cdc486c68a1f6eabbd889e6e39532fd7225ba52f0d5c3553120141bb90625f9f",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "48173c7a63dfbfb760e40b3a83de93fc4c30680d1250245d2f8e8102738786e2",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -94,28 +94,28 @@
       "fixtureOnly": true,
       "scenario": "WEB",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:18:23.833Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:20:50.953680Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -136,39 +136,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "browserWebView",
       "productionBoundsInWindowPx": {
         "left": 0,
-        "top": 270,
-        "right": 1080,
-        "bottom": 1655
+        "top": 227,
+        "right": 720,
+        "bottom": 1464
       },
       "modalUsesNativeWindow": false,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "cdc486c68a1f6eabbd889e6e39532fd7225ba52f0d5c3553120141bb90625f9f",
+      "screenshotSha256": "48173c7a63dfbfb760e40b3a83de93fc4c30680d1250245d2f8e8102738786e2",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "INPUT",
     "file": "03-input.png",
-    "sha256": "0f9ddd05511dbb884d60f5d9fd7d80defd9a9a10b2330f5d7e3f079c7a2d5b44",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "b56d4ebc73b470a1c0987d486bedc573201febabcf37cf5c0824e8b1b8bf9140",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -176,28 +176,28 @@
       "fixtureOnly": true,
       "scenario": "INPUT",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:18:31.577Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:20:54.870875Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -218,39 +218,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "addressInput",
       "productionBoundsInWindowPx": {
-        "left": 32,
-        "top": 133,
-        "right": 796,
-        "bottom": 280
+        "left": 21,
+        "top": 136,
+        "right": 531,
+        "bottom": 234
       },
       "modalUsesNativeWindow": false,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "0f9ddd05511dbb884d60f5d9fd7d80defd9a9a10b2330f5d7e3f079c7a2d5b44",
+      "screenshotSha256": "b56d4ebc73b470a1c0987d486bedc573201febabcf37cf5c0824e8b1b8bf9140",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "TABS_GRID",
     "file": "04-tabs_grid.png",
-    "sha256": "bff8c18dc5799ecdeefa6e46a30ccfb13736a8a556303ea02ea927d8afac8613",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "8d2b75e6c62b70703e25af73215a062e5ec3858e52541bef24c49096c3983b67",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -258,28 +258,28 @@
       "fixtureOnly": true,
       "scenario": "TABS_GRID",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:18:37.392Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:20:57.557592Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -300,39 +300,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "tabGrid",
       "productionBoundsInWindowPx": {
-        "left": 32,
-        "top": 614,
-        "right": 1048,
-        "bottom": 1794
+        "left": 21,
+        "top": 456,
+        "right": 699,
+        "bottom": 1558
       },
       "modalUsesNativeWindow": true,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "bff8c18dc5799ecdeefa6e46a30ccfb13736a8a556303ea02ea927d8afac8613",
+      "screenshotSha256": "8d2b75e6c62b70703e25af73215a062e5ec3858e52541bef24c49096c3983b67",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "TABS_LIST",
     "file": "05-tabs_list.png",
-    "sha256": "cbafa315f23b95a0856dcb77828a6abe6a111127b4f1bb69cdb8a7aca9b45cef",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "7a18b3e69df82d88bc4d5369e63de46a6915c08dc905a1ab2a4e719ac55f78b9",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -340,28 +340,28 @@
       "fixtureOnly": true,
       "scenario": "TABS_LIST",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:18:45.689Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:02.754842Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -382,39 +382,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "tabList",
       "productionBoundsInWindowPx": {
-        "left": 32,
-        "top": 614,
-        "right": 1048,
-        "bottom": 1794
+        "left": 21,
+        "top": 456,
+        "right": 699,
+        "bottom": 1558
       },
       "modalUsesNativeWindow": true,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "cbafa315f23b95a0856dcb77828a6abe6a111127b4f1bb69cdb8a7aca9b45cef",
+      "screenshotSha256": "7a18b3e69df82d88bc4d5369e63de46a6915c08dc905a1ab2a4e719ac55f78b9",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "TABS_SEARCH",
     "file": "06-tabs_search.png",
-    "sha256": "e460b72f34cc655c2186b142685ca605609bd276db602b650f10d87966b65604",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "c0ff0b5e16c3a7f0a0470ba735cbe48139eeaaebd986399548faa61d8b50a664",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -422,28 +422,28 @@
       "fixtureOnly": true,
       "scenario": "TABS_SEARCH",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:18:52.561Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:06.903388Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -464,39 +464,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "tabGrid",
       "productionBoundsInWindowPx": {
-        "left": 32,
-        "top": 614,
-        "right": 1048,
-        "bottom": 1794
+        "left": 21,
+        "top": 456,
+        "right": 699,
+        "bottom": 1558
       },
       "modalUsesNativeWindow": true,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "e460b72f34cc655c2186b142685ca605609bd276db602b650f10d87966b65604",
+      "screenshotSha256": "c0ff0b5e16c3a7f0a0470ba735cbe48139eeaaebd986399548faa61d8b50a664",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "RESOURCES",
     "file": "07-resources.png",
-    "sha256": "0bc82c4a2de06260847268b29963292182d92d3fcc4491a3d0eb5c71934323d0",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "7089c3b2543593ad7021dea49093dbce48e774b1a9ce875a90829e53ee2f7a0e",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -504,28 +504,28 @@
       "fixtureOnly": true,
       "scenario": "RESOURCES",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:19:00.617Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:11.387632Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -546,39 +546,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "resource-sheet",
       "productionBoundsInWindowPx": {
         "left": 0,
-        "top": 294,
-        "right": 1080,
-        "bottom": 1794
+        "top": 232,
+        "right": 720,
+        "bottom": 1558
       },
       "modalUsesNativeWindow": true,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "0bc82c4a2de06260847268b29963292182d92d3fcc4491a3d0eb5c71934323d0",
+      "screenshotSha256": "7089c3b2543593ad7021dea49093dbce48e774b1a9ce875a90829e53ee2f7a0e",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "DOWNLOAD_QUICK",
     "file": "08-download_quick.png",
-    "sha256": "af9462b78a428170ceac5b8c594eb3aac92afe1290e5e7f55f0ad61e69199732",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "782b7be8769d5a49533b2ddab749867707146d5c425d01cd6c16a47e79be2543",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -586,28 +586,28 @@
       "fixtureOnly": true,
       "scenario": "DOWNLOAD_QUICK",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:19:05.270Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:14.136384Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -628,39 +628,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "downloadQuickSheet",
       "productionBoundsInWindowPx": {
         "left": 0,
         "top": 0,
-        "right": 1080,
-        "bottom": 1828
+        "right": 720,
+        "bottom": 1177
       },
       "modalUsesNativeWindow": true,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "af9462b78a428170ceac5b8c594eb3aac92afe1290e5e7f55f0ad61e69199732",
+      "screenshotSha256": "782b7be8769d5a49533b2ddab749867707146d5c425d01cd6c16a47e79be2543",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "DOWNLOADS",
     "file": "09-downloads.png",
-    "sha256": "88876c083890b41800c07e66699e782ff5f48fd382142ad668f84ea1de690e2e",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "5a32feb681526bb6af5e6d2fce2026789744f01336c8e206d62d1fce331957eb",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -668,28 +668,28 @@
       "fixtureOnly": true,
       "scenario": "DOWNLOADS",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:19:08.796Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:17.004409Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -710,39 +710,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "downloadsScreen",
       "productionBoundsInWindowPx": {
         "left": 0,
-        "top": 122,
-        "right": 1080,
-        "bottom": 1794
+        "top": 129,
+        "right": 720,
+        "bottom": 1558
       },
       "modalUsesNativeWindow": false,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "88876c083890b41800c07e66699e782ff5f48fd382142ad668f84ea1de690e2e",
+      "screenshotSha256": "5a32feb681526bb6af5e6d2fce2026789744f01336c8e206d62d1fce331957eb",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "LIBRARY",
     "file": "10-library.png",
-    "sha256": "aacd655d59f5b27832a41a90a859f26478120e91f0b5872d075f672096b984f6",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "72a8f2d14c0a214f9a15697e8510a43387c04806a000eca2b350409d8c320e4d",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -750,28 +750,28 @@
       "fixtureOnly": true,
       "scenario": "LIBRARY",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:19:13.467Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:19.388343Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -792,39 +792,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "videoLibraryList",
       "productionBoundsInWindowPx": {
         "left": 0,
-        "top": 290,
-        "right": 1080,
-        "bottom": 1794
+        "top": 241,
+        "right": 720,
+        "bottom": 1558
       },
       "modalUsesNativeWindow": false,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "aacd655d59f5b27832a41a90a859f26478120e91f0b5872d075f672096b984f6",
+      "screenshotSha256": "72a8f2d14c0a214f9a15697e8510a43387c04806a000eca2b350409d8c320e4d",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "FILE_ACTIONS",
     "file": "11-file_actions.png",
-    "sha256": "2c98262a47204cffe03347bfc1353ca05a0ddf46b9721c907e7ea8857bddb02c",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "5a7ee4f3b00f9447fae22a2376e456d4a3d20580a7a2e4e1b5a50b234714e4c2",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -832,28 +832,28 @@
       "fixtureOnly": true,
       "scenario": "FILE_ACTIONS",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:19:20.384Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:22.603954Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -874,39 +874,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "video-actions-v014-available",
       "productionBoundsInWindowPx": {
         "left": 0,
         "top": 0,
-        "right": 1080,
-        "bottom": 1920
+        "right": 720,
+        "bottom": 1321
       },
       "modalUsesNativeWindow": true,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "2c98262a47204cffe03347bfc1353ca05a0ddf46b9721c907e7ea8857bddb02c",
+      "screenshotSha256": "5a7ee4f3b00f9447fae22a2376e456d4a3d20580a7a2e4e1b5a50b234714e4c2",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "SETTINGS",
     "file": "12-settings.png",
-    "sha256": "4eda41d29ba62ecd49b8336385d6cdb6328c229a21eae6b681c4ff856a0fba3c",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "e64d05100bf46807376927e75688ae08e09c37ec004b8378b40329baf08efc3d",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -914,28 +914,28 @@
       "fixtureOnly": true,
       "scenario": "SETTINGS",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:19:27.074Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:25.885350Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -956,39 +956,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "settingsScreen",
       "productionBoundsInWindowPx": {
         "left": 0,
-        "top": 122,
-        "right": 1080,
-        "bottom": 1794
+        "top": 129,
+        "right": 720,
+        "bottom": 1558
       },
       "modalUsesNativeWindow": false,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "4eda41d29ba62ecd49b8336385d6cdb6328c229a21eae6b681c4ff856a0fba3c",
+      "screenshotSha256": "e64d05100bf46807376927e75688ae08e09c37ec004b8378b40329baf08efc3d",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "MENU",
     "file": "13-menu.png",
-    "sha256": "15cd601248a569d386b53c17ec03313dc84b4a9aeac21148437c2719d11020d0",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "aacd7d99f577cf578687566e782d04d9690b380e0130f66b775ad57a37952132",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -996,28 +996,28 @@
       "fixtureOnly": true,
       "scenario": "MENU",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:19:31.601Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:28.269942Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -1038,39 +1038,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "dismissMenuButton",
       "productionBoundsInWindowPx": {
-        "left": 912,
-        "top": 754,
-        "right": 1038,
-        "bottom": 880
+        "left": 608,
+        "top": 866,
+        "right": 692,
+        "bottom": 950
       },
       "modalUsesNativeWindow": true,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "15cd601248a569d386b53c17ec03313dc84b4a9aeac21148437c2719d11020d0",
+      "screenshotSha256": "aacd7d99f577cf578687566e782d04d9690b380e0130f66b775ad57a37952132",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "BOOKMARKS",
     "file": "14-bookmarks.png",
-    "sha256": "ab8e8caf0d3f0420ecf0a586834513eacd21093a58722b62cfdfa832b603a910",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "ad255fbf26aa7c84946ea78d67682823a0b8d0a638aa6916337a409bfec80cc8",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -1078,28 +1078,28 @@
       "fixtureOnly": true,
       "scenario": "BOOKMARKS",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:19:34.499Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:31.019431Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -1120,39 +1120,39 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "savedPagesList",
       "productionBoundsInWindowPx": {
-        "left": 32,
-        "top": 357,
-        "right": 1048,
-        "bottom": 1794
+        "left": 21,
+        "top": 285,
+        "right": 699,
+        "bottom": 1558
       },
       "modalUsesNativeWindow": false,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "ab8e8caf0d3f0420ecf0a586834513eacd21093a58722b62cfdfa832b603a910",
+      "screenshotSha256": "ad255fbf26aa7c84946ea78d67682823a0b8d0a638aa6916337a409bfec80cc8",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   },
   {
     "state": "HISTORY",
     "file": "15-history.png",
-    "sha256": "ea99044e01c2c4433f15b7c56f65b18c232ddd4a2ec1888cb93ee12b1046e7a3",
-    "width": 1080,
-    "height": 1542,
+    "sha256": "f72e584b0395ef6224c0e33c951256334b67617a24983481dddf623f4974fd91",
+    "width": 720,
+    "height": 1467,
     "fixture": true,
     "variant": "NATIVE_LIGHT",
     "report": {
@@ -1160,28 +1160,28 @@
       "fixtureOnly": true,
       "scenario": "HISTORY",
       "variant": "NATIVE_LIGHT",
-      "timeUtc": "2026-10-03T11:19:38.353Z",
-      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "timeUtc": "2026-10-03T13:21:33.602864Z",
+      "sourceRevision": "6dfa0410f6a56f702f1f4de822388d8d4edbb001fdcc43bd5487563b9bb84f93",
       "package": "io.github.jeckchen666.purebrowser.debug",
-      "versionName": "0.1.4-rc.2-debug",
-      "versionCode": 12,
+      "versionName": "0.1.4-debug",
+      "versionCode": 13,
       "buildVariant": "debug fixture harness; not signed-release evidence",
-      "api": 28,
-      "device": "Google Android SDK built for x86_64",
-      "webViewPackage": "com.android.chrome",
-      "webViewVersion": "69.0.3497.100",
+      "api": 37,
+      "device": "Google sdk_gphone16k_x86_64",
+      "webViewPackage": "com.google.android.webview",
+      "webViewVersion": "149.0.7827.5",
       "displayMetricsPx": {
-        "width": 1080,
-        "height": 1794
+        "width": 720,
+        "height": 1600
       },
       "signingCertificateSha256": [
         "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
       ],
-      "nativeDensityDpi": 420,
+      "nativeDensityDpi": 280,
       "nativeFontScale": 1,
       "nativeConfigurationDp": {
         "width": 411,
-        "height": 659,
+        "height": 914,
         "orientation": 1,
         "locales": "en-US"
       },
@@ -1202,30 +1202,30 @@
       ],
       "status": "PASS",
       "availableRootPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
       "fixtureViewportPx": {
-        "width": 1080,
-        "height": 1731
+        "width": 720,
+        "height": 1467
       },
-      "effectiveDensity": 2.625,
+      "effectiveDensity": 1.75,
       "effectiveFontScale": 1,
       "productionCaptureTag": "savedPagesList",
       "productionBoundsInWindowPx": {
-        "left": 32,
-        "top": 357,
-        "right": 1048,
-        "bottom": 1794
+        "left": 21,
+        "top": 285,
+        "right": 699,
+        "bottom": 1558
       },
       "modalUsesNativeWindow": false,
       "screenshot": "FIXTURE-NATIVE_LIGHT.png",
-      "screenshotSha256": "ea99044e01c2c4433f15b7c56f65b18c232ddd4a2ec1888cb93ee12b1046e7a3",
+      "screenshotSha256": "f72e584b0395ef6224c0e33c951256334b67617a24983481dddf623f4974fd91",
       "cropInDisplayPx": {
         "left": 0,
-        "top": 126,
-        "right": 1080,
-        "bottom": 1668
+        "top": 91,
+        "right": 720,
+        "bottom": 1558
       }
     }
   }

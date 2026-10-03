@@ -12,6 +12,17 @@
 - **v0.1.0 的 `com.example.purebrowser` 不会被覆盖，也不自动迁移其私有数据/网站登录。** 后续正式版本沿同包同签名升级。
 - [实现与验收](docs/V0.1.3-COMPLETION.md) · [后续版本路线图](docs/VERSION-ROADMAP-0.1.md)。
 
+## v0.1.4：统一 UI 与核心交互（已实现，最终验收中，未发布）
+
+**T41–T48 implemented；T49进行中，T50 pending。** 顶部唯一地址入口／底部五动作、标签网格／列表／搜索、有界预览、资源与下载速览、完整管理、视频库／文件操作、书签／历史／设置已采用统一紧凑浅深界面。
+
+- 候选API37 301／API28 162／visual60／phone15／JVM156已通过；候选Debug Lint0错误／33提醒，API36 summary21项通过。截图为生产组件合成fixtures，**不是final签名APK截图**。
+- 签名API36 share修复同名测试fixture误选后通过；API36 RC2实际24标签切换／menu／resources12轮通过，同设备API37旧已发行code10 vs final13配对仍pending。
+- `0.1.4 / code13`先前55bdbc6输入完整302/302 **历史PASS**（535.936秒，source_unchanged=true），JVM156／Debug Lint0错误33提醒／host34也历史PASS。当前输入`9d9568096b29f3f1551d2962606098723a147755`仅修复测试fixture异步root等待，生产代码未动：phone-ready15在跑，随后API28 density240 visual60／core162，再API37完整302重跑，均pending，不能用旧输入冒充当前。
+- 旧final13 visual44/60与phone14/15均FAIL并完整保留；wide窗口误配／初次HOME root未ready已定位，截图隐私guards不放宽。精确签名smoke8项／实际UI升级保留／HTTPS／share／freeze与发布仍pending，不提前称8项通过。
+- 系统1.3×／2.0×字体已有API36候选实测；真实OS分屏、实际TalkBack焦点顺序与final适用性待补。不声称听取TalkBack音频、OEM或大样本长期试用。大文件／长HLS明确复用v0.1.3历史证据，不冒充本版重跑。
+- [条件性完成摘要](docs/V0.1.4-COMPLETION.md) · [验收台账](docs/RELEASE-ACCEPTANCE-V0.1.4.md) · [候选记录](docs/V0.1.4-CANDIDATE.md) · [发行说明草稿](docs/releases/v0.1.4.md)。最终实际结果／身份由release附件核验后更新；当前下载入口仍为已发行v0.1.3。
+
 ## v0.1.3：可恢复的本地下载
 
 发行身份 **0.1.3 / versionCode 10**，沿用 v0.1.1 的正式包名与长期签名。
@@ -125,9 +136,9 @@ python3 tools/fixtures/serve_video_fixture.py
 
 ## 项目文档
 
-- [v0.1.4 版本与执行计划](docs/EXECUTION-PLAN-V0.1.4.md) · [发行验收台账](docs/RELEASE-ACCEPTANCE-V0.1.4.md)：统一 UI 与核心交互改版，T41–T50；待实施，不改变当前 v0.1.3 发行状态。
+- [v0.1.4 版本与执行计划](docs/EXECUTION-PLAN-V0.1.4.md) · [发行验收台账](docs/RELEASE-ACCEPTANCE-V0.1.4.md) · [条件性完成摘要](docs/V0.1.4-COMPLETION.md) · [发行说明草稿](docs/releases/v0.1.4.md)：T41–T48已实现，T49进行中，T50 pending；未发布，不改变当前v0.1.3发行状态。
 
-- [UI 设计方向：紧凑版浏览器 V4](docs/design/compact-browser-2026-10-03/README.md)：15 个界面总览、顶部网址／底部操作、交互规则及后续验收清单；仅设计方向，尚未实施。
+- [UI 设计方向：紧凑版浏览器 V4](docs/design/compact-browser-2026-10-03/README.md)：15个界面总览与交互参考；T41–T48已实现，生成图不是实机或最终包验收证据。
 
 - `docs/releases/v0.1.3.md`：本次正式签名公开测试版的发行说明。
 - `docs/V0.1.3-COMPLETION.md`：最终包身份、验收与证据复用边界。

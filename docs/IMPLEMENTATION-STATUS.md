@@ -1,5 +1,21 @@
 # PureBrowser 当前实现状态
 
+## v0.1.4 当前实现／条件性验收快照
+
+日期：2026-10-03（Asia/Shanghai）。**T41–T48 implemented；T49最终验收进行中，T50 pending、未冻结或发布。** 已发行版本仍为v0.1.3/code10。
+
+- 统一紧凑浅深主题、顶部地址／底部五动作、首页与菜单、标签网格／列表／搜索／有界预览、资源与直链／HLS确认、下载速览／管理、视频库／文件操作、书签／日期历史／设置／关于已实现。
+- 候选API37完整301／API28 162／visual60／phone15／JVM156通过，Debug Lint0错误／33提醒。截图是候选生产组件合成fixtures，不是final签名APK。
+- API36 sidecar summary21项通过，含真实系统字体／窗口、15分钟后台、通知拒绝和OS限制；host IME观察不另加JUnit；真实OS分屏、实际TalkBack焦点顺序仍pending，不声称TalkBack听音频。
+- 签名API36 share修复后通过：debug.test／release.test同名fixture误选，接收器标签加入 `${applicationId}`，helper读取自身ActivityInfo标签精确匹配，HlsProductAudit统一helper。失败历史保留。
+- API36 RC2实际24标签切换／menu／resources12轮通过；最终同设备／WebView baseline配对pending，不据跨设备初测宣称性能提升。
+- code13先前55bdbc6输入完整302/302 **历史PASS**（535.936秒，source_unchanged=true），JVM156／Debug Lint0错误33提醒／host34也历史PASS。当前fixture修复输入`9d9568096b29f3f1551d2962606098723a147755`：生产代码未动，phone-ready15正在API37跑，随后API28 density240 visual60／core162，再API37完整302重跑，均pending，不把旧输入冒充当前。
+- 旧final13 visual44/60（15wide skip＋HOME root未ready失败）和phone14/15（HOME root null）均FAIL，完整保留。V014VisualAudit更新serviceflags后最多等5秒非null root，仍拒绝外国前台窗口／IME，截图隐私guards与业务断言全保留。
+- 精确最终签名smoke计划8项（原7＋actualTabSwitchAndRepeatedMenuResourcesWithTwentyFourTabs）、安装哈希／升级／HTTPS／share／freeze与发布pending；覆盖升级补旧历史及自定义shortcut实际UI验证，同设备API37 code10 vs final13配对未完成，结果由主代理更新。
+- 大文件／长HLS明确复用v0.1.3历史适用证据，不称本版重跑；不宣称OEM、30样本或7日用户试用通过。
+
+[条件性完成摘要](V0.1.4-COMPLETION.md) · [必要验收台账](RELEASE-ACCEPTANCE-V0.1.4.md) · [候选记录](V0.1.4-CANDIDATE.md) · [执行计划](EXECUTION-PLAN-V0.1.4.md) · [发行说明草稿](releases/v0.1.4.md)。下文旧版“当前”均仅指各自历史时间，不覆盖本节。
+
 ## v0.1.3 发行快照
 
 版本 **0.1.3 / versionCode 10**，正式包与长期证书不变。T31–T40 的交付和最终包核验见 [完成摘要](V0.1.3-COMPLETION.md) 与 [发行说明](releases/v0.1.3.md)。下文 rc.1/rc.2 及旧版状态保留为历史，不能用其中“当前/未发行”描述覆盖本节。
@@ -7,7 +23,7 @@
 ## 以下为收尾前历史记录
 
 
-## 本轮候选更新（以此段为当前状态）
+## v0.1.3 收尾前候选历史更新（不是当前状态）
 
 当前 `0.1.3-rc.2 / code9`。已完成开发机大文件/长HLS、15分钟后台、真实系统限制/网络及签名HTTPS补验；详细实绩和未完成项见 [RC2开发机补验](V0.1.3-RC2-LOCAL-ACCEPTANCE.md)。修复后 API37 单批225项已通过，发行冻结仍待收尾，不创建正式v0.1.3标签。下方rc.1统计保留为历史，不能当作rc.2全量通过。
 

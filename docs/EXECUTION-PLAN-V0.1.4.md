@@ -1,10 +1,10 @@
 # PureBrowser v0.1.4 版本与执行计划
 
 规划日期：2026-10-03（Asia/Shanghai）。
-状态：**实施与验收中；T41–T48 已接入候选代码，T49 正在回归／适配验证，T50 尚未冻结发行。此状态不代表必要门槛通过。**
+状态：**T41–T48 implemented；T49 最终回归／适配验收中，T50 pending、尚未冻结发行。实现完成不代表必要门槛通过。** 当前验收输入为`9d9568096b29f3f1551d2962606098723a147755`（code13）；只修复测试fixture的异步root就绪等待，生产代码未动。`55bdbc6`的完整302/JVM156/Lint0+33/host34通过历史保留，但不称当前输入已通过。phone-ready15正在运行，随后计划API28 density240 visual60、core162，再API37完整302；当前输入各批结果均pending，由主代理最后更新。
 开发基线：本地 `main` / `8c32570`；当前发行 `v0.1.3 / versionCode 10`，以 [完成摘要](V0.1.3-COMPLETION.md) 为准。
 设计依据：[用户基本认可的紧凑版 V4](design/compact-browser-2026-10-03/README.md)、[设计落地清单](design/compact-browser-2026-10-03/IMPLEMENTATION-CHECKLIST.md)。
-发行门槛：[v0.1.4 验收台账](RELEASE-ACCEPTANCE-V0.1.4.md)。
+发行门槛：[v0.1.4 验收台账](RELEASE-ACCEPTANCE-V0.1.4.md)。实现与条件性结果见 [完成摘要](V0.1.4-COMPLETION.md)、[候选记录](V0.1.4-CANDIDATE.md)和[发行说明草稿](releases/v0.1.4.md)。
 
 ## 1. 版本定位
 
@@ -141,6 +141,16 @@ T41 先明确浏览输入、临时面板、管理页和返回路径之间的互�
 上述落点均相对 `app/src/main/java/com/example/purebrowser/`，仅用于定位，不要求一次性重写这些文件。
 每个工作包随实现补小范围回归；T49 是集中收口，不是第一次验证。T48 也不是把适配拖到最后才做。
 
+### 5.1 当前执行快照（实现与验收分列）
+
+| 工作包 | 实现状态 | 验收状态 |
+| --- | --- | --- |
+| T41–T48 | **implemented**：上述UI与交互已接入 | 候选已有通过结果；M6真实OS分屏／实际TalkBack焦点等必要证据仍pending，不等于工作包全部验收完成 |
+| T49 | 最终输入及新增24标签／分享helper测试已提交 | 55bdbc6输入完整302／JVM156／Lint0+33／host34历史通过；9d95680 phone-ready运行中，visual／API28／完整302重跑、M6及同设备API37 code10 vs final13配对pending |
+| T50 | 发行文档conditional草稿已建立 | 精确最终签名smoke8项、实际UI升级保留（含旧历史／自定义shortcut）、身份／HTTPS／share／freeze与tag／Pre-release **pending，未发布** |
+
+候选301／API28 162／visual60／phone15／JVM156、Lint0错误／33提醒与API36 summary21通过单独保留。API36 RC2真实24标签切换／menu／resources12轮、修复后签名share通过，不冒充最终包或同设备性能配对结论。候选截图为生产组件合成fixtures，不是final签名APK。visual44/60与phone14/15失败批次保留；9d95680仅修复测试fixture最多5秒等待异步root就绪，生产代码和截图guards不变。重跑顺序为phone-ready15→API28 density240 visual60→API28 core162→API37完整302，当前均pending。最终实际结果由主代理据release附件更新；严格final绑定规则不变。
+
 ## 6. 里程碑与范围控制
 
 | 里程碑 | 范围 | 检查点 |
@@ -157,7 +167,7 @@ T41 先明确浏览输入、临时面板、管理页和返回路径之间的互�
 ## 7. 交付与发行口径
 
 - 规划阶段不改版本／分支／发行；本轮已获授权执行，使用 `codex/v0.1.4-ui` 和内部候选构建，正式 tag／Pre-release 仍等全部必要门槛。
-- 实施时若新建分支，默认 `codex/v0.1.4-ui`；版本为 `0.1.4-rc.N` → 验收后的 `0.1.4`。每个对外安装包的 versionCode 高于上一个对外包，基线为 10，不把最终版固定为 11。
+- 实施时若新建分支，默认 `codex/v0.1.4-ui`；内部候选为 `0.1.4-rc.N`。本次最终验收输入已提交 `0.1.4 / code13`，版本身份提交不是发行放行。每个对外安装包的versionCode高于上一个对外包；当前已发行基线10，RC2为12，最终版本输入为13。
 - 正式包名与长期签名保持不变；实际验证已发行 v0.1.3 → 本版的同签名覆盖升级，保留书签／历史／快捷站点／偏好／任务与成品。
 - 使用最终签名候选做核心 HTTPS 与文件分享冒烟；下载引擎未改不等于新版 UI 可以免测。
 - v0.1.3 大文件／长 HLS／后台专项仅在实现与配置未改变、证据范围适用时复用；改变传输／存储／生命周期／服务则重跑受影响专项。
