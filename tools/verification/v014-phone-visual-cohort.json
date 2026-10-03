@@ -1,0 +1,17 @@
+[
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[HOME__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[WEB__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[INPUT__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[TABS_GRID__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[TABS_LIST__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[TABS_SEARCH__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[RESOURCES__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[DOWNLOAD_QUICK__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[DOWNLOADS__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[LIBRARY__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[FILE_ACTIONS__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[SETTINGS__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[MENU__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[BOOKMARKS__NATIVE_LIGHT]",
+  "com.example.purebrowser.ui.V014VisualAudit#productionState_deviceRenderedFixtureEvidence[HISTORY__NATIVE_LIGHT]"
+]

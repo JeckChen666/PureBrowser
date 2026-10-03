@@ -3,6 +3,7 @@ package com.example.purebrowser.ui.downloads
 import android.app.DownloadManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,11 +31,18 @@ internal fun DownloadTaskDetail(
     AlertDialog(
         modifier = Modifier.testTag("download-detail-${item.id}"),
         onDismissRequest = onDismiss,
-        title = { Text("下载任务详情") },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("下载任务详情", style = MaterialTheme.typography.titleMedium)
+                Text(item.stateLabel(), style = MaterialTheme.typography.labelLarge,
+                    color = if (item.uiGroup() == DownloadUiGroup.ATTENTION) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+            }
+        },
         text = {
             Column(
                 Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()).testTag("download-detail-content-${item.id}"),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 DetailField("显示名称", localSafeLabel(item.displayName))
                 DetailField("访问条件", if(item.useAccessContext) "使用适用网站会话与最小来源" else "不使用网站会话")
@@ -70,6 +78,7 @@ internal fun DownloadTaskDetail(
                     DetailField("分片进度", item.segmentSummary())
                     DetailField("成品保存", "分片完成不等于 MP4 已保存；封装、校验和写入公共目录均完成后才进入视频库。总大小未知，不显示整体百分比。")
                 }
+                if (item.uiGroup() == DownloadUiGroup.ATTENTION) DetailField("下一步", item.recoveryHint())
                 DetailField("格式初检", localFormatLabel(item.format))
                 DetailField("文件可用性", localAvailabilityLabel(item.availability))
                 DetailField("状态说明", localSafeLabel(item.detail).ifBlank { "暂无补充说明" })
@@ -95,14 +104,14 @@ internal fun DownloadTaskDetail(
                 })
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭详情") } },
+        confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("关闭详情") } },
     )
 }
 
 @Composable
 private fun DetailField(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.semantics { heading() })
-        Text(value, style = MaterialTheme.typography.bodyMedium)
+        Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

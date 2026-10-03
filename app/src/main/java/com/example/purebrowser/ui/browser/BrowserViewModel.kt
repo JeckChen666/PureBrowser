@@ -110,7 +110,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
     fun deleteBookmark(id: String) { change { it.copy(bookmarks = it.bookmarks.filterNot { p -> p.id == id }) } }
     fun deleteHistory(id: String) { change { it.copy(history = it.history.filterNot { p -> p.id == id }) } }
-    fun clearHistory() { change { it.copy(history = emptyList()) } }
+    fun clearHistory() { tabs.clearPreviews();change { it.copy(history = emptyList()) } }
     fun deleteShortcut(id: String) { change { it.copy(shortcuts = it.shortcuts.filterNot { p -> p.id == id }) } }
     fun saveShortcut(existing: Shortcut?, title: String, input: String): Boolean = savePage(title, input) { name, url ->
         if (existing == null && data.value.shortcuts.size >= 12) error("最多添加 12 个常用站点")

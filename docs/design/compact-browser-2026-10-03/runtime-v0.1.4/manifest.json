@@ -1,0 +1,1232 @@
+[
+  {
+    "state": "HOME",
+    "file": "01-home.png",
+    "sha256": "4301b51add07594b9b48f7ab05a04f53cd7e2e5c54c72f3cce12c7e4c5b4636c",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "HOME",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:18:19.017Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "homeScreen",
+      "productionBoundsInWindowPx": {
+        "left": 0,
+        "top": 270,
+        "right": 1080,
+        "bottom": 1655
+      },
+      "modalUsesNativeWindow": false,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "4301b51add07594b9b48f7ab05a04f53cd7e2e5c54c72f3cce12c7e4c5b4636c",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "WEB",
+    "file": "02-web.png",
+    "sha256": "cdc486c68a1f6eabbd889e6e39532fd7225ba52f0d5c3553120141bb90625f9f",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "WEB",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:18:23.833Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "browserWebView",
+      "productionBoundsInWindowPx": {
+        "left": 0,
+        "top": 270,
+        "right": 1080,
+        "bottom": 1655
+      },
+      "modalUsesNativeWindow": false,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "cdc486c68a1f6eabbd889e6e39532fd7225ba52f0d5c3553120141bb90625f9f",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "INPUT",
+    "file": "03-input.png",
+    "sha256": "0f9ddd05511dbb884d60f5d9fd7d80defd9a9a10b2330f5d7e3f079c7a2d5b44",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "INPUT",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:18:31.577Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "addressInput",
+      "productionBoundsInWindowPx": {
+        "left": 32,
+        "top": 133,
+        "right": 796,
+        "bottom": 280
+      },
+      "modalUsesNativeWindow": false,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "0f9ddd05511dbb884d60f5d9fd7d80defd9a9a10b2330f5d7e3f079c7a2d5b44",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "TABS_GRID",
+    "file": "04-tabs_grid.png",
+    "sha256": "bff8c18dc5799ecdeefa6e46a30ccfb13736a8a556303ea02ea927d8afac8613",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "TABS_GRID",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:18:37.392Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "tabGrid",
+      "productionBoundsInWindowPx": {
+        "left": 32,
+        "top": 614,
+        "right": 1048,
+        "bottom": 1794
+      },
+      "modalUsesNativeWindow": true,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "bff8c18dc5799ecdeefa6e46a30ccfb13736a8a556303ea02ea927d8afac8613",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "TABS_LIST",
+    "file": "05-tabs_list.png",
+    "sha256": "cbafa315f23b95a0856dcb77828a6abe6a111127b4f1bb69cdb8a7aca9b45cef",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "TABS_LIST",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:18:45.689Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "tabList",
+      "productionBoundsInWindowPx": {
+        "left": 32,
+        "top": 614,
+        "right": 1048,
+        "bottom": 1794
+      },
+      "modalUsesNativeWindow": true,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "cbafa315f23b95a0856dcb77828a6abe6a111127b4f1bb69cdb8a7aca9b45cef",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "TABS_SEARCH",
+    "file": "06-tabs_search.png",
+    "sha256": "e460b72f34cc655c2186b142685ca605609bd276db602b650f10d87966b65604",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "TABS_SEARCH",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:18:52.561Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "tabGrid",
+      "productionBoundsInWindowPx": {
+        "left": 32,
+        "top": 614,
+        "right": 1048,
+        "bottom": 1794
+      },
+      "modalUsesNativeWindow": true,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "e460b72f34cc655c2186b142685ca605609bd276db602b650f10d87966b65604",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "RESOURCES",
+    "file": "07-resources.png",
+    "sha256": "0bc82c4a2de06260847268b29963292182d92d3fcc4491a3d0eb5c71934323d0",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "RESOURCES",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:19:00.617Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "resource-sheet",
+      "productionBoundsInWindowPx": {
+        "left": 0,
+        "top": 294,
+        "right": 1080,
+        "bottom": 1794
+      },
+      "modalUsesNativeWindow": true,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "0bc82c4a2de06260847268b29963292182d92d3fcc4491a3d0eb5c71934323d0",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "DOWNLOAD_QUICK",
+    "file": "08-download_quick.png",
+    "sha256": "af9462b78a428170ceac5b8c594eb3aac92afe1290e5e7f55f0ad61e69199732",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "DOWNLOAD_QUICK",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:19:05.270Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "downloadQuickSheet",
+      "productionBoundsInWindowPx": {
+        "left": 0,
+        "top": 0,
+        "right": 1080,
+        "bottom": 1828
+      },
+      "modalUsesNativeWindow": true,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "af9462b78a428170ceac5b8c594eb3aac92afe1290e5e7f55f0ad61e69199732",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "DOWNLOADS",
+    "file": "09-downloads.png",
+    "sha256": "88876c083890b41800c07e66699e782ff5f48fd382142ad668f84ea1de690e2e",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "DOWNLOADS",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:19:08.796Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "downloadsScreen",
+      "productionBoundsInWindowPx": {
+        "left": 0,
+        "top": 122,
+        "right": 1080,
+        "bottom": 1794
+      },
+      "modalUsesNativeWindow": false,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "88876c083890b41800c07e66699e782ff5f48fd382142ad668f84ea1de690e2e",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "LIBRARY",
+    "file": "10-library.png",
+    "sha256": "aacd655d59f5b27832a41a90a859f26478120e91f0b5872d075f672096b984f6",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "LIBRARY",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:19:13.467Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "videoLibraryList",
+      "productionBoundsInWindowPx": {
+        "left": 0,
+        "top": 290,
+        "right": 1080,
+        "bottom": 1794
+      },
+      "modalUsesNativeWindow": false,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "aacd655d59f5b27832a41a90a859f26478120e91f0b5872d075f672096b984f6",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "FILE_ACTIONS",
+    "file": "11-file_actions.png",
+    "sha256": "2c98262a47204cffe03347bfc1353ca05a0ddf46b9721c907e7ea8857bddb02c",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "FILE_ACTIONS",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:19:20.384Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "video-actions-v014-available",
+      "productionBoundsInWindowPx": {
+        "left": 0,
+        "top": 0,
+        "right": 1080,
+        "bottom": 1920
+      },
+      "modalUsesNativeWindow": true,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "2c98262a47204cffe03347bfc1353ca05a0ddf46b9721c907e7ea8857bddb02c",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "SETTINGS",
+    "file": "12-settings.png",
+    "sha256": "4eda41d29ba62ecd49b8336385d6cdb6328c229a21eae6b681c4ff856a0fba3c",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "SETTINGS",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:19:27.074Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "settingsScreen",
+      "productionBoundsInWindowPx": {
+        "left": 0,
+        "top": 122,
+        "right": 1080,
+        "bottom": 1794
+      },
+      "modalUsesNativeWindow": false,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "4eda41d29ba62ecd49b8336385d6cdb6328c229a21eae6b681c4ff856a0fba3c",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "MENU",
+    "file": "13-menu.png",
+    "sha256": "15cd601248a569d386b53c17ec03313dc84b4a9aeac21148437c2719d11020d0",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "MENU",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:19:31.601Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "dismissMenuButton",
+      "productionBoundsInWindowPx": {
+        "left": 912,
+        "top": 754,
+        "right": 1038,
+        "bottom": 880
+      },
+      "modalUsesNativeWindow": true,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "15cd601248a569d386b53c17ec03313dc84b4a9aeac21148437c2719d11020d0",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "BOOKMARKS",
+    "file": "14-bookmarks.png",
+    "sha256": "ab8e8caf0d3f0420ecf0a586834513eacd21093a58722b62cfdfa832b603a910",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "BOOKMARKS",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:19:34.499Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "savedPagesList",
+      "productionBoundsInWindowPx": {
+        "left": 32,
+        "top": 357,
+        "right": 1048,
+        "bottom": 1794
+      },
+      "modalUsesNativeWindow": false,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "ab8e8caf0d3f0420ecf0a586834513eacd21093a58722b62cfdfa832b603a910",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  },
+  {
+    "state": "HISTORY",
+    "file": "15-history.png",
+    "sha256": "ea99044e01c2c4433f15b7c56f65b18c232ddd4a2ec1888cb93ee12b1046e7a3",
+    "width": 1080,
+    "height": 1542,
+    "fixture": true,
+    "variant": "NATIVE_LIGHT",
+    "report": {
+      "schema": 1,
+      "fixtureOnly": true,
+      "scenario": "HISTORY",
+      "variant": "NATIVE_LIGHT",
+      "timeUtc": "2026-10-03T11:19:38.353Z",
+      "sourceRevision": "2782a6886c24a6a866ad91174df45a5dbbbd561b9f3882ce8665ca3ee46d57a9",
+      "package": "io.github.jeckchen666.purebrowser.debug",
+      "versionName": "0.1.4-rc.2-debug",
+      "versionCode": 12,
+      "buildVariant": "debug fixture harness; not signed-release evidence",
+      "api": 28,
+      "device": "Google Android SDK built for x86_64",
+      "webViewPackage": "com.android.chrome",
+      "webViewVersion": "69.0.3497.100",
+      "displayMetricsPx": {
+        "width": 1080,
+        "height": 1794
+      },
+      "signingCertificateSha256": [
+        "03a10a17fa31a9bf5aae85a52f32554cae4059fd4dbe8838ac6c40dfb820788b"
+      ],
+      "nativeDensityDpi": 420,
+      "nativeFontScale": 1,
+      "nativeConfigurationDp": {
+        "width": 411,
+        "height": 659,
+        "orientation": 1,
+        "locales": "en-US"
+      },
+      "fixtureTheme": "LIGHT",
+      "requestedFontScale": null,
+      "requestedViewportDp": {
+        "width": null,
+        "height": null
+      },
+      "rendering": "UiAutomation device pixels, app-safe-area crop only; no generated or resized mockup",
+      "limits": [
+        "Synthetic snapshots are NOT real downloads or files",
+        "24 records are NOT 24 live WebViews",
+        "Constrained root/local font are NOT OS window/font settings",
+        "Modal dimensions remain native and are separately reported",
+        "INPUT excludes IME; settings privacy callbacks absent",
+        "No release, performance, signing/upgrade, TalkBack or transfer claim"
+      ],
+      "status": "PASS",
+      "availableRootPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "fixtureViewportPx": {
+        "width": 1080,
+        "height": 1731
+      },
+      "effectiveDensity": 2.625,
+      "effectiveFontScale": 1,
+      "productionCaptureTag": "savedPagesList",
+      "productionBoundsInWindowPx": {
+        "left": 32,
+        "top": 357,
+        "right": 1048,
+        "bottom": 1794
+      },
+      "modalUsesNativeWindow": false,
+      "screenshot": "FIXTURE-NATIVE_LIGHT.png",
+      "screenshotSha256": "ea99044e01c2c4433f15b7c56f65b18c232ddd4a2ec1888cb93ee12b1046e7a3",
+      "cropInDisplayPx": {
+        "left": 0,
+        "top": 126,
+        "right": 1080,
+        "bottom": 1668
+      }
+    }
+  }
+]

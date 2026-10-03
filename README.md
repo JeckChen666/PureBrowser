@@ -125,6 +125,8 @@ python3 tools/fixtures/serve_video_fixture.py
 
 ## 项目文档
 
+- [v0.1.4 版本与执行计划](docs/EXECUTION-PLAN-V0.1.4.md) · [发行验收台账](docs/RELEASE-ACCEPTANCE-V0.1.4.md)：统一 UI 与核心交互改版，T41–T50；待实施，不改变当前 v0.1.3 发行状态。
+
 - [UI 设计方向：紧凑版浏览器 V4](docs/design/compact-browser-2026-10-03/README.md)：15 个界面总览、顶部网址／底部操作、交互规则及后续验收清单；仅设计方向，尚未实施。
 
 - `docs/releases/v0.1.3.md`：本次正式签名公开测试版的发行说明。
@@ -134,7 +136,7 @@ python3 tools/fixtures/serve_video_fixture.py
 - `docs/T1-T7-COMPLETION.md`：第一轮交付、验收与边界。
 - `docs/IMPLEMENTATION-STATUS.md`：当前测试和功能边界。
 - `docs/PRODUCT-PLAN.md`：已确认的纯本地、产品化优先方向。
-- `docs/VERSION-ROADMAP-0.1.md`：v0.1.0–v0.1.3 建议版本范围、用户效果、发布与发行验收门槛；历史规划与当前交付状态分别标注。
+- `docs/VERSION-ROADMAP-0.1.md`：v0.1.0–v0.1.4 建议版本范围、用户效果、发布与发行验收门槛；历史规划与当前交付状态分别标注。
 - `docs/EXECUTION-PLAN.md`：第一轮 T1–T7 的已完成执行清单。
 - `docs/EXECUTION-PLAN-ROUND-2.md`：第二轮 T8–T14 的已完成执行清单。
 - `docs/ROUND-2-STATUS.md`：Git 基线、T8 增量与验证边界。

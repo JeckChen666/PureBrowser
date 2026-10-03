@@ -22,7 +22,7 @@ internal fun MediaCandidate.unsupportedExplanation(): String = when {
     kind == MediaKind.DASH ->
         "这是 DASH 播放清单，音频和视频可能分开传输。目前不支持分片下载与音视频合并。"
     kind == MediaKind.FILE ->
-        "此地址不是可交给系统下载器的 HTTP / HTTPS 文件直链，暂时不能尝试保存。"
+        "此地址不是可交给受控下载器的 HTTP / HTTPS 文件直链，暂时不能尝试保存。"
     else ->
         "已发现媒体线索，但尚未确认文件类型。请播放视频后重新查看；可尝试保存，响应不是完整 MP4/WebM 时会拒绝入库。"
 }

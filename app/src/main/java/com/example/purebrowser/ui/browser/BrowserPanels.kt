@@ -27,11 +27,13 @@ private data class PendingSubmission(
 
 @Composable
 fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, showResources: Boolean,
-                  onDismissResources: () -> Unit) {
+                  onDismissResources: () -> Unit, onBusyChanged: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val defaultWifiOnly by model.defaultWifiOnly.collectAsState()
     var confirmDownload by remember { mutableStateOf<DownloadDraft?>(null) }
     var pendingPermission by remember { mutableStateOf<PendingSubmission?>(null) }
+    SideEffect { onBusyChanged(confirmDownload != null || pendingPermission != null) }
+    DisposableEffect(Unit) { onDispose { onBusyChanged(false) } }
     val userAgent = remember { WebSettings.getDefaultUserAgent(context) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         val granted=grants[Manifest.permission.WRITE_EXTERNAL_STORAGE]==true && grants[Manifest.permission.READ_EXTERNAL_STORAGE]==true

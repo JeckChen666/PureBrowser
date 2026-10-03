@@ -385,11 +385,12 @@ class DownloadLibraryUiTest {
         ))
         listOf(1L, 2L, 3L, 4L).forEach { id ->
             scrollLibrary("video-$id")
-            compose.onNodeWithTag("video-$id").assertExists()
+            compose.onNodeWithTag("video-$id").assertExists().performClick()
             compose.onNodeWithTag("video-open-$id").assertDoesNotExist()
             compose.onNodeWithTag("video-share-$id").assertDoesNotExist()
             compose.onNodeWithText("cover-$id").assertDoesNotExist()
             compose.onNodeWithTag("video-source-$id").assertDoesNotExist()
+            compose.onNodeWithTag("video-actions-close-$id").performClick()
         }
         scrollLibrary("video-1")
         compose.onNodeWithTag("video-delete-1").assertDoesNotExist()
@@ -400,6 +401,7 @@ class DownloadLibraryUiTest {
     @Test fun libraryDefaultSourceSetDoesNotInventLegacySources() {
         showLibrary(listOf(asset(1)))
         scrollLibrary("video-1")
+        compose.onNodeWithTag("video-1").performClick()
         compose.onNodeWithTag("video-open-1").assertExists()
         compose.onNodeWithTag("video-share-1").assertExists()
         compose.onNodeWithTag("video-source-1").assertDoesNotExist()
@@ -434,10 +436,9 @@ class DownloadLibraryUiTest {
 
     @Test fun librarySourceAndFileActionsAreDisabledWhileBusy() {
         showLibrary(listOf(asset(1)), sourceIds = setOf(1), busy = setOf(1))
-        scrollLibrary("video-source-1")
-        listOf("source", "open", "share", "rename", "forget", "delete").forEach {
-            compose.onNodeWithTag("video-$it-1").assertIsNotEnabled()
-        }
+        scrollLibrary("video-1")
+        compose.onNodeWithTag("video-1").assertIsNotEnabled()
+        compose.onNodeWithTag("video-actions-1").assertDoesNotExist()
     }
 
     @Test fun librarySearchMatchesDisplayNameAndActualFilename() {
@@ -492,7 +493,13 @@ class DownloadLibraryUiTest {
     }
 
     private fun scrollLibrary(tag: String) {
-        compose.onNodeWithTag("videoLibraryList").performScrollToNode(hasTestTag(tag))
+        val action=Regex("video-(open|share|rename|forget|delete|source)-(.+)").matchEntire(tag)
+        if(action!=null) {
+            val id=action.groupValues[2]
+            compose.onNodeWithTag("videoLibraryList").performScrollToNode(hasTestTag("video-$id"))
+            compose.onNodeWithTag("video-$id").performClick()
+            compose.onNodeWithTag(tag).performScrollTo()
+        } else compose.onNodeWithTag("videoLibraryList").performScrollToNode(hasTestTag(tag))
     }
 
     private fun showDownloads(

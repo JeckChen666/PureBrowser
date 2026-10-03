@@ -16,6 +16,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -123,9 +124,10 @@ class HlsBrowserJourneyTest {
             val sourceGeneration = model.engine!!.generation
             previousIds = io { repository.records().map { it.recordId }.toSet() }
 
-            compose.onNodeWithTag("resourcesButton").performClick()
+            compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("resourcesButton").performClick()
             compose.onNodeWithTag("resource-sheet").performScrollToNode(hasTestTag("resource-card-${observed.displayName}"))
-            compose.onNode(hasText("尝试下载") and hasClickAction() and
+            compose.onNode(hasContentDescription("尝试下载") and hasClickAction() and
                 hasAnyAncestor(hasTestTag("resource-card-${observed.displayName}"))).performScrollTo().performClick()
             compose.onNodeWithText("确认下载 HLS").assertExists()
             compose.onNodeWithTag("hls-variant-0").assertDoesNotExist()
@@ -224,14 +226,16 @@ class HlsBrowserJourneyTest {
                 assertEquals(TaskStatus.SUCCEEDED, complete.taskStatus)
                 assertEquals(4, complete.completedSegments)
             }
-            compose.onNodeWithTag("downloadsButton").performClick()
+            compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("downloadsButton").performClick()
             compose.onNodeWithTag("downloadsList").performScrollToNode(hasTestTag("download-$id"))
             compose.onNodeWithTag("download-status-$id").assert(hasText("已保存 · 格式初检通过"))
             compose.onNodeWithTag("downloadsList").performScrollToNode(hasTestTag("downloadsLibrary"))
             compose.onNodeWithTag("downloadsLibrary").performClick()
             compose.onNodeWithTag("videoLibraryScreen").assertExists()
             compose.onNodeWithTag("videoLibraryList").performScrollToNode(hasTestTag("video-$id"))
-            compose.onNode(hasText(fileName) and hasAnyAncestor(hasTestTag("video-$id"))).assertIsDisplayed()
+            compose.onNode(hasText(fileName) and hasAnyAncestor(hasTestTag("video-$id")),useUnmergedTree=true).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithTag("video-$id").performClick()
             compose.onNodeWithTag("video-open-$id").assertIsEnabled()
             compose.onNodeWithTag("video-share-$id").assertIsEnabled()
         } catch (failure: Throwable) {

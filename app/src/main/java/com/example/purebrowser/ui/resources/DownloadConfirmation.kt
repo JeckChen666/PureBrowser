@@ -1,15 +1,11 @@
 package com.example.purebrowser.ui.resources
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -21,20 +17,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.download.DownloadDraft
 import com.example.purebrowser.download.DownloadRules
 import com.example.purebrowser.media.MediaKind
+import com.example.purebrowser.ui.components.BrowserGlyph
+import com.example.purebrowser.ui.components.Glyph
 
 /**
  * Pure confirmation UI. The caller keeps the selected draft for enqueue/permission handling
@@ -65,15 +59,10 @@ fun DownloadConfirmation(
         // would clear the background Activity's focus instead of this field.
         val focusManager = LocalFocusManager.current
         val keyboard = LocalSoftwareKeyboardController.current
-        Text("确认下载直链", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-        Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        ResourceHeading("确认下载直链")
+        Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium)
         ResourceMetadata(frozen.candidate)
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            frozen.sourceTitle?.takeIf(String::isNotBlank)?.let {
-                Text("来源页面：${readableResourceName(it)}", style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            Text("来源主机：${sourceHost(frozen.sourceUrl) ?: "未记录"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        ResourceSource(frozen)
         HorizontalDivider()
         OutlinedTextField(
             value = fileName,
@@ -94,29 +83,21 @@ fun DownloadConfirmation(
             modifier = Modifier.fillMaxWidth().testTag("download-file-name"),
         )
         Text("保存至系统 Download/PureBrowser 目录。保存时会添加唯一前缀，避免覆盖同名文件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .toggleable(value = wifiOnly, enabled = !submitted, role = Role.Checkbox, onValueChange = { wifiOnly = it }),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // One accessible toggle target, not a separately clickable checkbox and row.
-            Checkbox(checked = wifiOnly, onCheckedChange = null, enabled = !submitted)
-            Column(Modifier.weight(1f)) {
-                Text("仅 Wi-Fi", style = MaterialTheme.typography.bodyLarge)
-                Text(if (wifiOnly) "无 Wi-Fi 时等待连接" else "允许使用移动网络，可能产生流量费用", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Row(Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("download-use-context")
-            .toggleable(value=useContext,enabled=contextAvailable && !submitted,role=Role.Checkbox,onValueChange={ useContext=it }),
-            verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            Checkbox(checked=useContext,onCheckedChange=null,enabled=contextAvailable && !submitted)
-            Column(Modifier.weight(1f)) {
-                Text("使用当前网站访问条件")
-                Text(if(contextAvailable) "只使用适用的同源会话和最小来源；可关闭后尝试公开下载" else "没有可靠页面关联，不使用网站会话",
-                    style=MaterialTheme.typography.bodySmall)
-            }
-        }
+        ResourceOption(
+            label = "仅 Wi-Fi",
+            description = if (wifiOnly) "无 Wi-Fi 时等待连接" else "允许使用移动网络，可能产生流量费用",
+            checked = wifiOnly,
+            enabled = !submitted,
+            onChange = { wifiOnly = it },
+        )
+        ResourceOption(
+            label = "使用当前网站访问条件",
+            description = if (contextAvailable) "只使用适用的同源会话和最小来源；可关闭后尝试公开下载" else "没有可靠页面关联，不使用网站会话",
+            checked = useContext,
+            enabled = contextAvailable && !submitted,
+            onChange = { useContext = it },
+            modifier = Modifier.testTag("download-use-context"),
+        )
         Text(
             if (frozen.candidate.canTryDownload() && frozen.candidate.kind != MediaKind.HLS) "仅支持 MP4/WebM 文件直链；会话不写入任务记录，不跨源转发。签名可能过期，格式初检不等于完整播放保证。"
             else frozen.candidate.unsupportedExplanation(),
@@ -134,7 +115,10 @@ fun DownloadConfirmation(
             },
             enabled = canConfirm,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        ) { Text("开始下载") }
+        ) {
+            BrowserGlyph(Glyph.DOWNLOAD, "开始下载", Modifier.clearAndSetSemantics {})
+            Text("开始下载", modifier = Modifier.padding(start = 8.dp))
+        }
         TextButton(onClick = { focusManager.clearFocus(force=true);keyboard?.hide();onDismiss() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("取消") }
     }
 }

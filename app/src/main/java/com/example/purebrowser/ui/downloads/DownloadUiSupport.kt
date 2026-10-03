@@ -142,6 +142,25 @@ internal fun DownloadItem.pauseResumeExplanation(pauseConnected: Boolean, resume
     else -> null
 }
 
+/** Recovery guidance preserves network/storage/access distinctions rather than blaming every link. */
+internal fun DownloadItem.recoveryHint(): String = when {
+    systemRead == SystemTaskRead.UNAVAILABLE -> "暂时无法读取任务，请等待状态确认；不会用缓存状态执行文件操作。"
+    availability == FileAvailability.MISSING && verified -> "已保存的文件已丢失；移除记录不会找回文件。" +
+        if (!sourceUrl.isNullOrBlank()) "可返回来源网页重新发现资源。" else "来源信息缺失，请自行重新找到网页。"
+    pauseReason == PauseReason.STORAGE || failure == FailureKind.STORAGE -> "请检查可用存储空间。仅在检查点与继续能力已确认时继续原任务。"
+    pauseReason == PauseReason.NETWORK || failure == FailureKind.NETWORK -> "请检查网络。仅在继续能力已确认时使用原任务；重新下载则会另建任务，不是续传。"
+    pauseReason == PauseReason.WIFI -> "此任务仅允许 Wi-Fi，请连接符合原任务要求的网络。"
+    pauseReason == PauseReason.SYSTEM || failure == FailureKind.SYSTEM_LIMIT -> "系统限制了任务，请核对系统网络与后台运行限制。"
+    pauseReason in setOf(PauseReason.ACCESS, PauseReason.SOURCE_CHANGED) ||
+        failure in setOf(FailureKind.ACCESS_CONDITION, FailureKind.HTTP_REJECTED) ->
+        if (!sourceUrl.isNullOrBlank()) "链接可能已过期或需要登录，可返回来源网页重新发现资源；不能安全续传。"
+        else "访问条件已失效且来源信息缺失，请自行重新找到网页；不能安全续传。"
+    failure in setOf(FailureKind.NOT_VIDEO, FailureKind.UNSUPPORTED) -> "此资源或返回内容不受支持。" +
+        if (!sourceUrl.isNullOrBlank()) "请返回来源网页重新选择可保存的视频。" else "来源信息缺失，请自行重新找到网页。"
+    !sourceUrl.isNullOrBlank() -> "可返回来源网页重新发现资源；不会自动重新下载。"
+    else -> "来源信息缺失，请自行重新找到网页；不会自动重新下载。"
+}
+
 internal fun DownloadItem.cacheSummary(): String = "应用私有缓存 · ${localFileSize(cacheBytes)}（不是已保存的成品）"
 
 /** Paused/waiting tasks stay cancellable, but must not look like an actively running transfer. */
@@ -255,24 +274,25 @@ fun LocalFileConfirmation(
     AlertDialog(
         modifier = Modifier.testTag(tag),
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(title, style = MaterialTheme.typography.titleMedium) },
         text = {
             Column(
                 Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(localSafeLabel(displayName), style = MaterialTheme.typography.titleSmall)
-                Text(explanation)
+                Text(explanation, style = MaterialTheme.typography.bodyMedium)
                 if (!enabled) Text("当前无法执行，请等待状态确认或操作完成后再试。", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {
-            TextButton(onClick = onConfirm, enabled = enabled, modifier = Modifier.testTag("$tag-confirm")) {
+            TextButton(onClick = onConfirm, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp).testTag("$tag-confirm")) {
                 Text(confirmLabel)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, modifier = Modifier.testTag("$tag-dismiss")) { Text("返回") }
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp).testTag("$tag-dismiss")) { Text("返回") }
         },
     )
 }

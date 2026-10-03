@@ -34,6 +34,9 @@ class BrowserSession(
             engine.resume()
         }
     }
+    /** Only the existing mounted view; callers must never construct an inactive tab for preview. */
+    fun mountedPreviewView(): WebView? = webView?.takeIf { it.parent != null }
+
     fun unmount(host: FrameLayout) {
         val view = webView ?: return
         if (view.parent === host) {

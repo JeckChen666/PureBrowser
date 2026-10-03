@@ -30,7 +30,9 @@ class BrowserEngine(
     private val mutablePage = MutableStateFlow(BrowserPage(url = initialUrl))
     val page = mutablePage.asStateFlow()
     val generation: Long get() = pageEpoch.get()
-    private var view: WebView? = null
+    @Volatile private var view: WebView? = null
+    // One resolved, in-memory intent only. Do not publish/persist an unmounted destination.
+    private var pendingNavigation: String? = null
     private var domScanRunning = false
     private var scanToken = 0L
     private var documentTimeOrigin:Double?=null
@@ -49,6 +51,7 @@ class BrowserEngine(
 
     @SuppressLint("SetJavaScriptEnabled")
     fun attach(webView: WebView) {
+        if (view === webView) return // Mount/update must not replay a consumed navigation.
         view = webView
         webView.settings.apply {
             javaScriptEnabled = true
@@ -64,14 +67,17 @@ class BrowserEngine(
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(v: WebView, newProgress: Int) {
+                if (v !== view) return
                 publish(mutablePage.value.copy(progress = newProgress))
             }
             override fun onReceivedTitle(v: WebView, title: String?) {
+                if (v !== view) return
                 publish(mutablePage.value.copy(title = title.orEmpty().take(180)))
             }
         }
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(v: WebView, url: String?, favicon: Bitmap?) {
+                if (v !== view) return
                 invalidateScan()
                 sameDocumentUpdate=false
                 navigationStartedMs=System.currentTimeMillis()
@@ -79,36 +85,47 @@ class BrowserEngine(
                 publish(BrowserPage(url = url ?: "about:blank", progress = 0))
             }
             override fun onPageFinished(v: WebView, url: String?) {
+                if (v !== view) return
                 updateNavigation()
                 scanMedia()
                 if (url == "about:blank") { v.clearHistory(); updateNavigation() }
                 else if (mutablePage.value.error == null && BrowserAddress.isWebUrl(url.orEmpty())) onVisited(url!!, mutablePage.value.title)
             }
             override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean {
+                if (v !== view) return true
                 if (BrowserAddress.isWebUrl(request.url.toString())) return false
                 if (request.isForMainFrame) message("暂不支持打开外部应用或此类链接")
                 return true
             }
             override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse? {
-                if (request.method == "GET") {
-                    sniffer.observe(pageEpoch.get(), request.url.toString(), Evidence.REQUEST)
+                // Capture the epoch BEFORE checking the volatile owner: a concurrent teardown
+                // must not let an old view's request borrow the next page's generation.
+                val epoch = pageEpoch.get()
+                if (v === view && request.method == "GET") {
+                    sniffer.observe(epoch, request.url.toString(), Evidence.REQUEST)
                 }
                 return null
             }
             override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
+                if (v !== view) return
                 if (request.isForMainFrame) publish(mutablePage.value.copy(error = "网页加载失败，请检查网络或网址", progress = 100))
             }
             override fun onReceivedHttpError(v: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+                if (v !== view) return
                 if (request.isForMainFrame) publish(mutablePage.value.copy(error = "网页返回 HTTP ${response.statusCode}"))
             }
-            override fun doUpdateVisitedHistory(v: WebView, url: String?, isReload: Boolean) = updateNavigation()
+            override fun doUpdateVisitedHistory(v: WebView, url: String?, isReload: Boolean) {
+                if (v === view) updateNavigation()
+            }
             // SSL errors use WebView's default cancellation. Never silently bypass verification.
         }
         webView.setDownloadListener { url, _, _, mime, length ->
+            if (view !== webView) return@setDownloadListener
             sniffer.observe(pageEpoch.get(), url, Evidence.DOWNLOAD, mime, length)
             message("发现下载资源，请在资源面板中确认")
         }
         webView.setOnLongClickListener {
+            if (view !== webView) return@setOnLongClickListener false
             val hit = webView.hitTestResult
             val url = hit.extra.orEmpty()
             if (hit.type in setOf(WebView.HitTestResult.SRC_ANCHOR_TYPE, WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) && BrowserAddress.isWebUrl(url)) {
@@ -117,19 +134,30 @@ class BrowserEngine(
             } else false
         }
         resume()
-        webView.loadUrl(mutablePage.value.url.takeIf(BrowserAddress::isWebUrl) ?: "about:blank")
+        val destination = pendingNavigation ?: mutablePage.value.url.takeIf(BrowserAddress::isWebUrl) ?: "about:blank"
+        pendingNavigation = null // Consume before loadUrl can synchronously invoke a callback.
+        webView.loadUrl(destination)
     }
 
     fun navigate(input: String) {
         runCatching { BrowserAddress.resolve(input) }
-            .onSuccess { view?.loadUrl(it) }
+            .onSuccess { loadOrDefer(it) }
             .onFailure { message(it.message ?: "网址格式不正确") }
     }
+    private fun loadOrDefer(destination: String) {
+        val current = view
+        if (current == null) pendingNavigation = destination
+        else {
+            pendingNavigation = null
+            current.loadUrl(destination)
+        }
+    }
+
     fun back() { view?.let { if (it.canGoBack()) it.goBack() }; updateNavigation() }
     fun forward() { view?.let { if (it.canGoForward()) it.goForward() }; updateNavigation() }
     fun reload() { view?.reload() }
     fun stop() { view?.stopLoading(); publish(mutablePage.value.copy(progress = 100)) }
-    fun home() { view?.loadUrl("about:blank") }
+    fun home() { loadOrDefer("about:blank") }
     fun pause() { scanningActive = false; handler.removeCallbacks(scanner); view?.onPause() }
     fun resume() { view?.onResume(); scanningActive = true; handler.removeCallbacks(scanner); handler.post(scanner) }
 
@@ -187,13 +215,20 @@ class BrowserEngine(
 
     fun detach(webView: WebView) {
         if (view === webView) {
-            pause(); scanToken++
-            pageEpoch.set(sniffer.beginPage())
+            // Revoke callback ownership before stopLoading/onPause can deliver final events.
             view = null
-            domScanRunning = false
+            pendingNavigation = null
+            scanningActive = false
+            handler.removeCallbacks(scanner)
+            webView.onPause()
+            invalidateScan()
+            pageEpoch.set(sniffer.beginPage())
         }
         webView.stopLoading()
         webView.webChromeClient = null
+        webView.webViewClient = WebViewClient()
+        webView.setDownloadListener(null)
+        webView.setOnLongClickListener(null)
         webView.destroy()
     }
 

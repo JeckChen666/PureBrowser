@@ -30,7 +30,7 @@ class ProductWorkflowTest {
         compose.activityRule.scenario.onActivity{model=ViewModelProvider(it)[BrowserViewModel::class.java]}
         compose.waitUntil(10000){model.ready.value}
         fun onMain(action:()->Unit){compose.activityRule.scenario.onActivity{action()}}
-        fun menu(text:String){compose.onNodeWithTag("menuButton").activate();val key=when(text){"添加书签"->"bookmarkToggle";"书签"->"bookmarks";"历史"->"history";else->"settings"};compose.onNodeWithTag("menu-$key").activate()}
+        fun menu(text:String){compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("menuButton").assertIsDisplayed() }.isSuccess };compose.onNodeWithTag("menuButton").activate();val key=when(text){"添加书签"->"bookmarkToggle";"书签"->"bookmarks";"历史"->"history";else->"settings"};compose.onNodeWithTag("menu-$key").activate()}
         // Work in newly created owned tabs, not whatever pages existed before the test.
         val aUrl="$base/?product=${UUID.randomUUID()}"
         onMain{model.newTab(aUrl)}
@@ -52,16 +52,16 @@ class ProductWorkflowTest {
         compose.waitUntil(5000){model.sniffer?.candidates?.value?.isEmpty()==true}
         // UI tab switching, not just state rules.
         compose.onNodeWithTag("tabsButton").activate()
-        compose.onNodeWithTag("tabList").performScrollToNode(hasTestTag("tab-$a"))
+        compose.onNode(hasTestTag("tabList") or hasTestTag("tabGrid")).performScrollToNode(hasTestTag("tab-$a"))
         compose.onNodeWithTag("tab-$a").activate()
         compose.waitUntil(5000){model.data.value.selectedId==a && model.engine?.page?.value?.canGoBack==true}
         compose.onNodeWithTag("backButton").activate()
         compose.waitUntil(15000){hasExpectedSources() && model.engine?.page?.value?.url==aUrl}
         compose.onNodeWithTag("tabsButton").activate()
-        compose.onNodeWithTag("tabList").performScrollToNode(hasTestTag("tab-$b"))
+        compose.onNode(hasTestTag("tabList") or hasTestTag("tabGrid")).performScrollToNode(hasTestTag("tab-$b"))
         compose.onNodeWithTag("close-$b").activate()
         compose.waitUntil(5000){model.data.value.tabs.none{it.id==b}}
-        compose.onNodeWithTag("tabList").performScrollToNode(hasTestTag("tab-$c"))
+        compose.onNode(hasTestTag("tabList") or hasTestTag("tabGrid")).performScrollToNode(hasTestTag("tab-$c"))
         compose.onNodeWithTag("tab-$c").activate()
         // Platform IME/insets transitions are outside Compose's idling clock. Wait
         // for the real keyboard to close before scrolling/clicking the home surface.

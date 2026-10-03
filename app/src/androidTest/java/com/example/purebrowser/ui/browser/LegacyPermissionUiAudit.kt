@@ -22,6 +22,7 @@ class LegacyPermissionUiAudit {
         val before=model.repository.records().map { it.recordId }.toSet()
         compose.activityRule.scenario.onActivity { model.newTab("http://127.0.0.1:8765/second.html") }
         compose.waitUntil(20000) { model.sniffer!!.candidates.value.any { it.url.endsWith("second.mp4") && Evidence.DOM in it.sources } }
+        compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("resourcesButton").performClick()
         compose.onAllNodesWithText("尝试下载").onFirst().performClick()
         compose.onNodeWithText("开始下载").performScrollTo().performClick()

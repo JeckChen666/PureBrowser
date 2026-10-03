@@ -5,78 +5,91 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.purebrowser.ui.browser.BrowserChromeRules
 
 @Composable
-fun BrowserAddressBar(address:String,editing:Boolean,tabCount:Int,change:(String)->Unit,focus:()->Unit,submit:()->Unit,cancel:()->Unit,tabs:()->Unit,menu:@Composable ()->Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-        if (editing) {
-            val requester = remember { FocusRequester() }
-            val keyboard = LocalSoftwareKeyboardController.current
-            LaunchedEffect(Unit) { requester.requestFocus(); keyboard?.show() }
-            OutlinedTextField(value=address,onValueChange=change,singleLine=true,shape=RoundedCornerShape(18.dp),modifier=Modifier.weight(1f).testTag("addressInput").focusRequester(requester),
-                placeholder={Text("搜索或输入网址")},leadingIcon={BrowserGlyph(Glyph.SEARCH,"搜索")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Uri,imeAction=ImeAction.Go),keyboardActions=KeyboardActions(onGo={submit()}))
+fun BrowserAddressBar(address: String, editing: Boolean, change: (String)->Unit, focus: ()->Unit,
+                      submit: ()->Unit, cancel: ()->Unit, loading: Boolean, reload: ()->Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
+        if(editing) {
+            val requester=remember { FocusRequester() }
+            val keyboard=LocalSoftwareKeyboardController.current
+            LaunchedEffect(Unit) { requester.requestFocus();keyboard?.show() }
+            OutlinedTextField(value=address,onValueChange=change,singleLine=true,
+                shape=RoundedCornerShape(12.dp),modifier=Modifier.weight(1f).testTag("addressInput").focusRequester(requester),
+                placeholder={Text("搜索或输入网址")},leadingIcon={BrowserGlyph(Glyph.SEARCH,"网址与搜索")},
+                keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Uri,imeAction=ImeAction.Go),
+                keyboardActions=KeyboardActions(onGo={submit()}))
+            ToolButton(Glyph.NEXT,"访问",tag="navigateButton",action=submit)
+            ToolButton(Glyph.CLOSE,"取消输入",tag="cancelAddressButton",action=cancel)
         } else {
-            // A non-editing address is not a focusable editor: WebView focus changes must
-            // never reopen the keyboard or put the browser chrome back into edit mode.
-            OutlinedCard(onClick=focus,modifier=Modifier.weight(1f).heightIn(min=56.dp).testTag("addressInput"),shape=RoundedCornerShape(18.dp),colors=CardDefaults.outlinedCardColors(containerColor=MaterialTheme.colorScheme.surface)) {
-                Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                    BrowserGlyph(Glyph.SEARCH,"搜索")
-                    Text(address.ifBlank { "搜索或输入网址" },maxLines=1,overflow=TextOverflow.Ellipsis,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Surface(onClick=focus,shape=RoundedCornerShape(12.dp),color=MaterialTheme.colorScheme.surfaceContainer,
+                modifier=Modifier.weight(1f).heightIn(min=48.dp).testTag("addressInput")) {
+                Row(Modifier.padding(horizontal=12.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                    BrowserGlyph(Glyph.SEARCH,"编辑网址")
+                    Text(BrowserChromeRules.displayAddress(address),maxLines=1,overflow=TextOverflow.Ellipsis,
+                        style=MaterialTheme.typography.bodyMedium,modifier=Modifier.weight(1f))
                 }
             }
-        }
-        if(editing) {
-            TextButton(onClick=submit,modifier=Modifier.testTag("navigateButton")){Text("访问")}
-            TextButton(onClick=cancel){Text("取消")}
-        } else {
-            FilledTonalIconButton(onClick=tabs,modifier=Modifier.testTag("tabsButton")){Text(tabCount.toString())}
-            menu()
+            if(address.isNotBlank()) ToolButton(if(loading) Glyph.STOP else Glyph.REFRESH,
+                if(loading) "停止加载" else "刷新",tag="reloadButton",action=reload)
         }
     }
 }
+
 @Composable
-fun BrowserToolbar(canBack:Boolean,canForward:Boolean,resources:Int,home:()->Unit,back:()->Unit,next:()->Unit,media:()->Unit,downloads:()->Unit) {
-    Surface(tonalElevation=2.dp) {
-        Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
-            ToolButton(Glyph.HOME,"首页",tag="homeButton",action=home)
-            ToolButton(Glyph.BACK,"后退",canBack,tag="backButton",action=back)
-            ToolButton(Glyph.NEXT,"前进",canForward,tag="forwardButton",action=next)
-            FilledTonalButton(onClick=media,modifier=Modifier.testTag("resourcesButton"),contentPadding=PaddingValues(horizontal=12.dp,vertical=10.dp)){BrowserGlyph(Glyph.DOWNLOAD,"媒体资源",Modifier.size(18.dp));Spacer(Modifier.width(6.dp));Text("资源 $resources")}
-            ToolButton(Glyph.DOWNLOAD,"下载",tag="downloadsButton",action=downloads)
+fun BrowserToolbar(canBack: Boolean, canForward: Boolean, tabCount: Int, isHome: Boolean,
+                   back: ()->Unit, next: ()->Unit, home: ()->Unit, tabs: ()->Unit, menu: ()->Unit) {
+    Surface(color=MaterialTheme.colorScheme.surface) {
+        Column {
+            HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
+            Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=2.dp),
+                verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
+                ToolButton(Glyph.BACK,"后退",canBack,tag="backButton",action=back)
+                ToolButton(Glyph.NEXT,"前进",canForward,tag="forwardButton",action=next)
+                CompositionLocalProvider(LocalContentColor provides if(isHome) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) {
+                    IconButton(onClick=home,modifier=Modifier.sizeIn(minWidth=48.dp,minHeight=48.dp).testTag("homeButton").semantics { selected=isHome }) { BrowserGlyph(Glyph.HOME,"首页") }
+                }
+                IconButton(onClick=tabs,modifier=Modifier.sizeIn(minWidth=48.dp,minHeight=48.dp).testTag("tabsButton")
+                    .semantics { contentDescription="标签页，共 $tabCount 个" }) {
+                    Surface(shape=RoundedCornerShape(4.dp),border=androidx.compose.foundation.BorderStroke(1.5.dp,LocalContentColor.current)) {
+                        Text(tabCount.toString(),style=MaterialTheme.typography.labelMedium,modifier=Modifier.padding(horizontal=5.dp,vertical=1.dp))
+                    }
+                }
+                ToolButton(Glyph.MENU,"菜单",tag="menuButton",action=menu)
+            }
         }
     }
 }
+
 @Composable
-fun BrowserPageChrome(title:String,progress:Int,error:String?,reload:()->Unit) {
+fun BrowserPageChrome(progress:Int,error:String?,retry:()->Unit) {
     Column(Modifier.fillMaxWidth()) {
-        if(progress<100) LinearProgressIndicator(progress={progress/100f},modifier=Modifier.fillMaxWidth())
-        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text(title,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis)
-            ToolButton(if(progress<100)Glyph.STOP else Glyph.REFRESH,if(progress<100)"停止加载" else "刷新",tag="reloadButton",action=reload)
-        }
-        error?.let { BrowserErrorBanner(it,reload) }
+        if(progress<100) LinearProgressIndicator(progress={progress/100f},modifier=Modifier.fillMaxWidth().height(2.dp))
+        error?.let { BrowserErrorBanner(it,retry) }
     }
 }
 @Composable
 fun BrowserErrorBanner(message:String,retry:()->Unit) {
     Surface(color=MaterialTheme.colorScheme.errorContainer) {
         Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text(message,modifier=Modifier.weight(1f),style=MaterialTheme.typography.bodySmall)
-            TextButton(onClick=retry){Text("重试")}
+            Text(message,modifier=Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
+            TextButton(onClick=retry,modifier=Modifier.testTag("retryPageButton")){Text("重试")}
         }
     }
 }

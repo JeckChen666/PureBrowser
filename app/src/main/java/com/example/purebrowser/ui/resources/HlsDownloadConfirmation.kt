@@ -8,15 +8,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -36,16 +36,18 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.download.DownloadDraft
 import com.example.purebrowser.download.DownloadRules
 import com.example.purebrowser.download.RequestPolicy
 import com.example.purebrowser.media.MediaKind
+import com.example.purebrowser.ui.components.BrowserGlyph
+import com.example.purebrowser.ui.components.Glyph
 import com.example.purebrowser.download.hls.HlsDownloadPlan
 import com.example.purebrowser.download.hls.HlsPlaylist
 import com.example.purebrowser.download.hls.HlsResolver
@@ -109,40 +111,35 @@ fun HlsDownloadConfirmation(
             keyboard?.hide()
             dismiss()
         }
-        Text("确认下载 HLS", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-        Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        ResourceHeading("确认下载 HLS")
+        Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium)
         ResourceMetadata(frozen.candidate)
-        frozen.sourceTitle?.takeIf(String::isNotBlank)?.let {
-            Text("来源页面：${readableResourceName(it)}", maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        Text("来源主机：${sourceHost(frozen.sourceUrl) ?: "未记录"}", style = MaterialTheme.typography.bodySmall)
+        ResourceSource(frozen)
         Text("仅在你点击解析或准备时读取清单；选择档位不会自动请求子清单。仅支持未加密的固定点播 MPEG-TS（H.264 / AAC），合并为独立 MP4。不支持直播、DRM、独立音轨、fMP4 或续传。", style = MaterialTheme.typography.bodySmall)
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("download-use-context")
-                .toggleable(value = useContext, enabled = contextAvailable && !submitted, role = Role.Checkbox, onValueChange = {
-                    // Clear the prepared plan synchronously before the new access choice can be saved.
-                    preparation.accessChanged()
-                    useContext = it
-                }),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Checkbox(checked = useContext, onCheckedChange = null, enabled = contextAvailable && !submitted)
-            Column(Modifier.weight(1f)) {
-                Text("使用当前网站访问条件")
-                Text(if (contextAvailable) "只使用适用的同源会话和最小来源；修改后需重新解析清单" else "没有可靠页面关联，不使用网站会话", style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        ResourceOption(
+            label = "使用当前网站访问条件",
+            description = if (contextAvailable) "只使用适用的同源会话和最小来源；修改后需重新解析清单" else "没有可靠页面关联，不使用网站会话",
+            checked = useContext,
+            enabled = contextAvailable && !submitted,
+            onChange = {
+                // Clear the prepared plan synchronously before the new access choice can be saved.
+                preparation.accessChanged()
+                useContext = it
+            },
+            modifier = Modifier.testTag("download-use-context"),
+        )
         OutlinedButton(
             onClick = { if (previewAllowed()) preparation.parse(requestDraft) },
             enabled = !submitted && !preparation.busy,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("hls-parse-playlist"),
-        ) { Text("解析播放清单") }
-        if (wifiPreviewBlocked) Text(
-            "仅 Wi-Fi 已开启；请连接 Wi-Fi，或关闭“仅 Wi-Fi”后再点击解析/准备。不会自动重试。",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.testTag("hls-wifi-required"),
-        )
+        ) {
+            BrowserGlyph(Glyph.LIST, "解析播放清单", Modifier.clearAndSetSemantics {})
+            Text("解析播放清单", modifier = Modifier.padding(start = 8.dp))
+        }
+        if (wifiPreviewBlocked) ResourceStatus(error = true) {
+            Text("仅 Wi-Fi 已开启；请连接 Wi-Fi，或关闭“仅 Wi-Fi”后再点击解析/准备。不会自动重试。",
+                style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("hls-wifi-required"))
+        }
         val master = preparation.options?.playlist as? HlsPlaylist.Master
         if (master != null) {
             Text("选择视频档位", style = MaterialTheme.typography.titleSmall)
@@ -172,12 +169,24 @@ fun HlsDownloadConfirmation(
                 onClick = { if (previewAllowed()) preparation.prepare(requestDraft) },
                 enabled = !submitted && !preparation.busy && preparation.selected?.supported == true,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("hls-prepare-variant"),
-            ) { Text("准备所选档位") }
+            ) {
+                BrowserGlyph(Glyph.CHECK, "准备所选档位", Modifier.clearAndSetSemantics {})
+                Text("准备所选档位", modifier = Modifier.padding(start = 8.dp))
+            }
         }
-        if (preparation.busy) Text("正在读取清单…", modifier = Modifier.testTag("hls-preparing"))
-        preparation.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("hls-error")) }
+        if (preparation.busy) ResourceStatus {
+            Text("正在读取清单…", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("hls-preparing"))
+            // Network preparation has no meaningful byte or whole-video percentage.
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().testTag("hls-preparation-progress")
+                .semantics { stateDescription = "正在读取清单，尚未创建下载任务" })
+        }
+        preparation.error?.let { message ->
+            ResourceStatus(error = true) {
+                Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("hls-error"))
+            }
+        }
         ready?.let { plan ->
-            Column(Modifier.testTag("hls-plan-ready"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ResourceStatus(modifier = Modifier.testTag("hls-plan-ready")) {
                 Text("清单已准备 · ${plan.media.segments.size} 个分片")
                 val seconds = plan.media.durationUs / 1_000_000
                 Text("清单时长：${seconds / 60} 分 ${seconds % 60} 秒（清单声明）")
@@ -200,17 +209,13 @@ fun HlsDownloadConfirmation(
             modifier = Modifier.fillMaxWidth().testTag("download-file-name"),
         )
         Text("保存至本机公共 Download/PureBrowser 目录，添加唯一前缀避免覆盖。", style = MaterialTheme.typography.bodySmall)
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .toggleable(value = wifiOnly, enabled = !submitted, role = Role.Checkbox, onValueChange = { wifiOnly = it; wifiPreviewBlocked = false }),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Checkbox(checked = wifiOnly, onCheckedChange = null, enabled = !submitted)
-            Column(Modifier.weight(1f)) {
-                Text("仅 Wi-Fi")
-                Text(if (wifiOnly) "无 Wi-Fi 时等待连接" else "允许使用移动网络，可能产生流量费用", style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        ResourceOption(
+            label = "仅 Wi-Fi",
+            description = if (wifiOnly) "无 Wi-Fi 时等待连接" else "允许使用移动网络，可能产生流量费用",
+            checked = wifiOnly,
+            enabled = !submitted,
+            onChange = { wifiOnly = it; wifiPreviewBlocked = false },
+        )
         Text("会话不写入任务记录，不跨源转发。重新下载会另建任务并重新读取所选档位，不续传；档位消失时不会偷偷改选其他画质。", style = MaterialTheme.typography.bodySmall)
         Button(
             onClick = {
@@ -226,7 +231,10 @@ fun HlsDownloadConfirmation(
             },
             enabled = canConfirm,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("hls-save"),
-        ) { Text("保存视频") }
+        ) {
+            BrowserGlyph(Glyph.DOWNLOAD, "保存视频", Modifier.clearAndSetSemantics {})
+            Text("保存视频", modifier = Modifier.padding(start = 8.dp))
+        }
         TextButton(onClick = dismissWithKeyboard, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("取消") }
     }
 }

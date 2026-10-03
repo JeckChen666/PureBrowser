@@ -14,6 +14,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasTestTag
@@ -67,9 +68,9 @@ class ResourceUiTest {
 
         compose.onNodeWithText("1 个可尝试的直链 · 1 个 HLS 清单 · 2 个其他媒体资源").assertExists()
         scrollSheetTo(file.displayName)
-        cardFor(file).assert(hasAnyDescendant(hasText("尝试下载") and hasClickAction()))
+        cardFor(file).assert(hasAnyDescendant(hasContentDescription("尝试下载") and hasClickAction()))
         scrollSheetTo(hls.displayName)
-        cardFor(hls).assert(hasAnyDescendant(hasText("尝试下载") and hasClickAction()))
+        cardFor(hls).assert(hasAnyDescendant(hasContentDescription("尝试下载") and hasClickAction()))
         others.forEach { compose.onAllNodesWithText(it.displayName).assertCountEquals(0) }
 
         clickSheetText("其他媒体资源（2） · 展开")
@@ -79,8 +80,8 @@ class ResourceUiTest {
             val card = cardFor(candidate)
             card.assert(hasAnyDescendant(hasText(explanation)))
             card.assert(hasAnyDescendant(hasText("大小未知")))
-            card.assert(hasAnyDescendant(hasText("查看详情") and hasClickAction()))
-            card.assert(!hasAnyDescendant(hasText("尝试下载")))
+            card.assert(hasAnyDescendant(hasContentDescription("查看详情") and hasClickAction()))
+            card.assert(!hasAnyDescendant(hasContentDescription("尝试下载")))
             // Count every OnClick, including disabled controls: only the real details action
             // may exist. An extra disabled/no-op download button must fail this assertion.
             assertEquals("Unexpected action in ${candidate.kind} card", 1, clickActionCount(card.fetchSemanticsNode()))
@@ -90,7 +91,7 @@ class ResourceUiTest {
         clickSheetText("其他媒体资源（2） · 收起")
         others.forEach { compose.onAllNodesWithText(it.displayName).assertCountEquals(0) }
         scrollSheetTo(file.displayName)
-        compose.onNode(hasText("尝试下载") and hasClickAction() and
+        compose.onNode(hasContentDescription("尝试下载") and hasClickAction() and
             hasAnyAncestor(hasTestTag("resource-card-${file.displayName}"))).performScrollTo().performClick()
         compose.runOnIdle { assertEquals(listOf(file), selected) }
     }
@@ -155,13 +156,13 @@ class ResourceUiTest {
         // Start at the top and select the first real action, not a named candidate's action.
         // This checks visible order instead of reimplementing the production sort in the test.
         scrollSheetTo("尝试下载")
-        compose.onAllNodes(hasText("尝试下载") and hasClickAction()).onFirst()
+        compose.onAllNodes(hasContentDescription("尝试下载") and hasClickAction()).onFirst()
             .performScrollTo().assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(listOf(domFile), selected) }
         scrollSheetTo(requestFile.displayName)
         compose.onNodeWithText(requestFile.displayName).assertIsDisplayed()
         scrollSheetTo(domManifest.displayName)
-        cardFor(domManifest).assert(hasAnyDescendant(hasText("尝试下载") and hasClickAction()))
+        cardFor(domManifest).assert(hasAnyDescendant(hasContentDescription("尝试下载") and hasClickAction()))
     }
 
     @Test(timeout = 30_000)
@@ -299,20 +300,21 @@ class ResourceUiTest {
         }
     }
 
+    private fun actionOrText(text:String)=if(text in setOf("尝试下载","查看详情","返回来源页","关闭详情")) hasContentDescription(text) else hasText(text)
     private fun scrollSheetTo(text: String) {
-        compose.onNodeWithTag("resource-sheet").performScrollToNode(hasText(text))
+        compose.onNodeWithTag("resource-sheet").performScrollToNode(actionOrText(text))
     }
 
     private fun clickSheetText(text: String) {
         scrollSheetTo(text)
-        compose.onNodeWithText(text).assertIsDisplayed().performClick()
+        compose.onNode(actionOrText(text)).assertIsDisplayed().performClick()
     }
 
     private fun clickDialogText(text: String, dialogTitle: String = "确认下载直链") {
         // The underlying ModalBottomSheet is also a dialog. Its source action must not
         // match the detail dialog's action, so identify the dialog by its own title.
         val owningDialog = isDialog() and hasAnyDescendant(hasText(dialogTitle))
-        compose.onNode(hasText(text) and hasClickAction() and hasAnyAncestor(owningDialog))
+        compose.onNode(actionOrText(text) and hasClickAction() and hasAnyAncestor(owningDialog))
             .performScrollTo().assertIsDisplayed().performClick()
     }
 

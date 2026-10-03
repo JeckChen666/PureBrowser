@@ -1,0 +1,6 @@
+[
+  "com.example.purebrowser.browser.TabPreviewCaptureTest",
+  "com.example.purebrowser.browser.BrowserPendingNavigationTest",
+  "com.example.purebrowser.ui.V014AdaptiveAudit",
+  "com.example.purebrowser.ui.browser.V014BrowserChromeTest"
+]

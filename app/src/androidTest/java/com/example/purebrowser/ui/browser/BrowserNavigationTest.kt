@@ -31,7 +31,7 @@ class BrowserNavigationTest {
         compose.onNodeWithTag("homeButton").performClick()
         compose.onNodeWithTag("homeScreen").assertIsDisplayed()
         compose.onNodeWithTag("addressInput").performClick().performTextReplacement("not submitted")
-        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithTag("cancelAddressButton").performClick()
         compose.onNodeWithTag("addressInput").assertTextEquals("搜索或输入网址")
         compose.onNodeWithTag("homeScreen").assertIsDisplayed()
         compose.activityRule.scenario.onActivity { model.tabs.close(model.data.value.selectedId) }

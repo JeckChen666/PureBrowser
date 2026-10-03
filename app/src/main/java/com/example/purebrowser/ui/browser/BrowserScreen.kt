@@ -7,12 +7,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import com.example.purebrowser.ui.downloads.DownloadsScreen
+import com.example.purebrowser.ui.downloads.isActiveTask
 import com.example.purebrowser.ui.library.VideoLibraryScreen
 import com.example.purebrowser.library.LocalVideoThumbnail
 import androidx.core.view.ViewCompat
@@ -62,13 +64,13 @@ fun BrowserScreen(model: BrowserViewModel = viewModel()) {
     val context = LocalContext.current
     val message by model.message.collectAsStateWithLifecycle()
     val link by model.link.collectAsStateWithLifecycle()
+    val routeState=rememberSaveableStateHolder()
     var route by rememberSaveable { mutableStateOf(Destination.BROWSER) }
     var routeTrail by rememberSaveable { mutableStateOf("") }
     var address by rememberSaveable { mutableStateOf("") }
     var editing by remember { mutableStateOf(false) }
-    var menu by remember { mutableStateOf(false) }
-    var showTabs by remember { mutableStateOf(false) }
-    var showResources by remember { mutableStateOf(false) }
+    var tool by remember { mutableStateOf(BrowserTool.NONE) }
+    var confirmationBusy by remember { mutableStateOf(false) }
     var editor by remember { mutableStateOf<Editor?>(null) }
     var deletion by remember { mutableStateOf<SavedPage?>(null) }
     var clearHistory by remember { mutableStateOf(false) }
@@ -81,14 +83,15 @@ fun BrowserScreen(model: BrowserViewModel = viewModel()) {
     val imeVisible = WindowInsets.isImeVisible
     fun stopEditing() { keyboard?.hide(); focus.clearFocus(force=true); editing=false; address=page.url.takeIf { it!=HOME_URL }.orEmpty() }
     fun navigate(value: String) { keyboard?.hide(); focus.clearFocus(force=true);editing=false; route=Destination.BROWSER;routeTrail="";model.navigate(value) }
-    fun newTab(url: String=HOME_URL) { stopEditing();route=Destination.BROWSER;routeTrail="";model.newTab(url);showTabs=false }
+    fun newTab(url: String=HOME_URL) { stopEditing();route=Destination.BROWSER;routeTrail="";model.newTab(url);tool=BrowserTool.NONE }
     fun open(destination: Destination) {
-        stopEditing();menu=false
+        stopEditing();tool=BrowserTool.NONE
         if(route != destination) { routeTrail = (routeTrail.split(',').filter { it.isNotBlank() } + route.name).takeLast(12).joinToString(",");route=destination }
         model.reconcileDownloads()
     }
-    fun source(id: String) { stopEditing();route=Destination.BROWSER;routeTrail="";model.returnToSource(id) }
+    fun source(id: String) { tool=BrowserTool.NONE;stopEditing();route=Destination.BROWSER;routeTrail="";model.returnToSource(id) }
     fun routeBack() {
+        stopEditing();tool=BrowserTool.NONE
         val trail = routeTrail.split(',').filter { it.isNotBlank() }
         route = trail.lastOrNull()?.let { runCatching { Destination.valueOf(it) }.getOrNull() } ?: Destination.BROWSER
         routeTrail = trail.dropLast(1).joinToString(",")
@@ -116,47 +119,77 @@ fun BrowserScreen(model: BrowserViewModel = viewModel()) {
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer);model.flush() }
     }
+    fun showTool(next: BrowserTool) { if(confirmationBusy)return;stopEditing();tool=next }
     val backState=rememberNavigationEventState(currentInfo=NavigationEventInfo.None)
-    NavigationBackHandler(state=backState,isBackEnabled=!showTabs && !showResources && editor==null && deletion==null && !clearHistory && link==null && (route!=Destination.BROWSER || editing || page.canGoBack || page.url!=HOME_URL),onBackCompleted={
-        when { route!=Destination.BROWSER -> routeBack();editing || imeVisible -> stopEditing();page.canGoBack -> model.engine?.back();else -> model.engine?.home() }
+    NavigationBackHandler(state=backState,isBackEnabled=!confirmationBusy && editor==null && deletion==null && !clearHistory && link==null && (tool!=BrowserTool.NONE || route!=Destination.BROWSER || editing || page.canGoBack || page.url!=HOME_URL),onBackCompleted={
+        when { tool!=BrowserTool.NONE -> tool=BrowserTool.NONE;editing -> stopEditing();route!=Destination.BROWSER -> routeBack();imeVisible -> {keyboard?.hide();focus.clearFocus()};page.canGoBack -> model.engine?.back();else -> model.engine?.home() }
     })
 
-    Scaffold(modifier=Modifier.fillMaxSize().safeDrawingPadding().imePadding(),snackbarHost={SnackbarHost(snackbar)},topBar={
+    Scaffold(modifier=Modifier.fillMaxSize(),contentWindowInsets=WindowInsets.safeDrawing,
+        snackbarHost={SnackbarHost(snackbar)},topBar={
         if(route==Destination.BROWSER) {
-            Column {
-            BrowserAddressBar(address,editing,data.tabs.size,{address=it;editing=true},{editing=true},{navigate(address)},{stopEditing()},{stopEditing();showTabs=true}) {
-                    Box {
-                        ToolButton(Glyph.MENU,"菜单",tag="menuButton") {menu=true}
-                        DropdownMenu(expanded=menu,onDismissRequest={menu=false}) {
-                            DropdownMenuItem(modifier=Modifier.testTag("menu-newTab"),text={Text("新建标签")},onClick={menu=false;newTab()})
-                            DropdownMenuItem(modifier=Modifier.testTag("menu-bookmarkToggle"),text={Text(if(data.bookmarks.any{it.url==page.url})"取消书签" else "添加书签")},enabled=page.url!=HOME_URL && page.error==null,onClick={menu=false;model.toggleBookmark()})
-                            DropdownMenuItem(modifier=Modifier.testTag("menu-bookmarks"),text={Text("书签")},onClick={open(Destination.BOOKMARKS)})
-                            DropdownMenuItem(modifier=Modifier.testTag("menu-history"),text={Text("历史")},onClick={open(Destination.HISTORY)})
-                            DropdownMenuItem(text={Text("下载管理")},onClick={open(Destination.DOWNLOADS)})
-                            DropdownMenuItem(text={Text("视频库")},onClick={open(Destination.LIBRARY)})
-                            DropdownMenuItem(modifier=Modifier.testTag("menu-settings"),text={Text("设置")},onClick={open(Destination.SETTINGS)})
-                        }
-                    }
+            Column(Modifier.statusBarsPadding()) {
+                BrowserAddressBar(address,editing,{address=it},{tool=BrowserTool.NONE;editing=true},
+                    {if(editing)navigate(address)},{stopEditing()},page.progress<100,
+                    {if(page.progress<100)model.engine?.stop() else model.engine?.reload()})
+                if(page.url!=HOME_URL) BrowserPageChrome(page.progress,page.error) {model.engine?.reload()}
             }
-                if(page.url!=HOME_URL) BrowserPageChrome(page.title,page.progress,page.error) {if(page.progress<100)model.engine?.stop() else model.engine?.reload()}
+        } else if(route !in setOf(Destination.DOWNLOADS,Destination.LIBRARY)) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal=12.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
+                ToolButton(Glyph.BACK,"返回",tag="routeBackButton",action=::routeBack)
+                Text(route.label,style=MaterialTheme.typography.titleLarge,modifier=Modifier.weight(1f))
+                if(route==Destination.HISTORY && data.history.isNotEmpty()) TextButton(onClick={clearHistory=true},modifier=Modifier.testTag("clearHistoryButton")) {Text("清空")}
             }
-        } else if(route !in setOf(Destination.DOWNLOADS,Destination.LIBRARY)) Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically) {
-            ToolButton(Glyph.BACK,"返回",action=::routeBack)
-            Text(route.label,style=MaterialTheme.typography.titleLarge,modifier=Modifier.weight(1f))
-            if(route==Destination.HISTORY && data.history.isNotEmpty()) TextButton(onClick={clearHistory=true},modifier=Modifier.testTag("clearHistoryButton")) {Text("清空")}
         }
     },bottomBar={
-        if(route==Destination.BROWSER) BrowserToolbar(page.canGoBack,page.canGoForward,candidates.size,
-            {stopEditing();model.engine?.home()},{stopEditing();model.engine?.back()},{stopEditing();model.engine?.forward()},
-            {stopEditing();model.engine?.scanMedia();showResources=true},{open(Destination.DOWNLOADS)})
+        if(route==Destination.BROWSER && !editing && !imeVisible && tool==BrowserTool.NONE && !confirmationBusy) {
+            Box(Modifier.navigationBarsPadding()) {
+                BrowserToolbar(page.canGoBack,page.canGoForward,data.tabs.size,page.url==HOME_URL,
+                    {stopEditing();model.engine?.back()},{stopEditing();model.engine?.forward()},
+                    {stopEditing();model.engine?.home()},{showTool(BrowserTool.TABS)},{showTool(BrowserTool.MENU)})
+            }
+        }
     }) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             if(!ready) CircularProgressIndicator(Modifier.align(Alignment.Center)) else {
-                session?.let { BrowserWebViewHost(it,Modifier.fillMaxSize().testTag("browserWebView")) }
+                session?.let { BrowserWebViewHost(it,Modifier.fillMaxSize().testTag("browserWebView"),active=route==Destination.BROWSER && !paused,previewSource={view->model.tabs.bindPreviewSource(it.recordId,view)}) }
                 if(route==Destination.BROWSER && page.url==HOME_URL) Surface(Modifier.fillMaxSize()) {
                     HomeScreen(data,assets,{open(Destination.LIBRARY)},{id->model.launchFile(context,id,false)},::navigate,{editor=Editor("添加常用站点","","",isShortcut=true)}, {site->editor=Editor("编辑常用站点",site.title,site.url,shortcut=site,isShortcut=true)}, {open(Destination.BOOKMARKS)},{open(Destination.HISTORY)},{open(Destination.DOWNLOADS)})
                 }
-                if(route!=Destination.BROWSER) Surface(Modifier.fillMaxSize()) {
+                if(route==Destination.BROWSER && !editing && tool==BrowserTool.NONE && !confirmationBusy && page.url!=HOME_URL) {
+                    Column(Modifier.align(Alignment.BottomEnd).padding(12.dp),horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        if(candidates.isNotEmpty()) FilledTonalButton(onClick={model.engine?.scanMedia();showTool(BrowserTool.RESOURCES)},modifier=Modifier.testTag("resourceHintButton")) {
+                            BrowserGlyph(Glyph.VIDEO,"发现视频");Spacer(Modifier.width(6.dp));Text("发现 ${candidates.size} 个资源")
+                        }
+                        val activeCount=downloads.count { it.isActiveTask() }
+                        if(activeCount>0) FilledTonalButton(onClick={showTool(BrowserTool.DOWNLOADS)},modifier=Modifier.testTag("downloadQuickButton")) {
+                            BrowserGlyph(Glyph.DOWNLOAD,"下载速览");Spacer(Modifier.width(6.dp));Text("下载 · $activeCount")
+                        }
+                    }
+                }
+                if(route==Destination.BROWSER && editing) Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.surface) {
+                    androidx.compose.foundation.lazy.LazyColumn(contentPadding=PaddingValues(horizontal=12.dp,vertical=8.dp),modifier=Modifier.testTag("addressSuggestions")) {
+                        item { Text("历史与书签",style=MaterialTheme.typography.titleSmall,modifier=Modifier.padding(vertical=8.dp)) }
+                        val suggestions=BrowserChromeRules.suggestions(address,data.history,data.bookmarks)
+                        items(suggestions.size) { index ->
+                            val item=suggestions[index]
+                            Surface(onClick={navigate(item.url)},modifier=Modifier.fillMaxWidth().heightIn(min=56.dp).testTag("addressSuggestion-$index")) {
+                                Row(Modifier.padding(vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
+                                    BrowserGlyph(if(item.source=="书签")Glyph.BOOKMARK else Glyph.HISTORY,item.source)
+                                    Column(Modifier.weight(1f).padding(horizontal=12.dp)) {
+                                        Text(item.title,style=MaterialTheme.typography.bodyMedium,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        Text("${item.source} · ${BrowserChromeRules.displayAddress(item.url)}",style=MaterialTheme.typography.bodySmall,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    }
+                                    BrowserGlyph(Glyph.NEXT,"访问")
+                                }
+                            }
+                            HorizontalDivider()
+                        }
+                        if(suggestions.isEmpty()) item { Text("输入网址或搜索词，点击访问。联想仅使用本机记录。",style=MaterialTheme.typography.bodyMedium,modifier=Modifier.padding(vertical=12.dp)) }
+                    }
+                }
+                if(route!=Destination.BROWSER) routeState.SaveableStateProvider(route.name) {
+                  Surface(Modifier.fillMaxSize()) {
                     when(route) {
                         Destination.BOOKMARKS -> SavedPagesScreen(data.bookmarks,false,::navigate,{item->editor=Editor("编辑书签",item.title,item.url,bookmark=item)},{deletion=it})
                         Destination.HISTORY -> SavedPagesScreen(data.history,true,::navigate,{}, {deletion=it})
@@ -181,15 +214,26 @@ fun BrowserScreen(model: BrowserViewModel = viewModel()) {
                         Destination.LIBRARY -> VideoLibraryScreen(assets,busy,::routeBack,
                             {id->model.launchFile(context,id,false)},{id->model.launchFile(context,id,true)},
                             model::renameVideo,model::forgetDownload,model::deleteDownloadFile,::source,
-                            {open(Destination.DOWNLOADS)},thumbnail={asset->LocalVideoThumbnail(asset)},sourceAvailableIds=downloads.filter { it.sourceUrl != null }.map { it.id }.toSet())
+                            {open(Destination.DOWNLOADS)},thumbnail={asset->LocalVideoThumbnail(asset,Modifier.fillMaxSize())},sourceAvailableIds=downloads.filter { it.sourceUrl != null }.map { it.id }.toSet())
                         else -> Unit
                     }
+                  }
                 }
             }
         }
     }
-    if(showTabs) TabSwitcher(data.tabs,data.selectedId,{id->stopEditing();model.tabs.select(id);showTabs=false;route=Destination.BROWSER},model.tabs::close,{newTab()},{showTabs=false})
-    BrowserPanels(model,candidates,showResources,{showResources=false})
+    if(tool==BrowserTool.TABS) TabSwitcher(data.tabs,data.selectedId,{id->stopEditing();model.tabs.select(id);tool=BrowserTool.NONE;route=Destination.BROWSER},model.tabs::close,{newTab()},{tool=BrowserTool.NONE},previewCache=model.tabs.previewCache,requestPreview={model.tabs.captureActivePreview()})
+    if(tool==BrowserTool.DOWNLOADS) com.example.purebrowser.ui.downloads.DownloadQuickSheet(
+        downloads,busy,{tool=BrowserTool.NONE},{open(Destination.DOWNLOADS)},{open(Destination.LIBRARY)},
+        {id->model.launchFile(context,id,false)},{id->model.launchFile(context,id,true)},
+        model::retryDownload,model::cancelDownload,::source,
+        onRetryWithoutContext={model.retryDownload(it,false)},onPause=model::pauseDownload,onResume=model::resumeDownload,
+        onForget=model::forgetDownload,onDelete=model::deleteDownloadFile)
+    if(tool==BrowserTool.MENU) BrowserMenuSheet(data.bookmarks.any{it.url==page.url},page.url!=HOME_URL && page.error==null,
+        {tool=BrowserTool.NONE},{newTab()},{tool=BrowserTool.NONE;model.toggleBookmark()},
+        {model.engine?.scanMedia();showTool(BrowserTool.RESOURCES)},{open(Destination.DOWNLOADS)},
+        {open(Destination.LIBRARY)},{open(Destination.BOOKMARKS)},{open(Destination.HISTORY)},{open(Destination.SETTINGS)})
+    BrowserPanels(model,candidates,tool==BrowserTool.RESOURCES,{tool=BrowserTool.NONE},onBusyChanged={confirmationBusy=it})
     editor?.let { value ->
         PageEditor(value,onDismiss={editor=null},save={name,url->
             val success=if(value.isShortcut) model.saveShortcut(value.shortcut,name,url) else value.bookmark?.let {model.editBookmark(it,name,url)}==true

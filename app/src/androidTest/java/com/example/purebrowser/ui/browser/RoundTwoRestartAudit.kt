@@ -43,6 +43,7 @@ class RoundTwoRestartAudit {
         }
         assertNull(model.repository.fileUri(id))
         assertTrue(model.videoLibrary.value.any { it.recordId==id && it.availability==com.example.purebrowser.download.FileAvailability.MISSING })
+        compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("downloadsButton").performClick()
         compose.onNodeWithTag("downloadsLibrary").performClick()
         compose.onNodeWithTag("videoLibraryList").performScrollToNode(hasTestTag("video-$id"))

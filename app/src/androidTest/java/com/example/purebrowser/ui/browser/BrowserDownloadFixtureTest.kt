@@ -70,6 +70,7 @@ class BrowserDownloadFixtureTest {
         assertTrue(candidates.any { it.url=="$base/bad.mp4" })
         assertTrue(candidates.none { java.net.URI(it.url).path?.endsWith("/chunk.ts")==true || java.net.URI(it.url).path?.endsWith("/init.mp4")==true })
         assertEquals("$base/sample.mp4?token=demo%2Bsignature", candidates.first { it.url == "$base/sample.mp4?token=demo%2Bsignature" }.url)
+        compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("resourcesButton").performClick()
         compose.onNodeWithTag("resource-card-${candidates.first { it.url == "$base/sample.mp4?token=demo%2Bsignature" }.displayName}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag(com.example.purebrowser.ui.resources.resourceSaveTag("$base/sample.mp4?token=demo%2Bsignature")).performScrollTo().performClick()
@@ -98,6 +99,7 @@ class BrowserDownloadFixtureTest {
         compose.activityRule.scenario.onActivity { model.tabs.close(sourceTab) }
         assertTrue(model.repository.snapshot().any { it.id == completed.id && it.verified })
         assertNotNull(model.repository.fileUri(completed.id))
+        compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("downloadsButton").performClick()
         compose.onNodeWithTag("downloadsList").performScrollToNode(hasTestTag("download-${completed.id}"))
         compose.onNode(hasText(completed.displayName) and hasAnyAncestor(hasTestTag("download-${completed.id}"))).assertIsDisplayed()

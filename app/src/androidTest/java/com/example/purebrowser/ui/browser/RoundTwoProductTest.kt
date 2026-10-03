@@ -46,6 +46,7 @@ class RoundTwoProductTest {
     }
     private fun submit(name: String, fileName: String): DownloadItem {
         val ids = model.repository.snapshot().map { it.id }.toSet()
+        compose.onNodeWithTag("menuButton").activate()
         compose.onNodeWithTag("resourcesButton").activate()
         val candidate=model.sniffer!!.candidates.value.first { java.net.URI(it.url).path.endsWith("/$name") }
         compose.onNodeWithTag(com.example.purebrowser.ui.resources.resourceSaveTag(candidate.url)).performScrollTo().activate()
@@ -67,8 +68,16 @@ class RoundTwoProductTest {
         return model.downloads.value.first { it.id !in ids && it.verified }.also { track(it.id) }
     }
     private fun scrollLibrary(tag: String) {
-        compose.onNodeWithTag("videoLibraryList").performScrollToNode(hasTestTag(tag))
-        compose.onNodeWithTag(tag).performScrollTo().assertIsDisplayed()
+        val action=Regex("video-(open|share|rename|forget|delete|source)-(.+)").matchEntire(tag)
+        if(action!=null) {
+            val id=action.groupValues[2]
+            compose.onNodeWithTag("videoLibraryList").performScrollToNode(hasTestTag("video-$id"))
+            compose.onNodeWithTag("video-$id").activate()
+            compose.onNodeWithTag(tag).performScrollTo().assertIsDisplayed()
+        } else {
+            compose.onNodeWithTag("videoLibraryList").performScrollToNode(hasTestTag(tag))
+            compose.onNodeWithTag(tag).performScrollTo().assertIsDisplayed()
+        }
     }
     @Test fun twoFormatsThroughUiRenameForgetDeleteAndSourceRecovery() {
         start()
@@ -95,6 +104,7 @@ class RoundTwoProductTest {
         val unrelated = model.data.value.selectedId
         compose.waitUntil(5000) { model.defaultWifiOnly.value }
         assertEquals(false, model.repository.record(mp4.id)!!.wifiOnly) // Existing policy never mutates.
+        compose.onNodeWithTag("menuButton").activate()
         compose.onNodeWithTag("downloadsButton").activate()
         compose.onNodeWithTag("downloadsList").performScrollToNode(hasTestTag("download-source-${mp4.id}"))
         compose.onNodeWithTag("download-source-${mp4.id}").activate()
@@ -107,6 +117,7 @@ class RoundTwoProductTest {
         }
         assertNotEquals(unrelated, model.data.value.selectedId)
         assertTrue(model.data.value.tabs.any { it.id==unrelated && it.url=="about:blank" })
+        compose.onNodeWithTag("menuButton").activate()
         compose.onNodeWithTag("downloadsButton").activate()
         compose.onNodeWithTag("downloadsLibrary").activate()
         scrollLibrary("video-rename-${webm.id}")

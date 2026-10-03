@@ -23,17 +23,20 @@ class BrowserScreenTest {
     }
 
     @Test fun homeContainsWorkingBrowserControls() {
-        compose.onNodeWithText("自在浏览，随手保存。").assertIsDisplayed()
+        compose.onNodeWithTag("homeScreen").assertIsDisplayed()
         compose.onNodeWithTag("addressInput").assertIsDisplayed()
         compose.onNodeWithTag("tabsButton").assertIsDisplayed()
+        compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("resourcesButton").assertIsDisplayed()
     }
     @Test fun resourcePanelExplainsEmptyState() {
+        compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("resourcesButton").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("尚未发现视频").assertIsDisplayed()
     }
     @Test fun downloadCenterExplainsEmptyState() {
+        compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("downloadsButton").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("下载管理").assertIsDisplayed()
