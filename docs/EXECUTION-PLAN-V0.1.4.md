@@ -1,7 +1,7 @@
 # PureBrowser v0.1.4 版本与执行计划
 
 规划日期：2026-10-03（Asia/Shanghai）。
-状态：**T41–T48 implemented；T49 最终回归／适配验收中，T50 pending、尚未冻结发行。实现完成不代表必要门槛通过。** 当前验收输入为`9d9568096b29f3f1551d2962606098723a147755`（code13）；只修复测试fixture的异步root就绪等待，生产代码未动。`55bdbc6`的完整302/JVM156/Lint0+33/host34通过历史保留，但不称当前输入已通过。phone-ready15正在运行，随后计划API28 density240 visual60、core162，再API37完整302；当前输入各批结果均pending，由主代理最后更新。
+状态：**T41–T50已实现并完成资格验收；最终冻结／发布按身份附件门槛执行。** 当前code13输入的完整结果及证据边界见 [完成摘要](V0.1.4-COMPLETION.md)。下方保留最初范围和依赖，不将概念图当运行证据。
 开发基线：本地 `main` / `8c32570`；当前发行 `v0.1.3 / versionCode 10`，以 [完成摘要](V0.1.3-COMPLETION.md) 为准。
 设计依据：[用户基本认可的紧凑版 V4](design/compact-browser-2026-10-03/README.md)、[设计落地清单](design/compact-browser-2026-10-03/IMPLEMENTATION-CHECKLIST.md)。
 发行门槛：[v0.1.4 验收台账](RELEASE-ACCEPTANCE-V0.1.4.md)。实现与条件性结果见 [完成摘要](V0.1.4-COMPLETION.md)、[候选记录](V0.1.4-CANDIDATE.md)和[发行说明草稿](releases/v0.1.4.md)。
@@ -141,15 +141,15 @@ T41 先明确浏览输入、临时面板、管理页和返回路径之间的互�
 上述落点均相对 `app/src/main/java/com/example/purebrowser/`，仅用于定位，不要求一次性重写这些文件。
 每个工作包随实现补小范围回归；T49 是集中收口，不是第一次验证。T48 也不是把适配拖到最后才做。
 
-### 5.1 当前执行快照（实现与验收分列）
+### 5.1 执行结果
 
-| 工作包 | 实现状态 | 验收状态 |
+| 工作包 | 结果 | 依据 |
 | --- | --- | --- |
-| T41–T48 | **implemented**：上述UI与交互已接入 | 候选已有通过结果；M6真实OS分屏／实际TalkBack焦点等必要证据仍pending，不等于工作包全部验收完成 |
-| T49 | 最终输入及新增24标签／分享helper测试已提交 | 55bdbc6输入完整302／JVM156／Lint0+33／host34历史通过；9d95680 phone-ready运行中，visual／API28／完整302重跑、M6及同设备API37 code10 vs final13配对pending |
-| T50 | 发行文档conditional草稿已建立 | 精确最终签名smoke8项、实际UI升级保留（含旧历史／自定义shortcut）、身份／HTTPS／share／freeze与tag／Pre-release **pending，未发布** |
+| T41–T48 | 已实现并通过UI／核心交互资格验收 | 当前完整回归、系统配置与实际分屏／TalkBack焦点；生产组件截图15／矩阵60 |
+| T49 | 当前输入验收完成 | API37完整302／API28 162／JVM156、Lint0＋33、host34、同设备24标签配对；原失败保留后重跑 |
+| T50 | 实际同签名资格覆盖、数据UI与签名8项／产物审查完成；最终发行身份按附件冻结 | code10→13，不卸载／清数据；源码提交后重建并重复精确安装hash及同组签名冒烟，再tag／Pre-release |
 
-候选301／API28 162／visual60／phone15／JVM156、Lint0错误／33提醒与API36 summary21通过单独保留。API36 RC2真实24标签切换／menu／resources12轮、修复后签名share通过，不冒充最终包或同设备性能配对结论。候选截图为生产组件合成fixtures，不是final签名APK。visual44/60与phone14/15失败批次保留；9d95680仅修复测试fixture最多5秒等待异步root就绪，生产代码和截图guards不变。重跑顺序为phone-ready15→API28 density240 visual60→API28 core162→API37完整302，当前均pending。最终实际结果由主代理据release附件更新；严格final绑定规则不变。
+候选与当前结果不求和，截图为合成FIXTURE而非真实下载成功。最终源码、APK、证书、内嵌revision、hash和准确测试结果以Release身份附件绑定；OEM／大网站样本／多人长期试用／TalkBack音频不宣称通过。
 
 ## 6. 里程碑与范围控制
 
@@ -175,3 +175,7 @@ T41 先明确浏览输入、临时面板、管理页和返回路径之间的互�
 
 必须交付：真实截图与概念图差异说明、完成摘要／用户指南／发行说明、测试及复用证据台账、APK 与哈希／证书／源码身份材料、已知限制与未覆盖项。
 计划文档与设计图都不能替代完成报告；验收前一律标记为候选或未验证。
+
+## 执行完成索引
+
+T41–T48实现、T49当前302／162／60／15／156及系统／焦点／性能、T50实际10→13资格覆盖／签名8项／旧数据UI及产物审查已有结果。最终冻结输入一致性、精确最终APK的重复冒烟和安装哈希由Release身份附件确认，此后才tag／发布。下方若保留早期“待执行”，均是规划历史，不覆盖完成摘要的实际结果。

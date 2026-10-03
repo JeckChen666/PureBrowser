@@ -1,20 +1,12 @@
-# PureBrowser 当前实现状态
+# 当前实现与验证状态
 
-## v0.1.4 当前实现／条件性验收快照
+**v0.1.4 / code13：T41–T50统一UI与核心交互交付。** 正式签名小范围Pre-release，精确发布身份由最终Release附件与附注tag绑定；不等于商店／全机型稳定版。
 
-日期：2026-10-03（Asia/Shanghai）。**T41–T48 implemented；T49最终验收进行中，T50 pending、未冻结或发布。** 已发行版本仍为v0.1.3/code10。
+当前输入API37 302、API28 162、视觉60、手机窗口截图15、JVM156通过；Lint0错误／33提醒、主机34通过。API36同一生产实现系统专项21次JUnit，实际系统分屏／TalkBack焦点及24标签压力补验完成。签名升级资格及8项冒烟通过；最终冻结包重新核验源码／安装hash及同组冒烟，实际结果见附件。
 
-- 统一紧凑浅深主题、顶部地址／底部五动作、首页与菜单、标签网格／列表／搜索／有界预览、资源与直链／HLS确认、下载速览／管理、视频库／文件操作、书签／日期历史／设置／关于已实现。
-- 候选API37完整301／API28 162／visual60／phone15／JVM156通过，Debug Lint0错误／33提醒。截图是候选生产组件合成fixtures，不是final签名APK。
-- API36 sidecar summary21项通过，含真实系统字体／窗口、15分钟后台、通知拒绝和OS限制；host IME观察不另加JUnit；真实OS分屏、实际TalkBack焦点顺序仍pending，不声称TalkBack听音频。
-- 签名API36 share修复后通过：debug.test／release.test同名fixture误选，接收器标签加入 `${applicationId}`，helper读取自身ActivityInfo标签精确匹配，HlsProductAudit统一helper。失败历史保留。
-- API36 RC2实际24标签切换／menu／resources12轮通过；最终同设备／WebView baseline配对pending，不据跨设备初测宣称性能提升。
-- code13先前55bdbc6输入完整302/302 **历史PASS**（535.936秒，source_unchanged=true），JVM156／Debug Lint0错误33提醒／host34也历史PASS。当前fixture修复输入`9d9568096b29f3f1551d2962606098723a147755`：生产代码未动，phone-ready15正在API37跑，随后API28 density240 visual60／core162，再API37完整302重跑，均pending，不把旧输入冒充当前。
-- 旧final13 visual44/60（15wide skip＋HOME root未ready失败）和phone14/15（HOME root null）均FAIL，完整保留。V014VisualAudit更新serviceflags后最多等5秒非null root，仍拒绝外国前台窗口／IME，截图隐私guards与业务断言全保留。
-- 精确最终签名smoke计划8项（原7＋actualTabSwitchAndRepeatedMenuResourcesWithTwentyFourTabs）、安装哈希／升级／HTTPS／share／freeze与发布pending；覆盖升级补旧历史及自定义shortcut实际UI验证，同设备API37 code10 vs final13配对未完成，结果由主代理更新。
-- 大文件／长HLS明确复用v0.1.3历史适用证据，不称本版重跑；不宣称OEM、30样本或7日用户试用通过。
+详见[完成摘要](V0.1.4-COMPLETION.md)、[验收台账](RELEASE-ACCEPTANCE-V0.1.4.md)、[用户指南](USER-GUIDE.md)、[运行截图](design/compact-browser-2026-10-03/runtime-v0.1.4/README.md)。旧大／长任务证据明确复用v0.1.3，不声称本版重跑；OEM／网站大样本／多人长期试用／TalkBack音频未覆盖。
 
-[条件性完成摘要](V0.1.4-COMPLETION.md) · [必要验收台账](RELEASE-ACCEPTANCE-V0.1.4.md) · [候选记录](V0.1.4-CANDIDATE.md) · [执行计划](EXECUTION-PLAN-V0.1.4.md) · [发行说明草稿](releases/v0.1.4.md)。下文旧版“当前”均仅指各自历史时间，不覆盖本节。
+以下旧状态按历史阶段保留，不能当作当前构建或最新发行。
 
 ## v0.1.3 发行快照
 
