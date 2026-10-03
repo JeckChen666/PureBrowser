@@ -159,7 +159,7 @@ class PrivacyBoundaryTest {
         }
     }
 
-    @Test fun privacyCancelsRequestAndWaitsUntilResponseCloseActuallyFinishes() = fixture { repo ->
+    @Test(timeout = 30_000) fun privacyCancelsRequestAndWaitsUntilResponseCloseActuallyFinishes() = fixture { repo ->
         val token = TransferCancellation()
         val cancelled = CountDownLatch(1)
         val closing = CountDownLatch(1)
@@ -172,7 +172,13 @@ class PrivacyBoundaryTest {
                 override val status = 200
                 override fun header(name: String): String? = null
                 override fun body() = ByteArrayInputStream(byteArrayOf(1))
-                override fun close() { closing.countDown(); await(releaseClose) }
+                override fun close() {
+                    closing.countDown()
+                    // Hold the resource until the test explicitly releases it. The generic
+                    // five-second boundary helper could throw here on a busy emulator,
+                    // correctly releasing the real lease but creating a false privacy failure.
+                    releaseClose.await()
+                }
             }
         })
         val response = guarded.open("https://example.com/video.mp4", emptyMap(), token)

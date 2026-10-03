@@ -18,9 +18,9 @@ class SignedUpgradeAudit {
         val repo=DownloadRepository(app)
         val draft=DownloadDraft(MediaCandidate("https://example.org/upgrade-fixture.mp4",MediaKind.FILE,emptySet()),"PureBrowser-UpgradeAudit",useAccessContext=false)
         // The test APK may seed the prior v4 runtime before covering it with the v5 APK.
-        val enqueue=repo.javaClass.methods.single { it.name=="enqueue" && it.parameterTypes.firstOrNull()==DownloadDraft::class.java && it.parameterCount in 5..6 }
-        val params=mutableListOf<Any?>(draft,false,"upgrade.mp4",null,null)
-        if(enqueue.parameterCount==6)params.add(null)
+        val enqueue=repo.javaClass.methods.single { it.name=="enqueue" && it.parameterTypes.firstOrNull()==DownloadDraft::class.java && it.parameterCount in 4..6 }
+        val params=mutableListOf<Any?>(draft,false,"upgrade.mp4",null)
+        while(params.size<enqueue.parameterCount)params.add(null)
         val id=enqueue.invoke(repo,*params.toTypedArray()) as String
         val bytes=i.context.assets.open("test-video.mp4").use { it.readBytes() }
         ControlledTransfer(repo,HttpTransport { _,_,_->object:HttpResponse {

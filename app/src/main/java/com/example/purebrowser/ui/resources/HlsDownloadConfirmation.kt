@@ -95,16 +95,20 @@ fun HlsDownloadConfirmation(
     val ready = preparation.readyPlan(requestDraft)
     val canConfirm = ready != null && frozen.candidate.kind == MediaKind.HLS && frozen.candidate.canTryDownload() && fileName.isNotBlank() &&
         fileName.trim() !in setOf(".", "..") && !submitted
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
     val dismiss = {
         preparation.close()
-        focus.clearFocus(force = true)
-        keyboard?.hide()
         onDismiss()
     }
 
     ResourceDialog(onDismiss = dismiss) {
+        // Resolve window-local controllers inside the Dialog, not its caller.
+        val focus = LocalFocusManager.current
+        val keyboard = LocalSoftwareKeyboardController.current
+        val dismissWithKeyboard = {
+            focus.clearFocus(force = true)
+            keyboard?.hide()
+            dismiss()
+        }
         Text("确认下载 HLS", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
         Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
         ResourceMetadata(frozen.candidate)
@@ -192,7 +196,7 @@ fun HlsDownloadConfirmation(
                 else -> "成品统一保存为 MP4。路径、控制字符和特殊字符会过滤。"
             }) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
+            keyboardActions = KeyboardActions(onDone = { focus.clearFocus(force = true); keyboard?.hide() }),
             modifier = Modifier.fillMaxWidth().testTag("download-file-name"),
         )
         Text("保存至本机公共 Download/PureBrowser 目录，添加唯一前缀避免覆盖。", style = MaterialTheme.typography.bodySmall)
@@ -223,7 +227,7 @@ fun HlsDownloadConfirmation(
             enabled = canConfirm,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("hls-save"),
         ) { Text("保存视频") }
-        TextButton(onClick = dismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("取消") }
+        TextButton(onClick = dismissWithKeyboard, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("取消") }
     }
 }
 

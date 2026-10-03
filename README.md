@@ -1,27 +1,30 @@
 # PureBrowser
 
-以网页视频发现与授权保存为核心的纯本地 Android 浏览器。**当前开发分支为 v0.1.3 候选；最新已发布版本仍为 v0.1.1，小范围 Pre-release**：浏览 → 发现 → 受控下载 → 视频库 → 打开/分享 → 文件管理。
+以网页视频发现与授权保存为核心的纯本地 Android 浏览器。**v0.1.3 小范围 Pre-release**：浏览 → 发现 → 受控下载 → 视频库 → 打开/分享 → 文件管理。
 
 不提供自有云存储、云解析、云同步、账号、遥测或后端；仍可联网访问用户选择的网站。
 
 ## 获取与开源
 
-- [GitHub 源码](https://github.com/JeckChen666/PureBrowser) · [v0.1.1 APK / Release](https://github.com/JeckChen666/PureBrowser/releases/tag/v0.1.1)。
+- [GitHub 源码](https://github.com/JeckChen666/PureBrowser) · [v0.1.3 APK / Release](https://github.com/JeckChen666/PureBrowser/releases/tag/v0.1.3)。
 - Apache-2.0，见 [LICENSE](LICENSE)、[NOTICE](NOTICE)。贡献与安全说明见 [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)。
 - 正式包：`io.github.jeckchen666.purebrowser`；Debug 包：`io.github.jeckchen666.purebrowser.debug`。最低 Android 8.0 / API26。
 - **v0.1.0 的 `com.example.purebrowser` 不会被覆盖，也不自动迁移其私有数据/网站登录。** 后续正式版本沿同包同签名升级。
-- [实现与验收](docs/V0.1.1-COMPLETION.md) · [后续版本路线图](docs/VERSION-ROADMAP-0.1.md)。
+- [实现与验收](docs/V0.1.3-COMPLETION.md) · [后续版本路线图](docs/VERSION-ROADMAP-0.1.md)。
 
-## v0.1.3 候选新增（不是正式发行）
+## v0.1.3：可恢复的本地下载
 
-- 有强资源身份的直链受控Range续传；完整HLS分片检查点、清单/序号核对和重新封装。
-- 暂停、取消、继续、另建下载语义分离；冷启动先对账，不静默启动下载。
-- schema v5保护迁移、停止原因/缓存反馈、通知动作、本地隐私分项清理与用户主动脱敏诊断。
-- 用户说明见 [USER-GUIDE](docs/USER-GUIDE.md)，隐私说明见 [PRIVACY](docs/PRIVACY.md)。
-- [候选验收](docs/V0.1.3-CANDIDATE.md) / [执行记录](docs/EXECUTION-PLAN-V0.1.3.md) / [发行门槛](docs/RELEASE-ACCEPTANCE-V0.1.3.md)。
-- v0.1.2真实验收欠项、两厂商真机/长任务/30授权样本/5人7日尚未满足，不创建正式v0.1.3标签。
+发行身份 **0.1.3 / versionCode 10**，沿用 v0.1.1 的正式包名与长期签名。
 
-## v0.1.2 候选新增（尚未完成正式发布门槛）
+- 有强资源身份的直链受控 Range 续传；完整 HLS 分片检查点、清单/序号核对和中断后重新封装。
+- 暂停、取消、继续、另建下载语义分离；冷启动先对账，由用户主动恢复，不静默启动下载。
+- schema v5 备份迁移、停止原因/缓存反馈、通知动作、本地隐私分项清理与主动脱敏诊断。
+- 修复导航后扫描占位和弹窗焦点/键盘问题，降低大文件传输的重复元数据开销。
+- [发行说明](docs/releases/v0.1.3.md) · [最终验收摘要](docs/V0.1.3-COMPLETION.md) · [用户指南](docs/USER-GUIDE.md) · [隐私说明](docs/PRIVACY.md)。
+- 129 JVM、候选生产代码对应的 API37 单批 225 项、API28/36 专项已验证；最终签名包另验证升级、浏览入口、真实跨 UID 分享及三个获授权 HTTPS 作品。历史候选与最终包的证据边界见验收摘要。
+- **主要在模拟器验证，OEM 后台行为待补测**；真机、多站点大样本和多人长期试用不作为本次 Pre-release 的阻断项，不声称全机型/全网站稳定。
+
+## v0.1.2 阶段新增（当时未单独发行，能力纳入 v0.1.3）
 
 - 未加密、已结束的 MPEG-TS / H.264 + 同组 AAC HLS 点播：显式解析、选择档位、下载并本地封装为独立 MP4。
 - 默认优先不超过1080p；清单和每个分片均由现有受控请求策略联网，不转发跨源网站 Cookie。
@@ -59,7 +62,7 @@
 
 ## 当前未实现
 
-加密HLS、直播/未结束清单、fMP4/CMAF、BYTERANGE、独立音轨/字幕合并、时间轴不连续、DASH、DRM、复杂跨站/分区会话和 JS Token、手动暂停/续传、完整 Service Worker / 跨域 iframe / MSE 关联、真正无痕。
+加密HLS、直播/未结束清单、fMP4/CMAF、BYTERANGE、独立音轨/字幕合并、时间轴不连续、DASH、DRM、复杂跨站/分区会话和 JS Token、完整 Service Worker / 跨域 iframe / MSE 关联、真正无痕。
 受支持的HLS可转换为MP4；不支持的HLS、DASH和blob说明限制，不直接保存清单或blob冒充视频。
 历史 DownloadManager 任务只对账与管理；新任务不交给系统下载器。正式版仅 HTTPS，Debug 仅指定回环测试地址例外。
 
@@ -76,7 +79,7 @@
 ```sh
 git clone https://github.com/JeckChen666/PureBrowser.git
 cd PureBrowser
-git checkout v0.1.1
+git checkout v0.1.3
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 # UI 测试会编辑本地浏览数据；只在专用、可丢弃的测试模拟器执行。
 # 有真实数据时先备份，不以卸载目标应用来重置测试。
@@ -87,7 +90,7 @@ adb -s emulator-5554 install -r app/build/outputs/apk/androidTest/debug/app-debu
 adb -s emulator-5554 shell am instrument -w io.github.jeckchen666.purebrowser.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-版本：0.1.1，versionCode=4；正式签名与旧 Debug 安装身份不同，不作跨包自动迁移。
+版本：0.1.3，versionCode=10；正式签名与旧 Debug 安装身份不同，不作跨包自动迁移。
 正式 applicationId：`io.github.jeckchen666.purebrowser`，namespace：`com.example.purebrowser`；minSdk 26，compileSdk / targetSdk 36。
 AGP 9.0.1，Gradle 9.1.0，Compose compiler 2.3.20，NavigationEvent 1.0.2。
 `local.properties` 为各开发者的本机路径，不提交到版本控制；历史环境文档仅作验收环境记录，不是跨机器配置模板。
@@ -124,12 +127,14 @@ python3 tools/fixtures/serve_video_fixture.py
 
 - [UI 设计方向：紧凑版浏览器 V4](docs/design/compact-browser-2026-10-03/README.md)：15 个界面总览、顶部网址／底部操作、交互规则及后续验收清单；仅设计方向，尚未实施。
 
-- `docs/releases/v0.1.0.md`：首个开源源码预览的发布说明。
+- `docs/releases/v0.1.3.md`：本次正式签名公开测试版的发行说明。
+- `docs/V0.1.3-COMPLETION.md`：最终包身份、验收与证据复用边界。
+- `docs/releases/v0.1.0.md`：首个开源源码预览的历史发布说明。
 - `docs/SOURCE-RESEARCH.md`：GitHub 参考项目、许可证、固定提交、采用与不采用的设计。
 - `docs/T1-T7-COMPLETION.md`：第一轮交付、验收与边界。
 - `docs/IMPLEMENTATION-STATUS.md`：当前测试和功能边界。
 - `docs/PRODUCT-PLAN.md`：已确认的纯本地、产品化优先方向。
-- `docs/VERSION-ROADMAP-0.1.md`：v0.1.0–v0.1.3 建议版本范围、用户效果、发布与发行验收门槛；后三版尚未实现。
+- `docs/VERSION-ROADMAP-0.1.md`：v0.1.0–v0.1.3 建议版本范围、用户效果、发布与发行验收门槛；历史规划与当前交付状态分别标注。
 - `docs/EXECUTION-PLAN.md`：第一轮 T1–T7 的已完成执行清单。
 - `docs/EXECUTION-PLAN-ROUND-2.md`：第二轮 T8–T14 的已完成执行清单。
 - `docs/ROUND-2-STATUS.md`：Git 基线、T8 增量与验证边界。
@@ -138,7 +143,7 @@ python3 tools/fixtures/serve_video_fixture.py
 - `CONTEXT.md`：资源线索、视频候选、下载任务、成品等术语。
 - `.agents/ANDROID-SKILLS.md`：25 个项目级 Android 技能安装记录。
 
-只下载自有或获授权的内容，不绕过 DRM 或访问控制。本版本不能保证所有网站兼容，且尚未进行真机及大文件后台验证。
+只下载自有或获授权的内容，不绕过 DRM 或访问控制。本版本不能保证所有网站兼容；大文件和后台已在开发机验证，尚无 OEM 真机兼容与多人长期试用证据。
 
 ## v0.1.0 历史验证
 

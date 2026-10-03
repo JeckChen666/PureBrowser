@@ -239,7 +239,7 @@ class ControlledTransfer(
 
     private fun ensureWriting(id: TaskId, cancel: TransferCancellation) {
         cancel.check()
-        if (repository.record(id)?.let(::writable) != true) throw CancellationException()
+        if (!repository.transfersAllowed || repository.store.writerRecord(id)?.let(::writable) != true) throw CancellationException()
     }
     private fun update(id: TaskId, block: (DownloadRecord) -> DownloadRecord): DownloadRecord? {
         var changed = false

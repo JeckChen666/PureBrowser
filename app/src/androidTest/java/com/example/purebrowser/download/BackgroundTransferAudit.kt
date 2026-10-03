@@ -31,9 +31,22 @@ class BackgroundTransferAudit {
                 val record=runtime.repository.record(id)!!
                 assertEquals(TaskStatus.RUNNING,record.taskStatus)
                 assertTrue(record.received>before+800000)
-                File(app.cacheDir,"v011-background-result.json").writeText("""{"elapsedMs":${System.currentTimeMillis()-started},"received":${record.received},"status":"${record.taskStatus}","screenOffRequested":true}""")
+                val digest=java.security.MessageDigest.getInstance("SHA-256")
+                File(app.applicationInfo.sourceDir).inputStream().use { input ->
+                    val buffer=ByteArray(65536)
+                    while(true) { val n=input.read(buffer);if(n<0)break;digest.update(buffer,0,n) }
+                }
+                val evidence=org.json.JSONObject().put("elapsedMs",System.currentTimeMillis()-started)
+                    .put("received",record.received).put("status",record.taskStatus).put("screenOffRequested",true)
+                    .put("apkSha256",digest.digest().joinToString("") { b->"%02x".format(b) }).put("api",android.os.Build.VERSION.SDK_INT).toString()
+                File(app.cacheDir,"v011-background-result.json").writeText(evidence)
+                instrument.sendStatus(0,android.os.Bundle().apply { putString("backgroundEvidence",evidence) })
             } finally {
                 runtime.repository.cancel(id)
+                val cleanupDeadline=System.currentTimeMillis()+15000
+                while(runtime.repository.transferInFlight(id) && System.currentTimeMillis()<cleanupDeadline)Thread.sleep(100)
+                assertFalse(runtime.repository.transferInFlight(id))
+                runtime.repository.forgetRecord(id)
                 instrument.uiAutomation.executeShellCommand("input keyevent 224").close()
                 instrument.uiAutomation.executeShellCommand("wm dismiss-keyguard").close()
             }

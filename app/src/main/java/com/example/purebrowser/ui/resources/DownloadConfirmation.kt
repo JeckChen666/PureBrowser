@@ -60,10 +60,11 @@ fun DownloadConfirmation(
     val safeName = DownloadRules.safeFileName(fileName)
     val canConfirm = fileName.isNotBlank() && fileName.trim() !in setOf(".", "..") &&
         frozen.candidate.canTryDownload() && frozen.candidate.kind != MediaKind.HLS && !submitted
-    val focusManager = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-
     ResourceDialog(onDismiss = onDismiss) {
+        // A Dialog has its own Compose root. Reading these outside the content
+        // would clear the background Activity's focus instead of this field.
+        val focusManager = LocalFocusManager.current
+        val keyboard = LocalSoftwareKeyboardController.current
         Text("确认下载直链", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
         Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
         ResourceMetadata(frozen.candidate)
@@ -89,7 +90,7 @@ fun DownloadConfirmation(
                 })
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(force = true); keyboard?.hide() }),
             modifier = Modifier.fillMaxWidth().testTag("download-file-name"),
         )
         Text("保存至系统 Download/PureBrowser 目录。保存时会添加唯一前缀，避免覆盖同名文件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

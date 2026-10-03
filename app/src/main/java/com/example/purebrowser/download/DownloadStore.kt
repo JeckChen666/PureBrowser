@@ -22,11 +22,18 @@ class DownloadStore(
     var writable = true
         private set
     private var notice: String? = null
+    // Cache parsing, NOT disk identity: every load still reads AtomicFile and compares the entire JSON text.
+    // Stat-only caches would miss equal-length external edits and could bypass future-schema protection.
+    private var parsedRaw: String? = null
+    private var parsedData: DownloadData? = null
+    private var parsedGeneration=-1L
+    private fun invalidateParsed() { parsedRaw=null;parsedData=null }
 
     fun takeNotice(): String? = synchronized(transactionLock) { notice.also { notice = null } }
 
     fun load(): DownloadData = synchronized(transactionLock) {
         if (!file.exists() && !File(file.path + ".bak").exists()) {
+            invalidateParsed()
             val raw = legacyReader()
             val data = try { DownloadData(records = decodeLegacy(raw)) }
             catch (_: Exception) {
@@ -50,8 +57,16 @@ class DownloadStore(
                 }
                 result.toString("UTF-8")
             }
+            parsedData?.let { if(raw==parsedRaw) { parsedGeneration=transactionGeneration;return@synchronized it } }
             val data = decode(raw)
-            if (JSONObject(raw).getInt("schemaVersion") in setOf(2, 3, 4)) {
+            val version=JSONObject(raw).getInt("schemaVersion")
+            if(version==SCHEMA_VERSION) {
+                val immutable=data.copy(records=java.util.Collections.unmodifiableList(data.records.toList()),
+                    assets=java.util.Collections.unmodifiableList(data.assets.toList()))
+                parsedRaw=raw;parsedData=immutable;parsedGeneration=transactionGeneration
+                return@synchronized immutable
+            }
+            if (version in setOf(2, 3, 4)) {
                 val bytes = raw.toByteArray(Charsets.UTF_8)
                 val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).take(8).joinToString("") { "%02x".format(it) }
                 val oldVersion = JSONObject(raw).getInt("schemaVersion")
@@ -66,10 +81,12 @@ class DownloadStore(
             }
             data
         } catch (_: FutureSchemaException) {
+            invalidateParsed()
             writable = false
             notice = "下载记录版本不兼容，原始数据未改动"
             DownloadData()
         } catch (_: Exception) {
+            invalidateParsed()
             // Do not resurrect removed records by importing the old preference file again.
             writable = runCatching {
                 file.copyTo(backupFile("state"), overwrite = false)
@@ -83,12 +100,21 @@ class DownloadStore(
 
     fun save(data: DownloadData) = synchronized(transactionLock) {
         check(writable) { "Download storage is read-only" }
+        invalidateParsed() // The next load still validates the successfully written representation.
         val bytes = encode(data).toByteArray(Charsets.UTF_8)
         require(bytes.size <= DownloadRules.MAX_FILE_BYTES)
         file.parentFile?.mkdirs()
         val stream = atomic.startWrite()
-        try { stream.write(bytes); atomic.finishWrite(stream) }
+        try { stream.write(bytes); atomic.finishWrite(stream);transactionGeneration++ }
         catch (failure: Exception) { atomic.failWrite(stream); throw failure }
+    }
+
+    /** Hot writer gate only. All app commits invalidate this view under the same transaction lock.
+     * Normal load/change still read the actual AtomicFile; coordinator/progress/final publication
+     * revalidate disk. Resume, migration and ownership never authorize from this transient view. */
+    internal fun writerRecord(id:TaskId):DownloadRecord?=synchronized(transactionLock) {
+        val data=if(parsedData!=null && parsedGeneration==transactionGeneration)parsedData!! else load()
+        if(writable)data.records.firstOrNull { it.recordId==id } else null
     }
 
     private fun backupFile(label: String) = File(file.parentFile,
@@ -103,6 +129,7 @@ class DownloadStore(
     companion object {
         // Covers read-modify-save across repository instances, not only atomic file writes.
         internal val transactionLock = Any()
+        private var transactionGeneration=0L
         const val SCHEMA_VERSION = 5
 
         private fun JSONObject.nullableString(key: String): String? = if (isNull(key)) null else getString(key)

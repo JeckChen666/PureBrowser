@@ -35,14 +35,36 @@ class BrowserDownloadFixtureTest {
         lateinit var model: BrowserViewModel
         compose.activityRule.scenario.onActivity { model = ViewModelProvider(it)[BrowserViewModel::class.java] }
         compose.waitUntil(10000) { model.ready.value }
-        compose.activityRule.scenario.onActivity { model.newTab() }
+        compose.activityRule.scenario.onActivity {
+            model.setDefaultWifiOnly(false)
+            model.newTab()
+        }
         compose.onNodeWithTag("addressInput").performClick()
         compose.onNodeWithTag("addressInput").performTextReplacement("$base/")
         compose.onNodeWithTag("navigateButton").performClick()
-        compose.waitUntil(20_000) {
-            val candidates = model.sniffer!!.candidates.value
-            candidates.any { it.url == "$base/sample.mp4?token=demo%2Bsignature" && Evidence.DOM in it.sources } &&
-                candidates.any { it.kind == MediaKind.HLS } && candidates.any { it.kind == MediaKind.DASH }
+        try {
+            compose.waitUntil(20_000) {
+                val candidates = model.sniffer!!.candidates.value
+                candidates.any { it.url == "$base/sample.mp4?token=demo%2Bsignature" && Evidence.DOM in it.sources } &&
+                    candidates.any { it.kind == MediaKind.HLS } && candidates.any { it.kind == MediaKind.DASH } &&
+                    candidates.any { it.url == "$base/bad.mp4" }
+            }
+        } catch (failure: Throwable) {
+            val engine = model.engine!!
+            fun field(name: String): Any? = engine.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(engine)
+            var dom = "not returned"
+            val done = java.util.concurrent.CountDownLatch(1)
+            compose.activityRule.scenario.onActivity {
+                (field("view") as? android.webkit.WebView)?.let { view ->
+                    view.evaluateJavascript("JSON.stringify({url:location.href,videos:document.querySelectorAll('video').length,resources:performance.getEntriesByType('resource').map(x=>x.name)})") {
+                        dom = it; done.countDown()
+                    }
+                } ?: done.countDown()
+            }
+            done.await(5, java.util.concurrent.TimeUnit.SECONDS)
+            throw AssertionError("Fixture discovery failed: page=${model.engine?.page?.value}, " +
+                "generation=${engine.generation}, scanning=${field("scanningActive")}, inScan=${field("domScanRunning")}, " +
+                "dom=$dom, candidates=${model.sniffer?.candidates?.value?.map { it.url to it.sources }}", failure)
         }
         val candidates = model.sniffer!!.candidates.value
         assertTrue(candidates.any { it.url=="$base/bad.mp4" })
@@ -53,12 +75,12 @@ class BrowserDownloadFixtureTest {
         compose.onNodeWithTag(com.example.purebrowser.ui.resources.resourceSaveTag("$base/sample.mp4?token=demo%2Bsignature")).performScrollTo().performClick()
         compose.onNodeWithText("确认下载直链").assertIsDisplayed()
         // The fixture is tiny; allow both emulator transports during this integration check.
-        compose.onNode(isToggleable() and hasText("仅 Wi-Fi",substring=true)).performClick()
+        compose.onNode(isToggleable() and hasText("仅 Wi-Fi",substring=true)).assertIsOff()
         val previousIds=model.repository.snapshot().map{it.id}.toSet()
         compose.onNodeWithText("开始下载").performClick()
         try {
             compose.waitUntil(45_000) { model.downloads.value.any { it.id !in previousIds && it.name.endsWith("_sample.mp4") && it.verified } }
-        } catch (failure: Exception) {
+        } catch (failure: Throwable) {
             throw AssertionError("Download did not complete: ${model.downloads.value.map { "${it.id}:${it.status}:${it.detail}" }}", failure)
         }
         val completed = model.downloads.value.first { it.id !in previousIds && it.name.endsWith("_sample.mp4") && it.verified }

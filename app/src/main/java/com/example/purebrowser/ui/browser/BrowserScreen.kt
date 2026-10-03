@@ -204,8 +204,6 @@ fun BrowserScreen(model: BrowserViewModel = viewModel()) {
 
 @Composable
 private fun PageEditor(value: Editor,onDismiss:()->Unit,save:(String,String)->Boolean,delete:(()->Unit)?) {
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
     var name by remember(value) {mutableStateOf(value.name)}
     var url by remember(value) {mutableStateOf(value.url)}
     var error by remember(value) {mutableStateOf(false)}
@@ -215,6 +213,15 @@ private fun PageEditor(value: Editor,onDismiss:()->Unit,save:(String,String)->Bo
         OutlinedTextField(value=url,onValueChange={url=it},singleLine=true,label={Text("网址")},modifier=Modifier.testTag("editorUrl"),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Uri))
         if(error) Text("请检查名称与网址；不要重复收藏或超过站点数量上限。",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
         if(delete!=null) TextButton(onClick={confirmDelete=true}) {Text("删除此站点")}
-    }},confirmButton={TextButton(onClick={focus.clearFocus(force=true);keyboard?.hide();error=!save(name,url)},modifier=Modifier.testTag("editorSave")){Text("保存")}},dismissButton={TextButton(onClick=onDismiss){Text("取消")}})
+    }},confirmButton={
+        // AlertDialog buttons run in the dialog root, unlike this function's caller.
+        val focus = LocalFocusManager.current
+        val keyboard = LocalSoftwareKeyboardController.current
+        TextButton(onClick={focus.clearFocus(force=true);keyboard?.hide();error=!save(name,url)},modifier=Modifier.testTag("editorSave")){Text("保存")}
+    },dismissButton={
+        val focus = LocalFocusManager.current
+        val keyboard = LocalSoftwareKeyboardController.current
+        TextButton(onClick={focus.clearFocus(force=true);keyboard?.hide();onDismiss()}){Text("取消")}
+    })
     if(confirmDelete && delete!=null) AlertDialog(onDismissRequest={confirmDelete=false},title={Text("删除这个常用站点？")},confirmButton={TextButton(onClick={confirmDelete=false;delete()}){Text("删除")}},dismissButton={TextButton(onClick={confirmDelete=false}){Text("取消")}})
 }

@@ -70,8 +70,16 @@ class HlsProductAudit {
                         ParcelFileDescriptor.AutoCloseInputStream(fd).bufferedReader().use { it.readText() }.takeIf { it.startsWith("{") } }.getOrNull();Thread.sleep(200)
                 }
                 val obj=JSONObject(receipt ?: error("recipient did not read"));assertTrue(obj.getBoolean("readable"));assertEquals(hash,obj.getString("sha256"))
-                File(app.cacheDir,"v012-long-result.json").writeText(JSONObject().put("durationMs",asset.durationMillis).put("segments",r.segmentCount)
-                    .put("sha256",hash).put("received",r.received).put("crossUidShare",true).toString())
+                val evidence=JSONObject().put("durationMs",asset.durationMillis).put("segments",r.segmentCount)
+                    .put("sha256",hash).put("received",r.received).put("crossUidShare",true).toString()
+                File(app.cacheDir,"v012-long-result.json").writeText(evidence)
+                if(args.getString("hlsExportOwned")=="true") {
+                    // Opt-in export of this generated fixture only, for full host decode. Not user media.
+                    app.contentResolver.openInputStream(uri)!!.use { input ->
+                        File(app.cacheDir,"v013-long-owned-output.mp4").outputStream().use { output->input.copyTo(output) }
+                    }
+                }
+                instrument.sendStatus(0,android.os.Bundle().apply { putString("longHlsEvidence",evidence) })
             } finally { runCatching {
                 if(repo.record(id)?.taskStatus in DownloadRepository.activeStatuses)repo.cancel(id)
                 val until=System.currentTimeMillis()+10000
@@ -80,6 +88,42 @@ class HlsProductAudit {
                     if(repo.stateSnapshot().assets.any { a->a.recordId==id })repo.deleteFile(id) else repo.forgetRecord(id)
                 }
             } }
+        }
+    }
+    @Test fun longHlsFinishesMuxAndPublicationWhileScreenRemainsOff() {
+        val args=InstrumentationRegistry.getArguments();assumeTrue(args.getString("hlsBackgroundFinish")=="true")
+        val instrument=InstrumentationRegistry.getInstrumentation();val app=instrument.targetContext
+        ActivityScenario.launch(MainActivity::class.java).use {
+            val rt=DownloadRuntime.get(app);rt.recover();val repo=rt.repository
+            val id=prepare(rt,"http://127.0.0.1:8767/video.m3u8")
+            try {
+                rt.kick();val ready=System.currentTimeMillis()+45000
+                while((repo.record(id)!!.received==0L || repo.record(id)!!.taskStatus!=TaskStatus.RUNNING) && System.currentTimeMillis()<ready)Thread.sleep(200)
+                assertEquals(TaskStatus.RUNNING,repo.record(id)!!.taskStatus)
+                instrument.uiAutomation.executeShellCommand("input keyevent 3").close()
+                instrument.uiAutomation.executeShellCommand("input keyevent 223").close()
+                val power=app.getSystemService(android.os.PowerManager::class.java)
+                val asleepDeadline=System.currentTimeMillis()+10000
+                while(power.isInteractive && System.currentTimeMillis()<asleepDeadline)Thread.sleep(100)
+                assertFalse(power.isInteractive)
+                val start=System.currentTimeMillis();val deadline=start+900000
+                while(repo.record(id)!!.taskStatus in DownloadRepository.activeStatuses && System.currentTimeMillis()<deadline)Thread.sleep(500)
+                assertFalse(power.isInteractive)
+                val record=repo.record(id)!!;assertEquals(record.safeFailure,TaskStatus.SUCCEEDED,record.taskStatus)
+                val asset=repo.stateSnapshot().assets.single { a->a.recordId==id }
+                assertTrue((asset.durationMillis ?: 0)>1800000);assertNotNull(repo.fileUri(id))
+                instrument.sendStatus(0,android.os.Bundle().apply { putString("backgroundHlsEvidence",JSONObject()
+                    .put("elapsedMs",System.currentTimeMillis()-start).put("durationMs",asset.durationMillis)
+                    .put("completedSegments",record.completedSegments).put("status",record.taskStatus)
+                    .put("screenOffAtStartAndFinish",true).put("publicAssetReadable",true).toString()) })
+            } finally {
+                instrument.uiAutomation.executeShellCommand("input keyevent 224").close()
+                instrument.uiAutomation.executeShellCommand("wm dismiss-keyguard").close()
+                if(repo.record(id)?.taskStatus in DownloadRepository.activeStatuses)repo.cancel(id)
+                val end=System.currentTimeMillis()+15000
+                while(repo.transferInFlight(id) && System.currentTimeMillis()<end)Thread.sleep(100)
+                if(repo.stateSnapshot().assets.any { a->a.recordId==id })repo.deleteFile(id) else repo.forgetRecord(id)
+            }
         }
     }
     @Test fun fifteenMinuteScreenOffHlsTransfer() {

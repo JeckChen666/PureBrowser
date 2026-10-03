@@ -58,17 +58,7 @@ class RuntimeFileShareTest {
             ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }.takeIf { it.startsWith("{") }
         }.getOrNull()
         compose.activityRule.scenario.onActivity { model.launchFile(it,id,true) }
-        val deadline=System.currentTimeMillis()+15000
-        var clicked=false
-        while(System.currentTimeMillis()<deadline && !clicked) {
-            val matches=instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("本地视频验收接收器").orEmpty()
-            for(node in matches) {
-                var target:AccessibilityNodeInfo?=node
-                while(target!=null && !target.isClickable) target=target.parent
-                if(target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)==true) { clicked=true;break }
-            }
-            Thread.sleep(300)
-        }
+        val clicked = chooseFixtureRecipient(instrumentation, 15_000)
         assertTrue("Actual chooser must expose the test-only file recipient",clicked)
         val readDeadline=System.currentTimeMillis()+10000
         var received=report()
