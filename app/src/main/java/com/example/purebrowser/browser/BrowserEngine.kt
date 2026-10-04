@@ -292,7 +292,8 @@ class BrowserEngine(
                     if (videos >= 50) return;
                     var video = v.tagName.toLowerCase() === 'video' ? v : v.parentElement;
                     var u = v.currentSrc || v.src;
-                    if (u && u.length <= 8192) { videos++;
+                    // An empty attribute resolves to the document URL; that is never the media itself.
+                    if (u && u !== w.location.href && u.length <= 8192) { videos++;
                       add({url:u, mime:(v.type || '').slice(0,120), video:true,
                         frame:w.location.href, title:(video.title || doc.title || '').slice(0,180),
                         playing:!video.paused && !video.ended && u===video.currentSrc});

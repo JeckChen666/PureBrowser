@@ -39,7 +39,7 @@ class ParseOnDetectionCoordinatorTest {
 
     private val ctx = SessionContext("https://cdn.example/watch", "UnitUA/1.0") { null }
 
-    @Test fun hlsObservationsDebounceIntoOneBatchCappedAtThreeMasters() = runTest {
+    @Test fun hlsObservationsDebounceIntoOneBatchCappedAtSixMasters() = runTest {
         val fetcher = fixture()
         val sniffer = ResourceSniffer()
         val queue = AutoProbeQueue(backgroundScope, fetcher)
@@ -56,15 +56,15 @@ class ParseOnDetectionCoordinatorTest {
         assertTrue(sniffer.candidates.value.all { it.probeState == ProbeState.PENDING })
         advanceTimeBy(1)
         runCurrent()
-        assertEquals(3, fetcher.playlistCalls())
-        assertEquals(3, fetcher.probeCalls())
+        assertEquals(5, fetcher.playlistCalls())
+        assertEquals(5, fetcher.probeCalls())
         val candidates = sniffer.candidates.value
         assertEquals(5, candidates.size)
-        assertEquals(3, candidates.count { it.probeState == ProbeState.VERIFIED })
-        assertEquals(2, candidates.count { it.probeState == ProbeState.PENDING })
+        assertEquals(5, candidates.count { it.probeState == ProbeState.VERIFIED })
+        assertEquals(0, candidates.count { it.probeState == ProbeState.PENDING })
         candidates.filter { it.variants != null }.forEach { assertEquals(2, it.variants!!.size) }
         // Each fetched master carries exactly one warned (non-H.264) variant.
-        assertEquals(3, candidates.flatMap { it.variants.orEmpty() }.count { it.warning != null })
+        assertEquals(5, candidates.flatMap { it.variants.orEmpty() }.count { it.warning != null })
     }
 
     @Test fun fileCandidatesProbeImmediatelyWithoutDebounce() = runTest {

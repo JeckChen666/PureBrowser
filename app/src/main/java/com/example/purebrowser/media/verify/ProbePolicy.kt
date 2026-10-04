@@ -7,8 +7,10 @@ import com.example.purebrowser.media.resolver.MediaProbe
 object ProbePolicy {
     /** Anonymous cheap probes allowed per navigation epoch. */
     const val MAX_PROBES_PER_EPOCH = 20
-    /** Master-playlist text fetches allowed per navigation epoch. */
-    const val MAX_PLAYLIST_FETCHES_PER_EPOCH = 3
+    /** Master-playlist/manifest text fetches allowed per navigation epoch. */
+    const val MAX_PLAYLIST_FETCHES_PER_EPOCH = 6
+    /** Aggregate manifest text bytes per epoch, so more fetches cannot mean unbounded traffic. */
+    const val MAX_PLAYLIST_BYTES_PER_EPOCH = 8 * 1024 * 1024
     /** Playlist text is bounded by the same cap the HLS HTTP client applies (2 MiB). */
     const val PLAYLIST_BYTE_CAP = HlsPlaylistParser.MAX_PLAYLIST_BYTES
     /** Container sniffing stays delegated to the explicit MediaProbe prefix limit (64 KiB). */

@@ -40,6 +40,7 @@ class AutoProbeQueue(
     private var activeEpoch = Long.MIN_VALUE
     private var probesUsed = 0
     private var playlistFetchesUsed = 0
+    private var playlistBytesUsed = 0
 
     fun start() {
         if (worker?.isActive == true) return
@@ -80,6 +81,7 @@ class AutoProbeQueue(
             activeEpoch = request.epoch
             probesUsed = 0
             playlistFetchesUsed = 0
+            playlistBytesUsed = 0
         }
         if (probesUsed >= ProbePolicy.MAX_PROBES_PER_EPOCH) return
         probesUsed++
@@ -90,7 +92,8 @@ class AutoProbeQueue(
         val dash = !hlsHint && ((result is ProbeResult.Verified && result.kindHint == MediaKind.DASH) ||
             request.kind == MediaKind.DASH || looksLikeDashManifestUrl(request.url))
         val wantsManifest = dash || hlsHint || request.kind == MediaKind.HLS || looksLikeHlsPlaylistUrl(request.url)
-        if (wantsManifest && playlistFetchesUsed < ProbePolicy.MAX_PLAYLIST_FETCHES_PER_EPOCH) {
+        if (wantsManifest && playlistFetchesUsed < ProbePolicy.MAX_PLAYLIST_FETCHES_PER_EPOCH &&
+            playlistBytesUsed < ProbePolicy.MAX_PLAYLIST_BYTES_PER_EPOCH) {
             playlistFetchesUsed++
             result = if (dash) enrichWithDashManifest(request, result) else enrichWithPlaylist(request, result)
         }
@@ -171,6 +174,7 @@ class AutoProbeQueue(
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(bytes.toByteArray())).toString()
             } catch (_: Exception) { return null }
+            playlistBytesUsed += decoded.length
             return decoded to opened.finalUrl
         }
     }

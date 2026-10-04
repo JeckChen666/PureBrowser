@@ -109,7 +109,7 @@ class AutoProbeQueueTest {
         assertTrue(results.take(20).all { it.first == 1L })
     }
 
-    @Test fun playlistFetchBudgetCapsAtThreePerEpoch() = runTest {
+    @Test fun playlistFetchBudgetCoversSixPerEpoch() = runTest {
         val fetcher = FakeFetcher { _, headers ->
             if ("Range" in headers) text(status = 200, headers = mapOf("Content-Type" to "application/vnd.apple.mpegurl"))
             else text(master)
@@ -121,10 +121,26 @@ class AutoProbeQueueTest {
         repeat(5) { queue.submit("https://cdn.example/hls/v$it.m3u8", MediaKind.HLS, 1L, ctx) }
         runCurrent()
         assertEquals(5, results.size)
-        assertEquals(3, fetcher.playlistCalls())
+        assertEquals(5, fetcher.playlistCalls())
         assertEquals(5, fetcher.probeCalls())
-        assertEquals(3, results.count { (it as ProbeResult.Verified).variants != null })
-        assertEquals(2, results.count { (it as ProbeResult.Verified).variants == null })
+        assertEquals(5, results.count { (it as ProbeResult.Verified).variants != null })
+    }
+
+    @Test fun playlistAggregateByteBudgetStopsFurtherFetches() = runTest {
+        val big = master + "\n" + "# comment padding ".repeat(105_000) // ~1.9 MiB per document
+        val fetcher = FakeFetcher { _, headers ->
+            if ("Range" in headers) text(status = 200, headers = mapOf("Content-Type" to "application/vnd.apple.mpegurl"))
+            else text(big)
+        }
+        val results = mutableListOf<ProbeResult>()
+        val queue = AutoProbeQueue(backgroundScope, fetcher)
+        queue.onResult = { _, _, result -> results += result }
+        queue.start()
+        repeat(6) { queue.submit("https://cdn.example/hls/v$it.m3u8", MediaKind.HLS, 1L, ctx) }
+        runCurrent()
+        assertEquals(6, results.size)
+        assertEquals(5, fetcher.playlistCalls())
+        // Sixth document would push the epoch past the 8 MiB aggregate cap.
     }
 
     @Test fun dashContentTypePathVerifiesDashAndCatalogsRepresentations() = runTest {
@@ -183,11 +199,10 @@ class AutoProbeQueueTest {
         repeat(5) { queue.submit("https://cdn.example/dash/v$it.mpd", MediaKind.DASH, 1L, ctx) }
         runCurrent()
         assertEquals(5, results.size)
-        // Same three-fetch budget as HLS playlists, shared, not additional.
-        assertEquals(3, fetcher.playlistCalls())
+        // Same six-fetch budget as HLS playlists, shared, not additional.
+        assertEquals(5, fetcher.playlistCalls())
         assertEquals(5, fetcher.probeCalls())
-        assertEquals(3, results.count { (it as ProbeResult.Verified).variants != null })
-        assertEquals(2, results.count { (it as ProbeResult.Verified).variants == null })
+        assertEquals(5, results.count { (it as ProbeResult.Verified).variants != null })
     }
 
     @Test fun staleEpochRequestsAreDroppedAtSubmitAndAtProcessing() = runTest {

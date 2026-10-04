@@ -66,9 +66,8 @@ class V016CrossSiteSmoke {
             while (System.currentTimeMillis() < deadline) {
                 candidates = session.sniffer.candidates.value
                 val addressable = candidates.filter { it.kind in setOf(MediaKind.FILE, MediaKind.HLS, MediaKind.DASH) }
-                val settled = addressable.isNotEmpty() && (
-                    addressable.all { it.probeState == ProbeState.VERIFIED || it.probeState == ProbeState.FAILED } ||
-                        addressable.any { it.probeState == ProbeState.VERIFIED })
+                val settled = addressable.isNotEmpty() &&
+                    addressable.all { it.probeState == ProbeState.VERIFIED || it.probeState == ProbeState.FAILED }
                 if (settled && page.error == null) break
                 Thread.sleep(500)
             }
