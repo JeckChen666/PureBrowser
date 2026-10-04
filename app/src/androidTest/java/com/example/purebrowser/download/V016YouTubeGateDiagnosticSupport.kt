@@ -28,6 +28,10 @@ internal object V016YouTubeGateDiagnosticSupport {
     const val ARM_DEADLINE_MS = 20_000L
     /** Whole-battery media GET budget for the session battery (T74): shared across all its arms. */
     const val MAX_SESSION_HTTP_OPENS = 6
+    /** Whole-battery media open budget for the T88 window battery: shared across all its probes. */
+    const val MAX_WINDOW_HTTP_OPENS = 16
+    /** Span-sensitivity probes the narrowing loop must keep budget for (T88). */
+    const val WINDOW_SPAN_COUNT = 4
     const val USER_AGENT = "PureBrowser authorized Sintel audit"
     private val redirects = setOf(301, 302, 303, 307, 308)
     private val contentRange = Regex("bytes ([0-9]{1,19})-([0-9]{1,19})/([0-9]{1,19})")

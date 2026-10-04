@@ -21,12 +21,12 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import com.example.purebrowser.download.V016YouTubeGateDiagnosticSupport as Gate
 
-/** ONLY the three arg-gated diagnostics (#clientGateBoundedDiagnostic, #segmentedRangeBoundedDiagnostic,
- * #sessionRangeBoundedDiagnostic) may use the network, and only with instrumentation argument
- * video=<11-char id> (plus optional clients= comma list, subset of IOS/ANDROID/ANDROID_VR/TV;
- * #sessionRangeBoundedDiagnostic additionally honors session=true to attach the WebView's own
- * session cookie to its bounded media GETs); absent video argument makes every one of them a
- * deliberate no-op. Per arm, sequentially, each battery resolves through the production resolver
+/** ONLY the four arg-gated diagnostics (#clientGateBoundedDiagnostic, #segmentedRangeBoundedDiagnostic,
+ * #sessionRangeBoundedDiagnostic, #windowStrategyDiagnostic) may use the network, and only with
+ * instrumentation argument video=<11-char id> (plus optional clients= comma list, subset of
+ * IOS/ANDROID/ANDROID_VR/TV; #sessionRangeBoundedDiagnostic additionally honors session=true to
+ * attach the WebView's own session cookie to its bounded media GETs); absent video argument
+ * makes every one of them a deliberate no-op. Per arm, sequentially, each battery resolves through the production resolver
  * path (clientOverride) with a fresh resolver/session, picks the largest avc1 video-only track
  * <=1080p, then performs ONE bounded media GET (Range bytes=0-65535 or the arm's range shape,
  * body read <=64KiB+1, at most two redirect hops, 20s arm wall clock) using the production
@@ -270,6 +270,114 @@ class V016YouTubeGateDiagnostic {
         assertEquals("Every session range shape must produce an observation record", 4, arms.size)
     }
 
+    /** T88 window-strategy battery: ONE fresh IOS resolve, then a bounded probe matrix over the
+     * largest avc1 track that characterizes the anonymous byte window precisely enough for a
+     * Go/No-go on a future chunking strategy. Needs the video argument (absent -> deliberate
+     * no-op). Hard budget: <=16 media opens across the whole battery (shared counting transport),
+     * each body read <=64KiB+1, 20s per-probe deadline, production redirect/header policy.
+     * Matrix: (1) coarse edge ladder — closed 1 KiB ranges starting at 5/10/12/15/20/30/50% of
+     * the declared length (a 75% rung is added only if every ladder rung passed), then
+     * bisection narrowing toward a +-1% bracket while the span probes stay affordable;
+     * (2) statelessness — one in-window 1 KiB probe issued immediately after a beyond-window
+     * rejection; (3) throttling — two further sequential in-window 1 KiB probes at distinct
+     * offsets (with the statelessness probe, 3 sequential in-window probes in total);
+     * (4) span sensitivity — closed 1 KiB/64 KiB/1 MiB/4 MiB spans at a 2% start offset.
+     * Output is one masked WIN[...] line per probe (fraction + pass/fail + the shared masked
+     * arm JSON; byte offsets stay derivable from the already-public declaredLength); the
+     * pass/fail flag is an observation, never an assertion for real-site probes. */
+    @Test(timeout = 480_000) fun windowStrategyDiagnostic() {
+        val args = InstrumentationRegistry.getArguments()
+        val video = args.getString("video") ?: return // absent -> deliberate no-op
+        require(Regex("[A-Za-z0-9_-]{11}").matches(video)) { "video argument must be an 11-char id" }
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scheduler = scheduler()
+        val opens = java.util.concurrent.atomic.AtomicInteger()
+        var mandatory = 0
+        val probes = mutableListOf<WinProbe>()
+        try {
+            DualTrackTestSupport.test { repository ->
+                val started = SystemClock.elapsedRealtime()
+                val media = runBlocking {
+                    withTimeout(40_000) { YouTubeResolver(context, repository::guardedTransport).resolve(video, "IOS") }
+                }
+                val resolveMs = SystemClock.elapsedRealtime() - started
+                val track = media.videos.maxBy { it.height }
+                check(track.length > 8 * 1024 * 1024) { "track too small for the window battery" }
+                println("WIN[resolve] client=IOS resolveMs=$resolveMs itag=${track.id} " +
+                    "height=${track.height} declaredLength=${track.length}")
+                // Battery-wide budget: at most 16 media opens across every probe (hop-inclusive).
+                val budgeted = HttpTransport { url, headers, token ->
+                    check(opens.incrementAndGet() <= Gate.MAX_WINDOW_HTTP_OPENS) { "Window battery media request budget exceeded" }
+                    UrlConnectionTransport().open(url, headers, token)
+                }
+                val transport = repository.guardedTransport(budgeted)
+                var passF: Double? = null // highest passing start fraction observed so far
+                var failF: Double? = null // lowest failing start fraction observed so far
+                var lastFailed = false
+                fun probeFraction(label: String, fraction: Double, span: Long = 1024): Gate.Arm {
+                    val start = (fraction * track.length).toLong()
+                    val end = start + span - 1
+                    check(start >= 0 && end < track.length) { "probe range outside the declared resource" }
+                    val arm = Gate.probe("IOS", resolveMs, track, request(), transport,
+                        SystemClock::elapsedRealtime, scheduler,
+                        deadlineMs = Gate.ARM_DEADLINE_MS, rangeHeader = "bytes=$start-$end")
+                    probes += WinProbe(label, fraction, span, arm)
+                    lastFailed = !arm.twoXxOr206
+                    if (arm.twoXxOr206) { if (passF == null || fraction > passF!!) passF = fraction }
+                    else { if (failF == null || fraction < failF!!) failF = fraction }
+                    println("WIN[$label] fraction=" + String.format(java.util.Locale.ROOT, "%.4f", fraction) +
+                        " span=$span pass=${arm.twoXxOr206} ${arm.json()}")
+                    return arm
+                }
+                // (1) Coarse edge ladder: closed 1 KiB probes at fractional start offsets.
+                for ((index, fraction) in listOf(0.05, 0.10, 0.12, 0.15, 0.20, 0.30, 0.50).withIndex()) {
+                    mandatory++; probeFraction("edge=${index + 1}", fraction)
+                }
+                if (failF == null) { mandatory++; probeFraction("edge=8", 0.75) }
+                // (2) Statelessness: an in-window probe immediately after a beyond-window rejection.
+                val refF = passF ?: 0.01 // anchor at the highest known-passing offset (explore 1% if none passed)
+                val after403 = lastFailed
+                mandatory++; probeFraction("reseek", refF)
+                println("WIN[reseek-context] precededByBeyondWindow403=$after403 anchorFraction=" +
+                    String.format(java.util.Locale.ROOT, "%.4f", refF))
+                // (3) Throttling: two further sequential in-window probes at distinct offsets.
+                mandatory++; probeFraction("seq=2", refF * 0.6)
+                mandatory++; probeFraction("seq=3", refF * 0.3)
+                // Bisection narrowing toward a +-1% bracket while the span battery stays affordable.
+                while (passF != null && failF != null && failF!! - passF!! > 0.02 &&
+                    opens.get() + 1 + Gate.WINDOW_SPAN_COUNT <= Gate.MAX_WINDOW_HTTP_OPENS) {
+                    probeFraction("narrow", (passF!! + failF!!) / 2)
+                }
+                // (4) Span sensitivity inside the window at a 2% start offset.
+                for (span in listOf(1024L, 65_536L, 1_048_576L, 4_194_304L)) {
+                    mandatory++
+                    check((0.02 * track.length).toLong() + span - 1 < track.length) { "span probe exceeds the track" }
+                    probeFraction("span=$span", 0.02, span)
+                }
+            }
+        } finally {
+            scheduler.shutdownNow()
+            val ladder = probes.filter { it.span == 1024L }
+            val passed = ladder.filter { it.arm.twoXxOr206 }
+            val failed = ladder.filter { !it.arm.twoXxOr206 }
+            val passF = passed.maxOfOrNull { it.fraction }
+            val failF = failed.minOfOrNull { it.fraction }
+            val bracket = when {
+                passF != null && failF != null -> "(%.4f,%.4f] widthPercent=%.4f".format(
+                    java.util.Locale.ROOT, passF, failF, failF - passF)
+                passF != null -> "(%.4f,>0.7500] widthUnknown".format(java.util.Locale.ROOT, passF)
+                else -> "none-passed"
+            }
+            val reseek = probes.firstOrNull { it.label == "reseek" }
+            val seq = probes.filter { it.label == "reseek" || it.label.startsWith("seq") }
+            println("WIN[summary] probes=${probes.size} mandatory=$mandatory opens=${opens.get()}/${Gate.MAX_WINDOW_HTTP_OPENS} " +
+                "edgeBracket=$bracket reseekPassAfter403=${reseek?.arm?.twoXxOr206} " +
+                "sequentialInWindowPasses=${seq.count { it.arm.twoXxOr206 }}/${seq.size} " +
+                "spanStatuses=${probes.filter { it.span != 1024L }.joinToString(" ") { "span=${it.span}:${it.arm.status}" }}")
+        }
+        assertTrue("Every planned probe must produce an observation record", probes.size >= mandatory)
+    }
+
     @Test fun fixtureRangeGetUsesProductionHeaderPolicyAndObservesScalarsOnly() = withScheduler { scheduler ->
         var requestedUrl: String? = null
         var requestedHeaders: Map<String, String> = emptyMap()
@@ -447,5 +555,7 @@ class V016YouTubeGateDiagnostic {
         }
         override fun close() { closed = true }
     }
+    /** Masked T88 window-battery record: label + fraction + span scalars plus the shared arm. */
+    private class WinProbe(val label: String, val fraction: Double, val span: Long, val arm: Gate.Arm)
     private companion object { const val DEFAULT_CLIENTS = "IOS,ANDROID_VR,TV,ANDROID" }
 }
