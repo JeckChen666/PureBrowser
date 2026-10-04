@@ -244,4 +244,36 @@ class SiteRulesCoordinatorTest {
         advanceUntilIdle()
         assertEquals(3, evaluations)
     }
+
+    /**
+     * T90 tier switch: an IMPORTED rule still fetches through the controlled channel (first
+     * evaluation is inside the halved wall window) and the analyze label reports the imported
+     * provenance; a built-in twin of the same shape stays labeled 站点规则.
+     */
+    @Test fun importedRuleFetchesUnderTierAndLabelsProvenance() = runBlocking {
+        val sniffer = ResourceSniffer()
+        val set = RuleSet.parseImported("""{"version":3,"rules":[
+            {"id":"imp","version":1,"match":{"hosts":"(^|\\.)tube\\.example$","path":"\\/watch\\/([0-9]+)"},
+             "actions":[{"type":"jsonExtract","pointers":["url"]}],
+             "fetch":[{"id":"cfg","url":"https://api.tube.example/v/{{m1}}","maxBytes":8192}]}]}""")
+        val fetches = mutableListOf<Int>()
+        val coordinator = SiteRulesCoordinator(
+            sniffer = sniffer,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            ruleSet = { set },
+            recentRequests = { emptyList() },
+            domSnapshot = null,
+            latestPlayerConfig = { null },
+            fetcher = { spec, _ ->
+                fetches += spec.maxBytes
+                RuleDocument("https://api.tube.example/v/1", 200, """{"url":"https://cdn.tube.example/1.mp4"}""")
+            },
+        )
+        val epoch = sniffer.beginPage()
+        coordinator.onPageSettled(epoch, "https://tube.example/watch/1")
+        val candidates = sniffer.candidates.value
+        assertTrue(candidates.map { it.url }.contains("https://cdn.tube.example/1.mp4"))
+        assertEquals(listOf(ImportedTier.effectiveMaxBytes(8192)), fetches)
+        assertEquals("导入规则", coordinator.matchedNote(epoch, "https://tube.example/watch/1"))
+    }
 }

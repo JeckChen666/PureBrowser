@@ -51,7 +51,7 @@ class BrowserSession(
     private val app = appContext.applicationContext
     private val context = MutableContextWrapper(app)
     val sniffer = ResourceSniffer()
-    val engine = BrowserEngine(sniffer, message, record.url, changed, visited, link, ruleSetProvider = { RuleSet.load(app) })
+    val engine = BrowserEngine(sniffer, message, record.url, changed, visited, link, ruleSetProvider = { RuleSet.loadMerged(app) })
     private val mounted = AtomicReference<WebView?>()
     private val webView: WebView? get() = mounted.get()
     private val verifyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -79,7 +79,7 @@ class BrowserSession(
     val siteRules = SiteRulesCoordinator(
         sniffer = sniffer,
         scope = verifyScope,
-        ruleSet = { withContext(Dispatchers.IO) { RuleSet.load(app) } },
+        ruleSet = { withContext(Dispatchers.IO) { RuleSet.loadMerged(app) } },
         recentRequests = sniffer::recentRequests,
         domSnapshot = engine::domSnapshot,
         latestPlayerConfig = { playerConfigHarvest?.takeIf { it.first == engine.generation }?.second },
@@ -93,7 +93,7 @@ class BrowserSession(
         engine.pageSignalListener = ::onPageSignal
         engine.pageSettleListener = ::onPageSettled
         // Warm the built-in rule cache off the main thread so script injection reads it cheaply.
-        verifyScope.launch { RuleSet.load(app) }
+        verifyScope.launch { RuleSet.loadMerged(app) }
     }
 
     /** Built-in site rules run once per page settle; the engine filters non-web addresses before this. */
@@ -127,7 +127,7 @@ class BrowserSession(
         // Session channel: opt-in is read per page from the store (default UNKNOWN ≡ off); the
         // policy additionally requires the rule's session block to cover the target host and the
         // target itself to pass the fetch policy before any cookie leaves the WebView store.
-        val rule = RuleSet.load(app).byId(spec.ruleId)
+        val rule = RuleSet.loadMerged(app).byId(spec.ruleId)
         val sessionCookie = rule?.let {
             RuleFetchPolicy.sessionCookie(it, url, optIn = sessionOptIn.isOptedIn(engine.page.value.url), cookieFor = { target ->
                 runCatching { CookieManager.getInstance().getCookie(target) }.getOrNull()

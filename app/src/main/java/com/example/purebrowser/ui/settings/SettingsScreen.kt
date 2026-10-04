@@ -2,6 +2,8 @@ package com.example.purebrowser.ui.settings
 
 import android.os.Build
 import com.example.purebrowser.download.PublishRoutePolicy
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,10 +26,16 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.data.browser.ThemeMode
+import com.example.purebrowser.media.rules.ImportedRulePolicy
+import com.example.purebrowser.media.rules.ImportedRuleStore
+import com.example.purebrowser.media.rules.ImportValidation
+import com.example.purebrowser.media.rules.ImportValidator
 import com.example.purebrowser.privacy.PrivacyCategory
 import com.example.purebrowser.privacy.PrivacyClearResult
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Optional parent-owned integration; null means unavailable, never a clickable no-op.
@@ -63,11 +71,65 @@ fun SettingsScreen(
     privacyActions: SettingsPrivacyActions = SettingsPrivacyActions(),
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var pendingCategory by rememberSaveable { mutableStateOf<PrivacyCategory?>(null) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     // Deliberately not saveable: do not persist generated diagnostics with UI/navigation state.
     var report by remember { mutableStateOf<String?>(null) }
+    // T90 import channel: the picked document is validated first; only an explicit consent turns
+    // it into stored data. The validated text lives in composition state only until the dialog
+    // closes — persistence happens through the app-private store, never the picker itself.
+    var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
+    var importedCount by remember { mutableStateOf<Int?>(null) }
+    var importBusy by remember { mutableStateOf(false) }
+
+    val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        importBusy = true
+        status = null
+        scope.launch {
+            var valid: ImportValidation.Valid? = null
+            var denied: ImportValidation.Denied? = null
+            var validText: String? = null
+            try {
+                withContext(Dispatchers.IO) {
+                    val text = context.contentResolver.openInputStream(uri)?.use { input ->
+                        val buffer = ByteArray(ImportedRulePolicy.MAX_IMPORT_BYTES + 1)
+                        var read = 0
+                        while (true) {
+                            if (read >= buffer.size) return@use null // oversize marker
+                            val n = input.read(buffer, read, buffer.size - read)
+                            if (n < 0) break
+                            read += n
+                        }
+                        if (read > ImportedRulePolicy.MAX_IMPORT_BYTES) null else buffer.copyOf(read).toString(Charsets.UTF_8)
+                    }
+                    when {
+                        text == null -> denied = ImportValidation.Denied(ImportValidation.Denied.Reason.OVERSIZE)
+                        else -> when (val verdict = ImportValidator.validate(text, builtInCount = com.example.purebrowser.media.rules.RuleSet.load(context).rules.size)) {
+                            is ImportValidation.Valid -> { valid = verdict; validText = text }
+                            is ImportValidation.Denied -> denied = verdict
+                        }
+                    }
+                }
+                val v = valid
+                val t = validText
+                val d = denied
+                when {
+                    v != null && t != null -> pendingImport = PendingImport(t, v.digest, v.rules.size)
+                    d != null -> status = importDenialText(d.reason)
+                    else -> status = "无法读取所选文件，请重试。"
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                status = "无法读取所选文件，请重试。"
+            } finally {
+                importBusy = false
+            }
+        }
+    }
 
     // The browser shell owns system/IME insets; do not add a second safe-area inset here.
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.TopCenter) {
@@ -114,6 +176,37 @@ fun SettingsScreen(
                 }
                 SettingsNote(if (Build.VERSION.SDK_INT >= 29) "本机公共目录，不提供目录选择。显示名称可修改，实际文件名保留唯一前缀。移除记录不会删除文件，删除文件需要另行确认。"
                 else "此系统版本不允许应用直接写入公共下载，成品保存在应用专属外部目录，可通过打开或分享另存。不提供目录选择。显示名称可修改，实际文件名保留唯一前缀。移除记录不会删除文件，删除文件需要另行确认。")
+            }
+            SettingsGroup("站点规则") {
+                SettingsNote("导入的规则只保存在本机应用私有存储，不联网分发、不自动更新。导入后与内置规则合并，内置规则始终优先；导入规则的受控抓取额度减半且不允许跨源跳转。分析入口会标注命中来自“导入规则”。")
+                OutlinedButton(
+                    onClick = {
+                        importedCount = com.example.purebrowser.media.rules.ImportedRuleStore.importedCount(context)
+                        runCatching { importPicker.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
+                            .onFailure { status = "无法打开文件选择器，请重试。" }
+                    },
+                    enabled = !importBusy,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("rule-import-pick"),
+                ) { Text("导入站点规则", style = MaterialTheme.typography.bodyMedium) }
+                if (importBusy) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                } else if (importedCount == null) {
+                    importedCount = com.example.purebrowser.media.rules.ImportedRuleStore.importedCount(context)
+                }
+                importedCount?.let { count ->
+                    if (count > 0) {
+                        SettingsNote("当前已导入 $count 条规则。")
+                        TextButton(
+                            onClick = {
+                                if (com.example.purebrowser.media.rules.ImportedRuleStore.clear(context)) {
+                                    importedCount = 0
+                                    status = "已清除导入的站点规则。"
+                                } else status = "没有已导入的规则可清除。"
+                            },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("rule-import-clear"),
+                        ) { Text("清除已导入规则", style = MaterialTheme.typography.bodyMedium) }
+                    }
+                }
             }
             SettingsGroup("本地数据") {
                 SettingsNote("每次只清理你确认的类别，不提供一键全删。网站数据与网页缓存面向本应用的所有网站，不只是当前网页；任何清理都不会删除已保存的视频。")
@@ -172,6 +265,48 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    // T90 consent dialog: the user must explicitly accept that the imported rules gain the
+    // controlled-fetch capability before anything is stored. The canonical SHA-256 is shown for
+    // manual verification against the source the file came from (no signing infra in-app).
+    pendingImport?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("导入站点规则？") },
+            text = {
+                Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("外部规则将获得受控抓取能力（仅 GET、HTTPS、限额减半、不跨源跳转）。文件来源无法由应用验证，请先自行核对发布方的完整性摘要再确认。", style = MaterialTheme.typography.bodyLarge)
+                    Text("规则条数：${pending.count}", style = MaterialTheme.typography.bodyMedium)
+                    Text("完整性摘要（SHA-256，规范化后）：", style = MaterialTheme.typography.bodyMedium)
+                    SelectionContainer { Text(pending.digest, style = MaterialTheme.typography.bodySmall) }
+                    SettingsNote("本应用未内置签名密钥体系，摘要仅供人工核对；确认后规则保存在本机，可随时在设置中清除。")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val text = pending.text
+                        pendingImport = null
+                        importBusy = true
+                        scope.launch {
+                            val saved = withContext(Dispatchers.IO) { ImportedRuleStore.save(context, text) }
+                            importedCount = ImportedRuleStore.importedCount(context)
+                            status = if (saved) "已导入 ${importedCount ?: 0} 条站点规则。" else "导入失败：文件超过大小限制。"
+                            importBusy = false
+                        }
+                    },
+                    enabled = !importBusy,
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("rule-import-confirm"),
+                ) { Text("确认导入", style = MaterialTheme.typography.bodyLarge) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImport = null }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("取消", style = MaterialTheme.typography.bodyLarge)
+                }
+            },
+        )
     }
 
     pendingCategory?.let { category ->
@@ -249,6 +384,17 @@ fun SettingsScreen(
             },
         )
     }
+}
+
+/** Validated import awaiting explicit consent; [text] is composition state only, never persisted here. */
+private data class PendingImport(val text: String, val digest: String, val count: Int)
+
+private fun importDenialText(reason: ImportValidation.Denied.Reason): String = when (reason) {
+    ImportValidation.Denied.Reason.OVERSIZE -> "导入失败：文件超过 512KB 限制。"
+    ImportValidation.Denied.Reason.MALFORMED -> "导入失败：不是有效的规则 JSON 文档。"
+    ImportValidation.Denied.Reason.UNSUPPORTED_VERSION -> "导入失败：文档 schema 版本低于 v3。"
+    ImportValidation.Denied.Reason.NO_RULES -> "导入失败：文档中没有可用的规则条目。"
+    ImportValidation.Denied.Reason.CAP_EXCEEDED -> "导入失败：规则条数超过总量上限。"
 }
 
 private val PrivacyCategory.title: String get() = when (this) {

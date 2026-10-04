@@ -48,7 +48,7 @@ class SiteRulesCoordinator(
         private const val MAX_FETCH_CACHE = 64
     }
 
-    private data class Matched(val epoch: Long, val url: String, val ruleId: String, val sessionDomain: String?)
+    private data class Matched(val epoch: Long, val url: String, val ruleId: String, val sessionDomain: String?, val imported: Boolean)
 
     private val guard = Any()
     @Volatile private var lastEpoch = Long.MIN_VALUE
@@ -72,6 +72,10 @@ class SiteRulesCoordinator(
     private val fetchCache = LinkedHashMap<FetchKey, RuleDocument>()
     /** Last epoch whose fetch channel hit a budget or policy refusal; observability for the 可见 clause. */
     @Volatile private var fetchOverflowEpoch: Long? = null
+    // IMPORTED-tier wall clock (T90, D5): half the shared ledger's wall per epoch, tracked from
+    // the first evaluation of that epoch. Guarded by fetchGuard like the rest of the channel state.
+    private var importedWallEpoch = Long.MIN_VALUE
+    private var importedWallStartMs = 0L
 
     // Inline-data buffer (T85), guarded by inlineGuard; bounded per epoch.
     private val inlineGuard = Any()
@@ -202,6 +206,7 @@ class SiteRulesCoordinator(
     private suspend fun runFor(epoch: Long, pageUrl: String) {
         val set = ruleSet() ?: return
         fetchBudget.beginUserAction(epoch)
+        importedWallStart(epoch)
         dropFetchCache(epoch)
         val inline = inlineSnapshot(epoch)
         val channel: (suspend (FetchSpec, RenderedUrl) -> RuleDocument?)? = fetcher?.let { io ->
@@ -221,7 +226,7 @@ class SiteRulesCoordinator(
             // sit inside the page's own registrable domain (SessionTogglePolicy.coveredDomain).
             val sessionDomain = set.byId(first.ruleId)?.session
                 ?.let { SessionTogglePolicy.coveredDomain(it, pageUrl) }
-            matched = Matched(epoch, pageUrl, first.ruleId, sessionDomain)
+            matched = Matched(epoch, pageUrl, first.ruleId, sessionDomain, set.byId(first.ruleId)?.source == RuleSource.IMPORTED)
         }
         val familiesDone = mutableSetOf<String>()
         for (finding in findings) {
@@ -273,6 +278,14 @@ class SiteRulesCoordinator(
         val key = FetchKey(spec.ruleId, spec.id)
         cachedFetch(epoch, key)?.let { return it }
         val rule = set.byId(spec.ruleId) ?: return null
+        // T90 D5 IMPORTED tier switch: imported rules fetch with halved maxBytes and a halved
+        // wall clock, and their redirect hops are same-origin only — decided purely, applied here.
+        val imported = rule.source == RuleSource.IMPORTED
+        val effectiveSpec = if (imported) spec.copy(maxBytes = ImportedTier.effectiveMaxBytes(spec.maxBytes)) else spec
+        if (imported && importedWallElapsedMs(epoch) >= ImportedTier.wallBudgetMs(fetchBudget.maxWallMs)) {
+            fetchOverflowEpoch = epoch
+            return null
+        }
         val hosts = rule.match.hostsPattern
         var current = url.value
         var hop = 0
@@ -285,14 +298,14 @@ class SiteRulesCoordinator(
                 fetchOverflowEpoch = epoch // clear overflow → skip-rule downgrade
                 return null
             }
-            val document = runCatching { io(spec, current) }.getOrNull() ?: return null
+            val document = runCatching { io(effectiveSpec, current) }.getOrNull() ?: return null
             fetchBudget.chargeBytes(epoch, document.body.length.toLong())
             // T86: a credential-bearing hop charges the ledger and is held to the stricter
             // with-credentials redirect rule (cross-origin with a session cookie refuses).
             if (document.credentialUsed) fetchBudget.noteCredentialUse(epoch)
             if (document.status in 300..399 && document.location != null) {
                 val next = RuleFetchPolicy.redirectHop(current, document.location, hosts, credentialUsed = document.credentialUsed)
-                if (!next.allowed) {
+                if (!next.allowed || (imported && next.resolvedUrl?.let { ImportedTier.redirectAllowed(current, it) } == false)) {
                     fetchOverflowEpoch = epoch
                     return null
                 }
@@ -304,6 +317,24 @@ class SiteRulesCoordinator(
             return document
         }
         return null
+    }
+
+    /** Opens (or continues) the imported-tier wall window for [epoch]; returns elapsed ms. */
+    private fun importedWallStart(epoch: Long) {
+        synchronized(fetchGuard) {
+            if (importedWallEpoch != epoch) {
+                importedWallEpoch = epoch
+                importedWallStartMs = System.currentTimeMillis()
+            }
+        }
+    }
+
+    private fun importedWallElapsedMs(epoch: Long): Long = synchronized(fetchGuard) {
+        if (importedWallEpoch != epoch) {
+            importedWallEpoch = epoch
+            importedWallStartMs = System.currentTimeMillis()
+            0L
+        } else System.currentTimeMillis() - importedWallStartMs
     }
 
     private fun cachedFetch(epoch: Long, key: FetchKey): RuleDocument? = synchronized(fetchGuard) {
@@ -335,7 +366,7 @@ class SiteRulesCoordinator(
     fun matchedNote(generation: Long?, pageUrl: String?): String? {
         val hit = matched ?: return null
         if (generation == null || pageUrl == null || hit.epoch != generation || hit.url != pageUrl) return null
-        return "站点规则"
+        return if (hit.imported) "导入规则" else "站点规则"
     }
 
     /**

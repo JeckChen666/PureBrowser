@@ -253,6 +253,9 @@ object RuleTemplatePolicy {
     }
 }
 
+/** Where a rule came from (T90): shipped data, or the user's local import channel. */
+enum class RuleSource { BUILT_IN, IMPORTED }
+
 class SiteRule(
     val id: String,
     val version: Int,
@@ -265,6 +268,8 @@ class SiteRule(
     val fetch: List<FetchSpec> = emptyList(),
     /** Declared login-session reuse (schema v3+); null keeps v0.1.7 behavior. */
     val session: SessionSpec? = null,
+    /** Provenance marker: IMPORTED rules run under the tighter D5 imported tier. */
+    val source: RuleSource = RuleSource.BUILT_IN,
 ) {
     // Never dump patterns or notes into diagnostics.
     override fun toString() = "SiteRule(id=$id, version=$version, actions=${actions.size}, captures=${captureEndpoints.size}, fetch=${fetch.size})"
@@ -315,6 +320,7 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
         const val MAX_REGEX_GROUP_NAMES = 4
         const val MAX_REGEX_PATTERN_LENGTH = 256
         private val cached = AtomicReference<RuleSet?>()
+        private val mergedCached = AtomicReference<RuleSet?>()
 
         /** Built-in data: read once per process; a missing, oversized or malformed asset yields an empty set. */
         fun load(context: Context): RuleSet {
@@ -337,8 +343,36 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
             return cached.get() ?: loaded
         }
 
+        /**
+         * Built-ins merged with the user's local import (T90): built-ins keep precedence on id
+         * collisions, imported entries carry the IMPORTED marker, and the merged view is cached
+         * per process exactly like the built-in one. [invalidateMerged] drops the cache after an
+         * import or clear so the next evaluation sees the new data.
+         */
+        fun loadMerged(context: Context): RuleSet {
+            mergedCached.get()?.let { return it }
+            val builtIn = load(context)
+            val imported = ImportedRuleStore.read(context)?.let { parseImported(it) } ?: EMPTY
+            val merged = RuleSetMerger.merge(builtIn, imported)
+            mergedCached.compareAndSet(null, merged)
+            return mergedCached.get() ?: merged
+        }
+
+        /** Drops the merged cache (after an import change); the built-in cache is unaffected. */
+        fun invalidateMerged() { mergedCached.set(null) }
+
+        /**
+         * Import-channel parse (T90): the SAME load-time validation as [parse], with every rule
+         * flagged IMPORTED so the coordinator applies the D5 imported tier and the analyze
+         * button labels the provenance. A document below schema v3 parses but keeps v0.1.7
+         * semantics; the import validator rejects those before this is reached with one.
+         */
+        fun parseImported(text: String): RuleSet = parse(text, RuleSource.IMPORTED)
+
         /** Lenient, dependency-free parse kept JVM-testable: any malformed entry is skipped, never fatal. */
-        fun parse(text: String): RuleSet {
+        fun parse(text: String): RuleSet = parse(text, RuleSource.BUILT_IN)
+
+        private fun parse(text: String, source: RuleSource): RuleSet {
             val trimmed = text.trim()
             if (trimmed.isEmpty() || trimmed.length > MAX_FILE_BYTES_V3) return EMPTY
             val root = runCatching { RuleJsonParser(trimmed).parseDocument() }.getOrNull() as? Map<String, Any?>
@@ -355,7 +389,7 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
             for (raw in rawRules) {
                 if (out.size >= maxRules) break
                 val entry = raw as? Map<String, Any?> ?: continue
-                val rule = parseRule(entry, modern, regexBudget) ?: continue
+                val rule = parseRule(entry, modern, regexBudget, source) ?: continue
                 if (ids.add(rule.id)) out += rule
             }
             return RuleSet(out.toList(), version)
@@ -364,7 +398,7 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
         /** Aggregate compiled-regex counter; a rule that would cross the ceiling is rejected whole. */
         private class RegexBudget { var used = 0 }
 
-        private fun parseRule(entry: Map<String, Any?>, modern: Boolean, budget: RegexBudget): SiteRule? {
+        private fun parseRule(entry: Map<String, Any?>, modern: Boolean, budget: RegexBudget, source: RuleSource): SiteRule? {
             val id = (entry["id"] as? String)?.trim()?.takeIf { it.isNotEmpty() && it.length <= 64 } ?: return null
             val version = (entry["version"] as? Double)?.toInt() ?: 1
             val matchRaw = entry["match"] as? Map<String, Any?> ?: return null
@@ -397,7 +431,7 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
             val fetch = if (modern) parseFetch(entry, id, hostsPattern, pathPattern, path) ?: return null else emptyList()
             // A DECLARED session that fails validation rejects the rule; an absent block is v0.1.7.
             val session = if (modern && entry.containsKey("session")) parseSession(entry, hostsPattern, hosts) ?: return null else null
-            return SiteRule(id, version, RuleMatch(hosts, path, hostsPattern, pathPattern), actions.toList(), note, captureEndpoints, fetch, session)
+            return SiteRule(id, version, RuleMatch(hosts, path, hostsPattern, pathPattern), actions.toList(), note, captureEndpoints, fetch, session, source)
         }
 
         /** Null means an endpoint pattern failed to compile: the rule is rejected, never fatal. */
@@ -524,6 +558,11 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
          */
         internal fun parseJsonValue(text: String): Any? = runCatching {
             RuleJsonParser(text, maxDepth = 16, maxStringChars = 65_536).parseDocument()
+        }.getOrNull()
+
+        /** Bounded generic-JSON reader for the import channel's canonicalization (T90). */
+        internal fun parseBoundedJson(text: String, maxDepth: Int, maxStringChars: Int): Any? = runCatching {
+            RuleJsonParser(text, maxDepth = maxDepth, maxStringChars = maxStringChars).parseDocument()
         }.getOrNull()
 
         private fun patternText(value: Any?): String? =
