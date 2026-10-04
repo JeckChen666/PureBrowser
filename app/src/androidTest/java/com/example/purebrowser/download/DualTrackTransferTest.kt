@@ -305,7 +305,7 @@ class DualTrackTransferTest {
             // Every slice costs one redirect hop plus the ranged answer.
             if (url.contains("h=1")) ranged(DualTrackTestSupport.video, headers["Range"]!!)
             else response(byteArrayOf(), 302, mapOf("Location" to "$url&h=1"))
-        }, AccessContextProvider { null }).run(id, TransferCancellation())
+        }, AccessContextProvider { null }, chunkBytes = chunk).run(id, TransferCancellation())
         assertEquals(chunks + DualTrackTransfer.CHUNK_OPEN_ALLOWANCE, calls.toLong())
         assertEquals(FailureKind.HTTP_REJECTED, repo.record(id)!!.failure)
         assertEquals(DualTrackTransfer.CHUNK_BUDGET_MESSAGE, repo.record(id)!!.safeFailure)

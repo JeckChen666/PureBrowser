@@ -26,28 +26,20 @@ class V015YouTubeProductAudit {
    val draft=DownloadDraft(MediaCandidate(video.url,MediaKind.FILE,setOf(Evidence.SITE),"video/mp4"),"PureBrowser authorized Sintel audit",sourceUrl="https://www.youtube.com/watch?v=eRsGyueVLvQ",sourceTitle=media.title,useAccessContext=false,dualTrackPlan=plan)
    val id=repo.enqueue(draft,false,"Sintel-CC-BY-3.0.mp4")
    val start=System.currentTimeMillis()
-   // Explicit test-only normal-library Range-carrier experiment. Not a production/UI claim.
-   // No chunking, token edits, credentials or relaxed length/mux/publication contracts.
-   val queryCarrier=InstrumentationRegistry.getArguments().getString("v015FullRangeCarrier")=="query"
+   // Production header-mode transport only. The former query-param Range-carrier experiment was
+   // removed: the V016 battery shows the CDN ignores that carrier (200 without Content-Range
+   // inside its access window, 403 beyond), so it can neither chunk nor verify byte slices.
    val raw=UrlConnectionTransport()
-   val transport=if(!queryCarrier)raw else HttpTransport { url,headers,cancel ->
-    val declared=when(url){video.url->video.length;audio.url->audio.length;else->error("unexpected track request")}
-    val uri=java.net.URI(url)
-    require(uri.host.endsWith(".googlevideo.com") && uri.scheme=="https" && uri.port in setOf(-1,443) && uri.rawFragment==null)
-    require(uri.rawQuery!=null && uri.rawQuery.split('&').none{it.substringBefore('=')=="range"})
-    require(headers.entries.singleOrNull{it.key.equals("Range",true)}?.value=="bytes=0-${declared-1}")
-    require(headers.keys.none{it.equals("Cookie",true)||it.equals("Authorization",true)})
-    val target=url+"&range=0-${declared-1}"
-    RequestPolicy.validateUrl(target,false)
-    raw.open(target,headers.filterKeys{!it.equals("Range",true)},cancel)
-   }
-   DualTrackTransfer(repo,transport,AccessContextProvider{error("no cookie")}).run(id,TransferCancellation())
+   // Bounded scalar observation only: how many chunk-form opens the transfer issued before settling.
+   var opens=0
+   val counted=HttpTransport{url,headers,cancel->opens++;raw.open(url,headers,cancel)}
+   DualTrackTransfer(repo,counted,AccessContextProvider{error("no cookie")}).run(id,TransferCancellation())
    val record=repo.record(id)!!
    val report=JSONObject().put("videoId",media.videoId).put("videoFormat",video.id).put("audioFormat",audio.id).put("version","0.1.5-dev/code14")
     .put("status",record.taskStatus.name).put("safeFailure",record.safeFailure).put("elapsedMs",System.currentTimeMillis()-start)
-    .put("fullRangeCarrier",if(queryCarrier)"QUERY_TEST_ONLY" else "HEADER_PRODUCT_DEFAULT")
-    .put("currentUiAcceptancePassed",false).put("productDefaultTransport",!queryCarrier).put("productionTransportChanged",false)
-    .put("scope",if(queryCarrier)"ONE_FULL_QUERY_CARRIER_POC_NOT_CURRENT_UI_ACCEPTANCE" else "DEFAULT_PRODUCT_TRANSFER")
+    .put("chunkOpens",opens).put("receivedBytes",record.received)
+    .put("currentUiAcceptancePassed",false).put("productDefaultTransport",true).put("productionTransportChanged",false)
+    .put("scope","DEFAULT_PRODUCT_TRANSFER")
    val resultFile=File(context.getExternalFilesDir(null),"v015/sintel-result.json").apply{parentFile!!.mkdirs()}
    resultFile.writeText(report.toString(2))
    assertEquals(record.safeFailure,TaskStatus.SUCCEEDED,record.taskStatus)

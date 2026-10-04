@@ -44,9 +44,11 @@ internal object V016YouTubeGateDiagnosticSupport {
         var urlHasPotParam = false
         var urlHasIpParam = false
         var urlHasCpnParam = false
+        var urlHasRatebypassParam = false
         var status: Int? = null
         var redirectsObserved = 0
         var contentRangeTotal: Long? = null
+        var contentLengthMatchesDeclared = false
         var bodyBytesRead = 0
         var prefix = Prefix.NOT_OBSERVED
         var rangeHeaderObserved = "bytes=0-$RANGE_END"
@@ -60,9 +62,10 @@ internal object V016YouTubeGateDiagnosticSupport {
             .put("trackItag", trackItag ?: JSONObject.NULL).put("trackHeight", trackHeight)
             .put("declaredLength", declaredLength)
             .put("urlHasPotParam", urlHasPotParam).put("urlHasIpParam", urlHasIpParam)
-            .put("urlHasCpnParam", urlHasCpnParam)
+            .put("urlHasCpnParam", urlHasCpnParam).put("urlHasRatebypassParam", urlHasRatebypassParam)
             .put("httpStatus", status ?: JSONObject.NULL).put("redirects", redirectsObserved)
             .put("contentRangeTotal", contentRangeTotal ?: JSONObject.NULL)
+            .put("contentLengthMatchesDeclared", contentLengthMatchesDeclared)
             .put("bodyBytesRead", bodyBytesRead).put("prefixFlag", prefix.name)
             .put("elapsedMs", elapsedMs).put("rangeEnd", RANGE_END)
             .put("bodyReadLimit", MAX_BODY_BYTES).put("anonymous", true).put("rangeHeader", rangeHeaderObserved)
@@ -76,6 +79,12 @@ internal object V016YouTubeGateDiagnosticSupport {
     fun urlHasQueryParam(url: String, name: String): Boolean = URI(url).rawQuery?.split('&')?.any {
         runCatching { URLDecoder.decode(it.substringBefore('='), "UTF-8").lowercase() }.getOrDefault("") == name
     } ?: false
+
+    /** Sorted distinct decoded query parameter NAMES only; values are never parsed, kept or printed. */
+    fun queryParamNames(url: String): List<String> = URI(url).rawQuery?.split('&')?.mapNotNull {
+        runCatching { URLDecoder.decode(it.substringBefore('=', ""), "UTF-8").lowercase() }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+    }?.distinct()?.sorted() ?: emptyList()
 
     private fun validateTrackUrl(url: String) {
         RequestPolicy.validateUrl(url, false)
@@ -92,9 +101,10 @@ internal object V016YouTubeGateDiagnosticSupport {
         client: String, resolveMs: Long, track: YouTubeTrack, request: DownloadRecord,
         transport: HttpTransport, clock: () -> Long, scheduler: ScheduledThreadPoolExecutor,
         deadlineMs: Long = ARM_DEADLINE_MS, rangeHeader: String = "bytes=0-$RANGE_END",
+        queryRange: String? = null, noRange: Boolean = false,
     ): Arm {
         val result = Arm(client, resolveMs)
-        result.rangeHeaderObserved = rangeHeader
+        result.rangeHeaderObserved = when { noRange -> "none"; queryRange != null -> "query:$queryRange"; else -> rangeHeader }
         val start = clock()
         val token = TransferCancellation()
         val expired = AtomicBoolean(false)
@@ -108,15 +118,24 @@ internal object V016YouTubeGateDiagnosticSupport {
             result.urlHasPotParam = urlHasQueryParam(url, "pot")
             result.urlHasIpParam = urlHasQueryParam(url, "ip")
             result.urlHasCpnParam = urlHasQueryParam(url, "cpn")
+            result.urlHasRatebypassParam = urlHasQueryParam(url, "ratebypass")
             for (hop in 0..MAX_REDIRECTS) {
                 token.check()
                 // Same production media-open/header policy as V015: policy headers only, no
-                // cookies/credentials, anonymous UA; the fixed Range is the single added header.
+                // cookies/credentials, anonymous UA; the fixed Range is the single added header,
+                // unless the arm carries its slice window in the range query parameter instead
+                // (the browser-player carrier; the value is our own closed interval).
                 val headers = RequestPolicy.headers(request, url, null).toMutableMap()
                 check(headers.keys.none { it.equals("Cookie", true) || it.equals("Authorization", true) })
-                headers["Range"] = rangeHeader
+                if (queryRange == null && !noRange) headers["Range"] = rangeHeader
+                val target = if (queryRange == null) url else {
+                    check(!urlHasQueryParam(url, "range"))
+                    val appended = url + (if (URI(url).rawQuery == null) "?" else "&") + "range=$queryRange"
+                    validateTrackUrl(appended)
+                    appended
+                }
                 result.layer = Layer.NETWORK_OPEN
-                transport.open(url, headers, token).use { response ->
+                transport.open(target, headers, token).use { response ->
                     result.status = response.status
                     result.hops += hopJson(response, hop)
                     if (response.status in redirects) {
@@ -131,6 +150,8 @@ internal object V016YouTubeGateDiagnosticSupport {
                         result.layer = Layer.BODY_READ
                         result.contentRangeTotal = response.header("Content-Range")
                             ?.let(contentRange::matchEntire)?.groupValues?.get(3)?.toLongOrNull()
+                        result.contentLengthMatchesDeclared =
+                            response.header("Content-Length")?.trim()?.toLongOrNull() == track.length
                         response.body().use { input ->
                             val prefix = ByteArray(MAX_BODY_BYTES)
                             try {

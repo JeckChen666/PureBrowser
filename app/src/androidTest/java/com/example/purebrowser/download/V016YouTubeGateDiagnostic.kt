@@ -80,10 +80,14 @@ class V016YouTubeGateDiagnostic {
         assertEquals("Every client arm must produce an observation record", clients.size, arms.size)
     }
 
-    /** Single-variable range-shape battery: ONE resolve (IOS baseline), then three bounded GETs —
-     * A closed prefix (control), B open-ended (bytes=0-), C closed mid-file 1 MiB — over the SAME
-     * resolved address. Observation only; asserts record count, never statuses. */
-    @Test(timeout = 120_000) fun segmentedRangeBoundedDiagnostic() {
+    /** Single-variable range-shape battery: ONE resolve (IOS baseline), then bounded GETs over the
+     * SAME resolved addresses, one variable per arm — A closed prefix (control), B open-ended
+     * (bytes=0-), C closed mid-file 1 MiB; D–N prefix-span brackets on the largest and smallest
+     * video tracks; O–Q the audio track's span ceiling; R–W the range query-param carrier;
+     * X–Z/AA/AB span-cap vs end-offset-window discrimination; AG–AI plain no-Range GETs;
+     * AC/AD/AF the window rule on the largest track. Parameter NAMES only are ever printed.
+     * Observation only; asserts record count, never statuses. */
+    @Test(timeout = 240_000) fun segmentedRangeBoundedDiagnostic() {
         val args = InstrumentationRegistry.getArguments()
         val video = args.getString("video") ?: return // absent -> deliberate no-op
         require(Regex("[A-Za-z0-9_-]{11}").matches(video)) { "video argument must be an 11-char id" }
@@ -95,13 +99,19 @@ class V016YouTubeGateDiagnostic {
             DualTrackTestSupport.test { repository ->
                 val started = SystemClock.elapsedRealtime()
                 val media = runBlocking {
-                    withTimeout(Gate.ARM_DEADLINE_MS) {
+                    // The resolver itself budgets 45s; the battery only needs one resolve to succeed.
+                    withTimeout(40_000) {
                         YouTubeResolver(context, repository::guardedTransport).resolve(video, "IOS")
                     }
                 }
                 val resolveMs = SystemClock.elapsedRealtime() - started
                 val track = media.videos.maxBy { it.height }
                 check(track.length > 2_097_152) { "track too small for a mid-file probe" }
+                // Parameter NAMES only (never values), one bounded line per resolved track.
+                (media.videos + media.audios).forEach { resolved ->
+                    println("SEG[params itag=${resolved.id} height=${resolved.height} len=${resolved.length}] " +
+                        Gate.queryParamNames(resolved.url).joinToString(","))
+                }
                 for ((shape, range) in shapes) {
                     val arm = Gate.probe("IOS", resolveMs, track, request(), repository.guardedTransport(UrlConnectionTransport()),
                         SystemClock::elapsedRealtime, scheduler,
@@ -109,13 +119,82 @@ class V016YouTubeGateDiagnostic {
                     arms += shape to arm
                     println("SEG[range=$shape] ${arm.json()}")
                 }
+                // T67 audit layer: prefix spans on both extreme tracks (labels D–I), then a
+                // threshold bracket on the smallest track (labels J–N), the audio track's span
+                // ceiling (labels O–Q), and the browser-player range query carrier (labels R–T).
+                val smallest = media.videos.minBy { it.height }
+                val audioTrack = media.audios.first()
+                val spanArms = listOf(
+                    "D" to (track to "bytes=0-4194303"), "E" to (track to "bytes=0-1048575"), "F" to (track to "bytes=0-262143"),
+                    "G" to (smallest to "bytes=0-4194303"), "H" to (smallest to "bytes=0-1048575"), "I" to (smallest to "bytes=0-65535"),
+                    "J" to (smallest to "bytes=65536-131071"), "K" to (smallest to "bytes=0-131071"),
+                    "L" to (smallest to "bytes=0-262143"), "M" to (smallest to "bytes=0-524287"), "N" to (smallest to "bytes=0-786431"))
+                for ((label, spanTrack) in spanArms) {
+                    check(spanTrack.first.length > spanTrack.second.substringAfterLast('-').toLong()) { "span exceeds track" }
+                    val arm = Gate.probe("IOS", resolveMs, spanTrack.first, request(), repository.guardedTransport(UrlConnectionTransport()),
+                        SystemClock::elapsedRealtime, scheduler,
+                        deadlineMs = Gate.ARM_DEADLINE_MS, rangeHeader = spanTrack.second)
+                    arms += label to arm
+                    println("SEG[span=$label] ${arm.json()}")
+                }
+                for (label in listOf("O", "P", "Q")) {
+                    val range = when (label) { "O" -> "bytes=0-262143"; "P" -> "bytes=0-1048575"; else -> "bytes=0-4194303" }
+                    check(audioTrack.length > range.substringAfterLast('-').toLong()) { "span exceeds track" }
+                    val arm = Gate.probe("IOS", resolveMs, audioTrack, request(), repository.guardedTransport(UrlConnectionTransport()),
+                        SystemClock::elapsedRealtime, scheduler, deadlineMs = Gate.ARM_DEADLINE_MS, rangeHeader = range)
+                    arms += label to arm
+                    println("SEG[span=$label] ${arm.json()}")
+                }
+                val queryArms = listOf(
+                    "R" to (smallest to "0-524287"), "S" to (smallest to "0-262143"), "T" to (smallest to "0-4194303"),
+                    "U" to (audioTrack to "0-262143"), "V" to (track to "0-4194303"), "W" to (smallest to "0-${smallest.length - 1}"))
+                for ((label, carrierTrack) in queryArms) {
+                    check(carrierTrack.first.length > carrierTrack.second.substringAfter('-').toLong()) { "span exceeds track" }
+                    val arm = Gate.probe("IOS", resolveMs, carrierTrack.first, request(), repository.guardedTransport(UrlConnectionTransport()),
+                        SystemClock::elapsedRealtime, scheduler, deadlineMs = Gate.ARM_DEADLINE_MS, queryRange = carrierTrack.second)
+                    arms += label to arm
+                    println("SEG[query=$label] ${arm.json()}")
+                }
+                // Span-cap vs end-offset-cap discrimination on the smallest track: a full 256 KiB
+                // span at a 2 MiB offset (X), a small span crossing the observed prefix ceiling (Y)
+                // and the exact final-chunk shape a 256 KiB transfer would issue (Z); plus the same
+                // discrimination on the audio track (labels AA/AB).
+                val offsetArms = listOf(
+                    Triple("X", smallest, "bytes=2097152-2359295"), Triple("Y", smallest, "bytes=200000-331071"),
+                    Triple("Z", smallest, "bytes=4718592-4865642"), Triple("AA", audioTrack, "bytes=10485760-10747903"),
+                    Triple("AB", audioTrack, "bytes=14155776-14373563"))
+                for ((label, offsetTrack, range) in offsetArms) {
+                    check(offsetTrack.length > range.substringAfterLast('-').toLong()) { "span exceeds track" }
+                    val arm = Gate.probe("IOS", resolveMs, offsetTrack, request(), repository.guardedTransport(UrlConnectionTransport()),
+                        SystemClock::elapsedRealtime, scheduler, deadlineMs = Gate.ARM_DEADLINE_MS, rangeHeader = range)
+                    arms += label to arm
+                    println("SEG[offset=$label] ${arm.json()}")
+                }
+                // Plain sequential GET (no Range header, no range param): does the anonymous gate
+                // stream the whole resource with a full Content-Length? Labels AG–AI. Then the
+                // window rule on the largest track: an 8 MiB prefix (AC), a 1 MiB span at ~85 MiB
+                // (AD) and the exact final chunk (AF) — span-cap vs end-offset-window semantics.
+                for ((label, plainTrack) in listOf("AG" to smallest, "AH" to audioTrack, "AI" to track)) {
+                    val arm = Gate.probe("IOS", resolveMs, plainTrack, request(), repository.guardedTransport(UrlConnectionTransport()),
+                        SystemClock::elapsedRealtime, scheduler, deadlineMs = Gate.ARM_DEADLINE_MS, noRange = true)
+                    arms += label to arm
+                    println("SEG[plain=$label] ${arm.json()}")
+                }
+                for ((label, range) in listOf("AC" to "bytes=0-8388607", "AD" to "bytes=85000192-85983231",
+                    "AF" to "bytes=167772160-170210372")) {
+                    check(track.length > range.substringAfterLast('-').toLong()) { "span exceeds track" }
+                    val arm = Gate.probe("IOS", resolveMs, track, request(), repository.guardedTransport(UrlConnectionTransport()),
+                        SystemClock::elapsedRealtime, scheduler, deadlineMs = Gate.ARM_DEADLINE_MS, rangeHeader = range)
+                    arms += label to arm
+                    println("SEG[window=$label] ${arm.json()}")
+                }
             }
         } finally {
             scheduler.shutdownNow()
-            println("SEG[summary] arms=${arms.size} expected=${shapes.size} twoXxOr206=" +
+            println("SEG[summary] arms=${arms.size} expected=${shapes.size + 31} twoXxOr206=" +
                 arms.filter { it.second.twoXxOr206 }.joinToString(",") { it.first })
         }
-        assertEquals("Every range shape must produce an observation record", shapes.size, arms.size)
+        assertEquals("Every range shape must produce an observation record", shapes.size + 31, arms.size)
     }
 
     @Test fun fixtureRangeGetUsesProductionHeaderPolicyAndObservesScalarsOnly() = withScheduler { scheduler ->
