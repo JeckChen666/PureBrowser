@@ -8,7 +8,7 @@ The Android app does **not** include Node, Python, FFmpeg, a cloud parser or an 
 - meriyah 7.3.3 — ISC
 - esbuild 0.28.2 — build tool only, not an app runtime
 
-`package-lock.json` fixes resolved tarball integrity; `provenance.json` records the runtime bundle SHA-256. Original runtime notices are distributed in `app/src/main/assets/site-parser/licenses/` and the linked `.LEGAL.txt`. The About screen can display the license texts. PureBrowser's root Apache-2.0 license is unchanged. PeerTube integration is original public-API interoperability, not copied AGPL server code.
+`package-lock.json` fixes resolved tarball integrity; `provenance.json` records the runtime bundle SHA-256. Original runtime notices are distributed as the tracked files in `app/src/main/assets/site-parser/licenses/`. The current pinned build emits no `.LEGAL.txt`; `--legal-comments=linked` does not replace these separately packaged license notices. The About screen can display the license texts. PureBrowser's root Apache-2.0 license is unchanged. PeerTube integration is original public-API interoperability, not copied AGPL server code.
 
 Rebuild from this directory:
 

@@ -84,7 +84,9 @@
       "Four distinct playback platforms; shared Blender creator provenance does NOT mean four independent authors."
     ],
     "pendingPrimaryAuthorCorroborations": 0,
-    "followupPrimaryAuthorCorroboratedCount": 4
+    "followupPrimaryAuthorCorroboratedCount": 4,
+    "renditionIdentityDiscrepanciesPending": 2,
+    "allRenditionIdentitiesValidated": false
   },
   "samples": [
     {
@@ -729,5 +731,37 @@
         "playbackOrAppTestPerformed": false
       }
     }
-  ]
+  ],
+  "followupPreflight": {
+    "date": "2026-10-04",
+    "report": "docs/V0.1.5-CORPUS-PREFLIGHT.md",
+    "scope": "anonymous primary metadata; no rendition bytes or device/app results",
+    "registrationPreserved": true,
+    "strictCorpusReady": false,
+    "discrepancies": [
+      {
+        "sampleId": "PUB-WC-TEARS",
+        "status": "registered_dimensions_and_size_do_not_match_current_primary_metadata",
+        "currentPageId": 40033389,
+        "currentWidth": 1920,
+        "currentHeight": 800,
+        "currentBytes": 571346576
+      },
+      {
+        "sampleId": "PUB-WC-ELEPHANTS",
+        "status": "canonical_alias_upload_identity_and_service_license_do_not_match_registration",
+        "currentCanonicalTitle": "File:Elephants Dream.ogv",
+        "currentPageId": 8819826,
+        "currentUploadTimestamp": "2009-12-24T02:08:36Z",
+        "currentBytes": 35614993,
+        "currentServiceLicense": "CC BY-SA 2.5"
+      }
+    ],
+    "limits": [
+      "Previous registration assertions are preserved without claiming they were verified historical file versions; they are not silently replaced.",
+      "Metadata differences do not prove the website recently changed the upload.",
+      "Author movie grants are distinct from selected-upload integrity and complete credits.",
+      "No change to the eight-sample denominator, no strict freeze or success-rate claim."
+    ]
+  }
 }

@@ -35,3 +35,22 @@ python3 -m unittest discover -s tools/verification -p 'test_*.py' -v
 `device_state_backup.py` 是原包历史回归的独立保护工具，不被这个脚本调用。
 
 终端计数只接受具备 class/test 身份的用例结束，不将 `sendStatus(0, evidence)` 的证据消息当作通过；匿名负状态仍拒绝放行。主机计数/构建拒绝回归现为9项。正式签名跨UID收尾使用独立 `SignedReleaseShareAudit`；androidTest APK单独开启debuggable用于读取接收器报告，生产APK不受影响。
+
+## v0.1.5 初步旧版观察汇总（不算配对增益）
+
+`summary_v015` 由 `summarize_v015_baseline.py` 离线生成：读取候选登记、已安装正式 code13 APK 的 hash／环境、逐行记录和脱敏证据，保留未测行。网址／版本错配、证据缺失／越界、伪成功状态拒绝接受。初步观察永远不输出成品率或跨站增益，不把 UI「已完成」、地址、前缀或主机文件检查当作 Android 声画／跨 UID 验收。
+
+```sh
+python3 tools/verification/summarize_v015_baseline.py \
+  --baseline app/build/reports/v0.1.5/next-round/baseline-code13 \
+  --output app/build/reports/v0.1.5/next-round/baseline-code13/summary.json
+python3 -m unittest discover -s tools/verification -p test_v015_baseline_summary.py -v
+```
+
+已有初步观察不等于严格语料冻结：须补上传版本／归属、统一正常操作和候选配对，并完成真实成品验收。输入法把作品 ID 改词、网页变化、原始文件与转码混用等情况必须保留并排除假归因，不能作为新版失败→成功的证据。
+
+### YouTube 有界诊断
+
+新增 `V015YouTubeTransferDiagnosticTest` 的10个 `fixture*` 方法只用内存 transport。选显式方法 cohort 可不触网、不带跳过地验证：同次解析／同轨／同头条件下两种单变量 Range 对照、重复拒绝停止、取消／deadline、响应合同与脱敏。
+
+仅方法 `#sintelRangeSemanticsBoundedDiagnostic` 配合 `-e v015YouTubeTransferDiagnostic true` 才触发实站；不随 `v015RealSites` 自动执行。完整 Range header、64字节 Range header、64字节 query range 三种语义；最多192字节 body观测，每种最多2次安全重定向／12秒 deadline。连续两次访问拒绝或其他非访问故障停止，不重试。真实完整传输必须另用产品路径、另记结果；诊断成功也不是成品成功。
