@@ -44,6 +44,8 @@ class BrowserEngine(
     val page = mutablePage.asStateFlow()
     val generation: Long get() = pageEpoch.get()
     @Volatile private var view: WebView? = null
+    /** Optional User-Agent override applied at attach; null keeps the platform default. */
+    @Volatile var forcedUserAgent: String? = null
     /** User-Agent snapshot taken at attach; safe to read from any sniffer thread. */
     @Volatile var observedUserAgent: String? = null
         private set
@@ -86,6 +88,9 @@ class BrowserEngine(
             javaScriptCanOpenWindowsAutomatically = false
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
+        // Optional caller override (diagnostics); applied before the first load so the whole
+        // page is negotiated under one identity.
+        forcedUserAgent?.takeIf { it.isNotBlank() }?.let { webView.settings.userAgentString = it }
         // Cached on the main thread: sniffing callbacks may run on WebView IO threads.
         observedUserAgent = webView.settings.userAgentString
         webView.addJavascriptInterface(signalBridge, "PbSniffBridge")

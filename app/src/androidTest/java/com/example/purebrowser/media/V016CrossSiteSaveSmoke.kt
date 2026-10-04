@@ -81,6 +81,9 @@ class V016CrossSiteSaveSmoke {
         )
         val sessionHost = AtomicReference<String>()
         try {
+            InstrumentationRegistry.getArguments().getString("ua")?.takeIf { it.isNotBlank() }?.let { ua ->
+                session.engine.forcedUserAgent = ua
+            }
             instrument.runOnMainSync {
                 session.mount(FrameLayout(instrument.targetContext))
                 sessionHost.set(session.engine.page.value.url)
