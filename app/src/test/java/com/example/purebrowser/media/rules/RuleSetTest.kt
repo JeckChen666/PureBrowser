@@ -118,4 +118,46 @@ class RuleSetTest {
         assertEquals("one", set.byId("one")?.id)
         assertNull(set.byId("missing"))
     }
+
+    @Test fun captureEndpointsFollowMatchFaceSafetyCaps() {
+        val five = (1..5).joinToString(",") { """"\\/ep\\/$it\\.json"""" }
+        val set = RuleSet.parse(json("""
+            {"id":"caps","version":1,"match":{"hosts":"a\\.example"},"actions":[{"type":"manifestHint","kind":"hls"}],
+             "captureEndpoints":[$five]}
+        """.trimIndent()))
+        assertEquals(listOf("\\/ep\\/1\\.json", "\\/ep\\/2\\.json", "\\/ep\\/3\\.json", "\\/ep\\/4\\.json"), set.rules.single().captureEndpoints)
+    }
+
+    @Test fun invalidCaptureEndpointRejectsTheWholeRule() {
+        val set = RuleSet.parse(json("""
+            {"id":"bad","version":1,"match":{"hosts":"a\\.example"},"actions":[{"type":"manifestHint","kind":"hls"}],
+             "captureEndpoints":["(["]},
+            ${hint("good", hosts = "b.example")}
+        """.trimIndent()))
+        assertEquals(listOf("good"), set.rules.map { it.id })
+    }
+
+    @Test fun captureEndpointSourcesAreDedupedAcrossRulesAndCapped() {
+        fun ruleJson(id: String, hosts: String, vararg endpoints: String): String {
+            val eps = endpoints.joinToString(",") { "\"" + it + "\"" }
+            return """{"id":"$id","version":1,"match":{"hosts":"$hosts"},"actions":[{"type":"manifestHint","kind":"unknown"}],"captureEndpoints":[$eps]}"""
+        }
+        val set = RuleSet.parse(json(
+            ruleJson("one", "a.example", "\\/config$", "\\/feed") + "," +
+                ruleJson("two", "b.example", "\\/config$", "\\/other"),
+        ))
+        assertEquals(listOf("\\/config$", "\\/feed", "\\/other"), set.captureEndpointSources())
+        // Process-wide cap keeps the injected pattern list bounded even at the full rule count.
+        val many = (1..40).joinToString(",") { ruleJson("r$it", "h$it.example", "\\/ep$it") }
+        assertTrue(RuleSet.parse(json(many)).captureEndpointSources().size <= RuleSet.MAX_CAPTURE_ENDPOINTS)
+    }
+
+    @Test fun missingOrMalformedCaptureListYieldsEmptyEndpoints() {
+        val set = RuleSet.parse(json("""
+            {"id":"none","version":1,"match":{"hosts":"a\\.example"},"actions":[{"type":"manifestHint","kind":"hls"}],
+             "captureEndpoints":"nope"}
+        """.trimIndent()))
+        assertEquals(emptyList<String>(), set.rules.single().captureEndpoints)
+        assertEquals(emptyList<String>(), RuleSet.parse(json(hint("bare", hosts = "a.example"))).rules.single().captureEndpoints)
+    }
 }

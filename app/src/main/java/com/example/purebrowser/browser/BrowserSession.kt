@@ -14,6 +14,7 @@ import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.ResourceSniffer
 import com.example.purebrowser.media.fingerprint.FamilyDetector
 import com.example.purebrowser.media.fingerprint.PlayerConfigParser
+import com.example.purebrowser.media.fingerprint.PlayerFamily
 import com.example.purebrowser.media.rules.RuleSet
 import com.example.purebrowser.media.rules.SiteRulesCoordinator
 import com.example.purebrowser.media.verify.AutoProbeQueue
@@ -24,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicReference
 
@@ -40,7 +42,7 @@ class BrowserSession(
     private val app = appContext.applicationContext
     private val context = MutableContextWrapper(app)
     val sniffer = ResourceSniffer()
-    val engine = BrowserEngine(sniffer, message, record.url, changed, visited, link)
+    val engine = BrowserEngine(sniffer, message, record.url, changed, visited, link, ruleSetProvider = { RuleSet.load(app) })
     private val mounted = AtomicReference<WebView?>()
     private val webView: WebView? get() = mounted.get()
     private val verifyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -62,6 +64,8 @@ class BrowserSession(
         coordinator.start()
         engine.pageSignalListener = ::onPageSignal
         engine.pageSettleListener = ::onPageSettled
+        // Warm the built-in rule cache off the main thread so script injection reads it cheaply.
+        verifyScope.launch { RuleSet.load(app) }
     }
 
     /** Built-in site rules run once per page settle; the engine filters non-web addresses before this. */
@@ -76,11 +80,17 @@ class BrowserSession(
         cookieFor = { url -> runCatching { CookieManager.getInstance().getCookie(url) }.getOrNull() },
     )
 
-    /** Read-only page signals become sniffer evidence; config/blob payloads are parsed, never executed. */
+    /** Read-only page signals become sniffer evidence; config/blob/payload contents are parsed, never executed. */
     private fun onPageSignal(epoch: Long, signal: PageSignal) {
         when (signal) {
-            is PageSignal.MediaUrl -> sniffer.observe(epoch, signal.url, Evidence.REQUEST)
-            is PageSignal.IframeSrc -> sniffer.observe(epoch, signal.url, Evidence.REQUEST)
+            is PageSignal.MediaUrl -> {
+                sniffer.observe(epoch, signal.url, Evidence.REQUEST)
+                siteRules.onPageSignal(epoch)
+            }
+            is PageSignal.IframeSrc -> {
+                sniffer.observe(epoch, signal.url, Evidence.REQUEST)
+                siteRules.onPageSignal(epoch)
+            }
             is PageSignal.MseMime -> Unit // mimeType only: no addressable candidate yet
             is PageSignal.PlayerConfig -> {
                 val pageUrl = engine.page.value.url
@@ -93,6 +103,15 @@ class BrowserSession(
                 val pageUrl = engine.page.value.url
                 HlsPlaylistParser.variantSummaries(signal.content, pageUrl)
                     .forEach { sniffer.observe(epoch, it.url, Evidence.DOM) }
+            }
+            is PageSignal.ApiPayload -> {
+                val pageUrl = engine.page.value.url
+                // The rule-scoped endpoint itself surfaces as rule evidence; the bounded body goes
+                // through the generic config walk (URLs + quality labels), never executed.
+                sniffer.observe(epoch, signal.url, Evidence.RULE)
+                PlayerConfigParser.parse(signal.content, PlayerFamily.UNKNOWN, origin = pageUrl, baseUrl = signal.url)
+                    .forEach { sniffer.observe(epoch, it.url, Evidence.RULE, title = it.qualityLabel) }
+                siteRules.onPageSignal(epoch)
             }
         }
     }

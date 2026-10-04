@@ -6,6 +6,9 @@ import com.example.purebrowser.media.ResourceSniffer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -75,5 +78,82 @@ class SiteRulesCoordinatorTest {
         coordinator.onPageSettled(1L, "about:blank")
         coordinator.onPageSettled(1L, "file:///tmp/x.html")
         assertEquals(0, loads)
+    }
+
+    /** Virtual-time fake clock: the debounce delay runs on the test scheduler, no real sleeps. */
+    @Test fun lateSignalsReRunEvaluationDebouncedWithinBudget() = runTest {
+        val sniffer = ResourceSniffer()
+        val set = RuleSet.parse("""{"version":1,"rules":[
+            {"id":"p","version":1,"match":{"hosts":"(^|\\.)tube\\.example$","path":"\\/method\\/video\\.get"},
+             "actions":[{"type":"manifestHint","kind":"unknown"}]}]}""")
+        var requests = emptyList<String>()
+        var evaluations = 0
+        val coordinator = SiteRulesCoordinator(
+            sniffer = sniffer,
+            scope = backgroundScope,
+            ruleSet = { evaluations++; set },
+            recentRequests = { requests },
+            domSnapshot = null,
+            latestPlayerConfig = { null },
+            signalDebounceMs = 500,
+        )
+        val epoch = sniffer.beginPage()
+        coordinator.onPageSettled(epoch, "https://tube.example/watch/1")
+        advanceUntilIdle()
+        assertEquals(1, evaluations) // settle pass: no endpoint seen yet, nothing matched
+        assertTrue(sniffer.candidates.value.isEmpty())
+
+        // The config endpoint fires after settle (late fetch); a signal burst merges into one re-run.
+        requests = listOf("https://api.tube.example/method/video.get?v=1")
+        coordinator.onPageSignal(epoch)
+        coordinator.onPageSignal(epoch)
+        coordinator.onPageSignal(epoch)
+        advanceTimeBy(499)
+        assertEquals(1, evaluations) // still inside the debounce window
+        advanceUntilIdle()
+        assertEquals(2, evaluations) // exactly one debounced extra evaluation
+        val candidate = sniffer.candidates.value.firstOrNull { it.url.startsWith("https://api.tube.example/method/video.get") }
+        assertNotNull(candidate)
+        assertTrue(candidate!!.sources.contains(Evidence.RULE))
+        assertEquals("站点规则", coordinator.matchedNote(epoch, "https://tube.example/watch/1"))
+
+        coordinator.onPageSignal(epoch)
+        advanceUntilIdle()
+        assertEquals(3, evaluations) // second and final extra evaluation for this epoch
+
+        coordinator.onPageSignal(epoch)
+        coordinator.onPageSignal(epoch)
+        advanceUntilIdle()
+        assertEquals(3, evaluations) // per-epoch budget of two extra runs is spent
+    }
+
+    @Test fun signalsForSupersededEpochsNeverReRun() = runTest {
+        val sniffer = ResourceSniffer()
+        val set = RuleSet.parse("""{"version":1,"rules":[
+            {"id":"p","version":1,"match":{"hosts":"(^|\\.)tube\\.example$","path":"\\/method\\/video\\.get"},
+             "actions":[{"type":"manifestHint","kind":"unknown"}]}]}""")
+        var evaluations = 0
+        val coordinator = SiteRulesCoordinator(
+            sniffer = sniffer,
+            scope = backgroundScope,
+            ruleSet = { evaluations++; set },
+            recentRequests = { listOf("https://api.tube.example/method/video.get?v=1") },
+            domSnapshot = null,
+            latestPlayerConfig = { null },
+            signalDebounceMs = 500,
+        )
+        val first = sniffer.beginPage()
+        coordinator.onPageSettled(first, "https://tube.example/one")
+        val second = sniffer.beginPage()
+        coordinator.onPageSettled(second, "https://tube.example/two")
+        coordinator.onPageSignal(first) // late signal for a page older than the settled one
+        advanceUntilIdle()
+        assertEquals(2, evaluations) // only the two settle passes ran
+        assertEquals("站点规则", coordinator.matchedNote(second, "https://tube.example/two"))
+
+        // The live epoch's own signals still get their debounced re-run.
+        coordinator.onPageSignal(second)
+        advanceUntilIdle()
+        assertEquals(3, evaluations)
     }
 }

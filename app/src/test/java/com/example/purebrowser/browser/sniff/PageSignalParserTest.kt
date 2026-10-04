@@ -10,6 +10,14 @@ class PageSignalParserTest {
         assertEquals(PageSignal.BlobManifest("#EXTM3U\nline\tone", true), PageSignalParser.parse("""{"type":"blobManifest","content":"#EXTM3U\nline\tone","truncated":true}"""))
         assertEquals(PageSignal.PlayerConfig("flashvars", """{"video_url":"https://cdn.example/v.mp4"}"""), PageSignalParser.parse("""{"type":"playerConfig","family":"flashvars","raw":"{\"video_url\":\"https://cdn.example/v.mp4\"}"}"""))
         assertEquals(PageSignal.IframeSrc("https://embed.example/frame"), PageSignalParser.parse("""{"type":"iframeSrc","url":"https://embed.example/frame"}"""))
+        assertEquals(
+            PageSignal.ApiPayload("https://api.example/video/1/config", """{"files":{}}"""),
+            PageSignalParser.parse("""{"type":"apiPayload","url":"https://api.example/video/1/config","content":"{\"files\":{}}"}"""),
+        )
+    }
+    @Test fun apiPayloadContentIsCappedAtTheBound() {
+        val signal = PageSignalParser.parse("""{"type":"apiPayload","url":"https://api.example/c","content":"${"a".repeat(300_000)}"}""") as PageSignal.ApiPayload
+        assertEquals(262_144, signal.content.length)
     }
     @Test fun decodesStringEscapesIncludingUnicode() {
         assertEquals(PageSignal.MediaUrl("https://a.example/\u00e9 movie.mp4"), PageSignalParser.parse("""{"type":"mediaUrl","url":"https://a.example/\u00e9 movie.mp4"}"""))
@@ -32,6 +40,10 @@ class PageSignalParserTest {
             """{"type":"playerConfig","family":"flashvars"}""",
             """{"type":"playerConfig","family":7,"raw":"x"}""",
             """{"type":"iframeSrc","url":null}""",
+            """{"type":"apiPayload","url":"https://a.example/c"}""",
+            """{"type":"apiPayload","url":"https://a.example/c","content":123}""",
+            """{"type":"apiPayload","url":42,"content":"x"}""",
+            """{"type":"apiPayload","url":"https://a.example/c","content":""}""",
             """{"type":"unknown","url":"https://a.example/v.mp4"}""",
         ).forEach { assertNull(it, PageSignalParser.parse(it)) }
     }

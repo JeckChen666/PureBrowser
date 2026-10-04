@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "rules": [
     {
       "id": "kvs-family",
@@ -63,21 +63,27 @@
     },
     {
       "id": "vimeo-player-config",
-      "version": 1,
+      "version": 2,
       "match": { "hosts": "(^|\\.)vimeo\\.com$", "path": "player\\.vimeo\\.com\\/video\\/[0-9]+" },
       "actions": [
         { "type": "manifestHint", "kind": "unknown" }
       ],
-      "note": "Vimeo 嵌入播放器配置请求：响应内含 progressive/HLS 地址；本版不截获响应，仅把端点标注为可分析线索"
+      "captureEndpoints": [
+        "player\\.vimeo\\.com\\/video\\/[0-9]+\\/config"
+      ],
+      "note": "Vimeo 嵌入播放器配置请求：按规则截获配置端点的 JSON 响应（只读、限量），从中提取 progressive/HLS 地址"
     },
     {
       "id": "vk-video-api",
-      "version": 1,
+      "version": 2,
       "match": { "hosts": "(^|\\.)vk\\.com$", "path": "\\/method\\/video\\.get" },
       "actions": [
         { "type": "manifestHint", "kind": "unknown" }
       ],
-      "note": "VK video.get API 调用：响应内含 mp4/HLS 地址；本版无凭据捕获，仅标注端点线索"
+      "captureEndpoints": [
+        "\\/method\\/video\\.get"
+      ],
+      "note": "VK video.get API 调用：按规则截获响应 JSON（只读、限量）以提取 mp4/HLS 地址；不捕获任何凭据"
     },
     {
       "id": "reddit-post",

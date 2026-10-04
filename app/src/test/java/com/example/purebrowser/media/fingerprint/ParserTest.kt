@@ -152,4 +152,26 @@ class ParserTest {
         assertEquals(listOf("https://cdn.example.com/ok.mp4"), PlayerConfigParser.parse(json, PlayerFamily.UNKNOWN).map { it.url })
         assertTrue(PlayerConfigParser.parseScript("html5player.setVideoUrlHigh('javascript:alert(1)');setVideoUrl('data:text/html,xx')").isEmpty())
     }
+
+    /** Watch-page config endpoint shape: progressive files under request.files plus HLS CDNs. */
+    @Test fun embeddedPlayerConfigPayloadYieldsProgressiveFilesAndHlsMaster() {
+        val payload = """
+            {"request":{"files":{
+              "progressive":[
+                {"url":"https://media.example/files/1080.mp4","width":1920,"height":1080,"quality":"1080p","mime":"video/mp4"},
+                {"url":"https://media.example/files/720.mp4","width":1280,"height":720,"quality":"720p","mime":"video/mp4"}],
+              "hls":{"cdns":{
+                "primary":{"url":"https://cdn.example/hls/primary.m3u8","origin":"gcs"},
+                "backup":{"url":"https://cdn.example/hls/backup.m3u8","origin":"custom"}}}}}}
+        """.trimIndent()
+        val sources = PlayerConfigParser.parse(payload, PlayerFamily.UNKNOWN, origin = "api", baseUrl = "https://api.example/video/1/config")
+        assertEquals(
+            listOf("https://media.example/files/1080.mp4", "https://media.example/files/720.mp4",
+                "https://cdn.example/hls/primary.m3u8", "https://cdn.example/hls/backup.m3u8"),
+            sources.map { it.url },
+        )
+        assertEquals(listOf("1080p", "720p", null, null), sources.map { it.qualityLabel })
+        assertEquals(listOf(MediaKind.FILE, MediaKind.FILE, MediaKind.HLS, MediaKind.HLS), sources.map { it.kindHint })
+        assertTrue(sources.all { it.family == PlayerFamily.UNKNOWN && it.origin == "api" })
+    }
 }

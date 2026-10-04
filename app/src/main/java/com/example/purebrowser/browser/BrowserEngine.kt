@@ -13,6 +13,7 @@ import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.ResourceSniffer
 import com.example.purebrowser.media.rules.DomNode
 import com.example.purebrowser.media.rules.RuleSelectorPolicy
+import com.example.purebrowser.media.rules.RuleSet
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -35,6 +36,8 @@ class BrowserEngine(
     private val onPageChanged: (BrowserPage) -> Unit = {},
     private val onVisited: (String, String) -> Unit = { _, _ -> },
     private val onLink: (String) -> Unit = {},
+    /** Built-in rule set source for the script's capture-endpoint list; null keeps capture off. */
+    private val ruleSetProvider: () -> RuleSet? = { null },
 ) {
     private val pageEpoch = AtomicLong(0)
     private val mutablePage = MutableStateFlow(BrowserPage(url = initialUrl))
@@ -103,7 +106,7 @@ class BrowserEngine(
                 sameDocumentUpdate=false
                 navigationStartedMs=System.currentTimeMillis()
                 pageEpoch.set(sniffer.beginPage())
-                v.evaluateJavascript(PageSignalScript.JS, null)
+                v.evaluateJavascript(pageSignalScript(), null)
                 publish(BrowserPage(url = url ?: "about:blank", progress = 0))
             }
             override fun onPageFinished(v: WebView, url: String?) {
@@ -202,6 +205,15 @@ class BrowserEngine(
         scanToken++
         domScanRunning = false
     }
+
+    /**
+     * Builds the injected observation script per navigation. The capture-endpoint list comes from
+     * the loaded rule set (all rules' patterns, deduped by [RuleSet.captureEndpointSources]); a
+     * missing or empty set simply leaves response capture off, never blocks injection.
+     */
+    private fun pageSignalScript(): String = PageSignalScript.build(
+        runCatching { ruleSetProvider()?.captureEndpointSources() }.getOrNull().orEmpty(),
+    )
 
     /** Shared passive GET observation used by both the WebView and service-worker clients. */
     private fun observeGetRequest(epoch: Long, request: WebResourceRequest) {

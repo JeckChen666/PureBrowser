@@ -7,6 +7,9 @@ sealed interface PageSignal {
     data class BlobManifest(val content: String, val truncated: Boolean) : PageSignal
     data class PlayerConfig(val family: String, val rawJson: String) : PageSignal
     data class IframeSrc(val url: String) : PageSignal
+
+    /** Bounded JSON body of a rule-matched fetch/XHR endpoint; the request URL is [url]. */
+    data class ApiPayload(val url: String, val content: String) : PageSignal
 }
 
 /**
@@ -30,6 +33,11 @@ object PageSignalParser {
                 if (family.isNullOrEmpty() || raw == null) null else PageSignal.PlayerConfig(family, raw)
             }
             "iframeSrc" -> (fields["url"] as? String)?.takeIf { it.isNotEmpty() }?.let { PageSignal.IframeSrc(it) }
+            "apiPayload" -> {
+                val url = fields["url"] as? String
+                val content = fields["content"] as? String
+                if (url.isNullOrEmpty() || content.isNullOrEmpty()) null else PageSignal.ApiPayload(url, content.take(262_144))
+            }
             else -> null
         }
     }

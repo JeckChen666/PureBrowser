@@ -56,13 +56,22 @@ class SiteRule(
     val match: RuleMatch,
     val actions: List<RuleAction>,
     val note: String?,
+    /** Regex sources of response-capture endpoints; empty for DOM-only rules. */
+    val captureEndpoints: List<String> = emptyList(),
 ) {
     // Never dump patterns or notes into diagnostics.
-    override fun toString() = "SiteRule(id=$id, version=$version, actions=${actions.size})"
+    override fun toString() = "SiteRule(id=$id, version=$version, actions=${actions.size}, captures=${captureEndpoints.size})"
 }
 
 class RuleSet(val rules: List<SiteRule>, val version: Int) {
     fun byId(id: String): SiteRule? = rules.firstOrNull { it.id == id }
+
+    /**
+     * Deduped capture-endpoint pattern sources across every rule, capped process-wide. Built into
+     * the injected page script; only shipped data flows in here, so one page's list is the same
+     * read-only superset for all pages.
+     */
+    fun captureEndpointSources(): List<String> = rules.flatMap { it.captureEndpoints }.distinct().take(MAX_CAPTURE_ENDPOINTS)
 
     companion object {
         val EMPTY = RuleSet(emptyList(), 0)
@@ -71,6 +80,8 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
         const val MAX_ACTIONS_PER_RULE = 4
         const val MAX_FILE_BYTES = 64 * 1024
         const val ASSET_PATH = "rules/site-rules.json"
+        const val MAX_CAPTURE_ENDPOINTS_PER_RULE = 4
+        const val MAX_CAPTURE_ENDPOINTS = 32
         private val cached = AtomicReference<RuleSet?>()
 
         /** Built-in data: read once per process; a missing, oversized or malformed asset yields an empty set. */
@@ -135,8 +146,24 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
                 actions += action
             }
             if (actions.isEmpty()) return null
+            // Same load-time safety caps as the match faces: bounded count/length, compiled here;
+            // an invalid expression rejects the whole rule exactly like a match face.
+            val captureEndpoints = parseCaptureEndpoints(entry["captureEndpoints"]) ?: return null
             val note = (entry["note"] as? String)?.trim()?.takeIf { it.isNotEmpty() }?.take(180)
-            return SiteRule(id, version, RuleMatch(hosts, path, hostsPattern, pathPattern), actions.toList(), note)
+            return SiteRule(id, version, RuleMatch(hosts, path, hostsPattern, pathPattern), actions.toList(), note, captureEndpoints)
+        }
+
+        /** Null means an endpoint pattern failed to compile: the rule is rejected, never fatal. */
+        private fun parseCaptureEndpoints(value: Any?): List<String>? {
+            val raw = value as? List<*> ?: return emptyList()
+            val out = mutableListOf<String>()
+            for (item in raw) {
+                if (out.size >= MAX_CAPTURE_ENDPOINTS_PER_RULE) break
+                val pattern = patternText(item) ?: continue
+                if (runCatching { Regex(pattern) }.isFailure) return null
+                out += pattern
+            }
+            return out
         }
 
         private fun parseAction(entry: Map<String, Any?>): RuleAction? = when (entry["type"] as? String) {
