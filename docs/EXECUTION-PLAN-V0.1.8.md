@@ -1,6 +1,6 @@
 # PureBrowser v0.1.8 版本与执行计划
 
-状态：**ACTIVE（2026-10-05 用户确认，D5–D11 按默认建议冻结；T81 完成，T82 起执行）。** v0.1.7 已发行；分支 `feat/v0.1.8`。
+状态：**已发行（2026-10-06）。T81–T93 完成：规则层 v3（受控抓取/会话复用/四新动作/格式选择器/17 条规则/导入通道）；4/4 规则站选定成品；T88 窗口研究 No-go 闭环；TED/Wikimedia/Odysee 边界如实登记。详见[验收台账](RELEASE-ACCEPTANCE-V0.1.8.md)。**
 开发基线：待发行 `v0.1.7 / versionCode 16`；本版目标 `versionCode 17`。
 关联：[v0.1.7 执行计划](EXECUTION-PLAN-V0.1.7.md)（T72 规则引擎已完成，本版在其上扩展）、[v0.1.6 验收台账](RELEASE-ACCEPTANCE-V0.1.6.md)、[v0.1.7 验收台账](RELEASE-ACCEPTANCE-V0.1.7.md)、[红线修订记录](VERSION-ROADMAP-0.1.md)、[领域词汇表](../CONTEXT.md)、[请求策略](app/src/main/java/com/example/purebrowser/download/RequestPolicy.kt)。
 
