@@ -21,6 +21,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.ui.browser.BrowserChromeRules
 
+// A URI may contain case-sensitive identifiers; an IME must not auto-correct them into words.
+internal val BROWSER_ADDRESS_KEYBOARD_OPTIONS = KeyboardOptions(
+    keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go, autoCorrectEnabled = false,
+)
+
 @Composable
 fun BrowserAddressBar(address: String, editing: Boolean, change: (String)->Unit, focus: ()->Unit,
                       submit: ()->Unit, cancel: ()->Unit, loading: Boolean, reload: ()->Unit) {
@@ -32,7 +37,7 @@ fun BrowserAddressBar(address: String, editing: Boolean, change: (String)->Unit,
             OutlinedTextField(value=address,onValueChange=change,singleLine=true,
                 shape=RoundedCornerShape(12.dp),modifier=Modifier.weight(1f).testTag("addressInput").focusRequester(requester),
                 placeholder={Text("搜索或输入网址")},leadingIcon={BrowserGlyph(Glyph.SEARCH,"网址与搜索")},
-                keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Uri,imeAction=ImeAction.Go),
+                keyboardOptions=BROWSER_ADDRESS_KEYBOARD_OPTIONS,
                 keyboardActions=KeyboardActions(onGo={submit()}))
             ToolButton(Glyph.NEXT,"访问",tag="navigateButton",action=submit)
             ToolButton(Glyph.CLOSE,"取消输入",tag="cancelAddressButton",action=cancel)
