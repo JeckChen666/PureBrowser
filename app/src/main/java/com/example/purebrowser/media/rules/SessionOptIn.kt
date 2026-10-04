@@ -58,11 +58,10 @@ class SessionOptIn(
             SessionOptInState.UNKNOWN -> "unknown"
         }
 
-        fun decode(raw: String?): SessionOptInState = when (raw?.trim()?.lowercase(Locale.ROOT)) {
+        fun decode(raw: String?): SessionOptInState? = when (raw?.trim()?.lowercase(Locale.ROOT)) {
             "in" -> SessionOptInState.OPT_IN
             "out" -> SessionOptInState.OPT_OUT
-            // Garbage and missing values are indistinguishable from a fresh install.
-            else -> SessionOptInState.UNKNOWN
+            else -> null
         }
     }
 }
