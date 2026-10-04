@@ -29,5 +29,12 @@
       "utils/Utils.js": "e92d2a495c7ffc0170f6e98d9cd4be065c223ce9b00cc3fe123840ab870d258d",
       "core/mixins/MediaInfo.js": "c8081f35e88307d56be75bf930d84dd019e72bcc3855ea14813af8f6bb1889a0"
     }
+  },
+  "clientGateBundle": {
+    "scope": "v0.1.6 client-gate diagnostic; per-message worker client override allowlisted to IOS/ANDROID/ANDROID_VR/TV, default IOS unchanged",
+    "workerSourceSha256": "c016283b1cb6e5f87519b14d6b18e2910e84db55b3dcab04f319710de75bbd5a",
+    "sha256": "8857798840792572d31f3d03bf7e9e33ae98ddc34929831abceca425c8a735c7",
+    "bytes": 712981,
+    "build": "npm ci --ignore-scripts && npm run build"
   }
 }

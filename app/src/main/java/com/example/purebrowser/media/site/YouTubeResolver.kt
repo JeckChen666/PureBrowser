@@ -64,10 +64,14 @@ internal fun validateCpnDiagnosticUrl(url: String, cpnExpected: Boolean) {
         else cpns.isEmpty()) { "Diagnostic cpn policy" }
 }
 
+/** Worker client names the resolver may forward; anything else keeps the default IOS path. */
+internal val YOUTUBE_WORKER_CLIENTS=setOf("IOS","ANDROID","ANDROID_VR","TV")
+internal fun sanitizeYouTubeWorkerClient(client:String?):String?=client?.takeIf{it in YOUTUBE_WORKER_CLIENTS}
+
 /** A local worker with NO network/native/storage authority; a polled, validated metadata queue.
  * All actual IO uses the repository's privacy lease wrapper and anonymous native HTTPS requests. */
 class YouTubeResolver(private val context:Context,private val guard:(HttpTransport)->HttpTransport={it}) {
-    suspend fun resolve(videoId:String):YouTubeMedia = parse(resolveOutput(videoId), videoId)
+    suspend fun resolve(videoId:String,clientOverride:String?=null):YouTubeMedia = parse(resolveOutput(videoId,clientOverride=clientOverride), videoId)
 
     /** Explicit test-only entry; false rejects BEFORE assets/WebView/metadata IO. */
     suspend fun resolveForCpnDiagnostic(videoId: String, testOnlyCpnOptIn: Boolean = false): YouTubeCpnDiagnosticSession {
@@ -81,7 +85,7 @@ class YouTubeResolver(private val context:Context,private val guard:(HttpTranspo
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private suspend fun resolveOutput(videoId:String, testOnlyCpnOptIn:Boolean=false):JSONObject {
+    private suspend fun resolveOutput(videoId:String, testOnlyCpnOptIn:Boolean=false, clientOverride:String?=null):JSONObject {
         require(Regex("[A-Za-z0-9_-]{11}").matches(videoId))
         val script=withContext(Dispatchers.IO){context.assets.open("site-parser/youtube-worker.js").bufferedReader().use { it.readText() }}
         val cancel=TransferCancellation()
@@ -99,11 +103,12 @@ class YouTubeResolver(private val context:Context,private val guard:(HttpTranspo
                 }
                 val encoded=JSONObject.quote(script).replace("<","\\u003c")
                 val id=JSONObject.quote(videoId)
+                val client=sanitizeYouTubeWorkerClient(clientOverride)?.let{",client:${JSONObject.quote(it)}"}.orEmpty()
                 val html="""<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; worker-src blob:; connect-src 'none'"><script>
                     window.__queue=[];window.__output=null;window.__failure=null;
                     const worker=new Worker(URL.createObjectURL(new Blob([$encoded],{type:'application/javascript'})));
                     window.__worker=worker;worker.onmessage=e=>{if(e.data.request)window.__queue.push(e.data.request);if(e.data.result)window.__output=e.data.result;if(e.data.failure)window.__failure=e.data.failure;};
-                    worker.onerror=()=>{window.__failure='解析运行环境不支持此站点';};worker.postMessage({videoId:$id,testOnlyCpnOptIn:$testOnlyCpnOptIn});
+                    worker.onerror=()=>{window.__failure='解析运行环境不支持此站点';};worker.postMessage({videoId:$id,testOnlyCpnOptIn:$testOnlyCpnOptIn$client});
                     </script>"""
                 web.loadDataWithBaseURL("https://purebrowser.invalid/","$html","text/html","UTF-8",null)
                 withTimeout(45000) {

@@ -7,6 +7,8 @@ for (const name of ['indexedDB','caches','WebSocket','XMLHttpRequest','importScr
 }
 let pending=new Map(), next=0, count=0;
 const MAX_REQUESTS=20;
+// Per-message client override (v0.1.6 gate diagnostic); allowlisted, default IOS unchanged.
+const CLIENTS=['IOS','ANDROID','ANDROID_VR','TV'];
 async function metadataFetch(input,init) {
  const request=new Request(input,init);
  const url=new URL(request.url);
@@ -41,8 +43,9 @@ onmessage=async event=>{
  if(data.videoId){
   try {
    if(!/^[A-Za-z0-9_-]{11}$/.test(data.videoId))throw Error('identity');
+   const client=typeof data.client==='string'&&CLIENTS.includes(data.client)?data.client:'IOS';
    const yt=await Innertube.create({fetch:metadataFetch});
-   const info=await yt.getBasicInfo(data.videoId,{client:'IOS'});
+   const info=await yt.getBasicInfo(data.videoId,{client});
    if(info.playability_status?.status!=='OK'||info.basic_info.is_live||info.basic_info.is_upcoming)throw Error('access_or_live');
    const all=info.streaming_data?.adaptive_formats||[];
    const videos=all.filter(f=>f.has_video&&!f.has_audio&&f.mime_type?.includes('avc1')&&f.height>0&&f.height<=1080&&!f.drm_families?.length&&!f.is_type_otf).slice(0,12);
