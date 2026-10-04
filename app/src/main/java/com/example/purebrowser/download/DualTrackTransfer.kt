@@ -15,8 +15,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * One slot, two sequential full-file GETs, one verified MP4. No Range continuation or checkpoints.
- * The muxer must validate actual track roles/codecs/timestamps; declarations alone are not proof.
+ * One slot, two sequential chains of closed-range chunks, one verified MP4. No open-ended ranges,
+ * no continuation joins, no checkpoints. The muxer must validate actual track roles/codecs/timestamps;
+ * declarations alone are not proof.
  */
 class DualTrackTransfer(
     private val repository: DownloadRepository,
@@ -25,6 +26,8 @@ class DualTrackTransfer(
     private val mux: (File, File, File, TransferCancellation) -> MuxedTracks = { video, audio, output, cancel ->
         DualTrackMuxer().mux(video, audio, output, cancel)
     },
+    // Fixed production slice size; smaller values exist only for authored chunk tests.
+    private val chunkBytes: Long = CHUNK_BYTES,
 ) {
     private val transport = repository.guardedTransport(transport)
 
@@ -159,85 +162,134 @@ class DualTrackTransfer(
         id: TaskId, request: DownloadRecord, source: String, file: File, declared: Long?, maximum: Long,
         cancel: TransferCancellation, check: () -> Unit, progress: (Int) -> Unit,
     ) {
-        var url = source
-        var hops = 0
-        var credentialUsed = false
-        while (true) {
-            check()
-            RequestPolicy.validateUrl(url, repository.allowLocalHttp)
-            val cookie = if (RequestPolicy.cookieEligible(request, url)) try { access.cookieFor(url) }
-                catch (_: Exception) { throw TransferFailure(FailureKind.ACCESS_CONDITION, "网站访问会话无法读取，请返回来源") }
-                else null
-            val headers = RequestPolicy.headers(request, url, cookie).toMutableMap()
-            // A fresh whole-resource range only. Never resumes or joins independent HTTP bodies.
-            headers["Range"] = if (declared != null) "bytes=0-${declared - 1}" else "bytes=0-"
-            credentialUsed = credentialUsed || !headers["Cookie"].isNullOrBlank()
-            transport.open(url, headers, cancel).use { response ->
-                if (response.status in REDIRECTS) {
-                    if (hops++ >= 5) throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨服务器跳转次数过多")
-                    url = RequestPolicy.redirect(url, response.header("Location")
-                        ?: throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨服务器缺少跳转地址"),
-                        credentialUsed, repository.allowLocalHttp)
-                } else {
-                    if (response.status in setOf(401, 403, 410))
-                        throw TransferFailure(FailureKind.ACCESS_CONDITION, "轨道地址失效或访问不足，请返回来源重新解析并确认下载")
-                    if (response.status !in setOf(200, 206))
-                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨服务器未返回完整资源，请重新解析")
-                    val encoding = response.header("Content-Encoding")
-                    if (encoding != null && !encoding.equals("identity", true))
-                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨响应编码不符合原始字节合同")
-                    if (response.header("Transfer-Encoding") != null && response.header("Content-Length") != null)
-                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨响应长度与传输编码互相矛盾")
-                    val responseLength = length(response.header("Content-Length"))
-                    val rangeTotal = if (response.status == 206) fullRange(response.header("Content-Range"))
-                        ?: throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨响应只是部分资源，不能拼接继续") else null
-                    if (response.status == 200 && response.header("Content-Range") != null)
-                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨完整响应包含矛盾的范围信息")
-                    if ((declared != null && responseLength != null && declared != responseLength) ||
-                        (rangeTotal != null && ((declared != null && rangeTotal != declared) ||
-                            (responseLength != null && responseLength != rangeTotal))))
-                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨长度与确认方案不符，请重新解析")
-                    val total = declared ?: rangeTotal ?: responseLength
-                    if (total != null && total !in 1..maximum)
-                        throw TransferFailure(FailureKind.UNSUPPORTED, "双轨资源超出字节预算")
-                    repository.files!!.dualTrackWorkspace.check(file, id)
-                    val fd = try { Os.open(file.path, OsConstants.O_WRONLY or OsConstants.O_CREAT or
-                        OsConstants.O_EXCL or OsConstants.O_NOFOLLOW, 0x180) }
-                        catch (_: Exception) { throw TransferFailure(FailureKind.STORAGE, "双轨临时文件无法安全创建") }
-                    var count = 0L
-                    try {
-                        FileOutputStream(fd).use { output ->
-                            response.body().use { input ->
-                                val buffer = ByteArray(65536)
-                                val prefix = java.io.ByteArrayOutputStream(12)
-                                while (true) {
-                                    check()
-                                    val n = input.read(buffer)
-                                    if (n < 0) break
-                                    if (n == 0) continue
-                                    check()
-                                    if (count + n > (total ?: maximum))
-                                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨响应超过声明长度或预算")
-                                    if (prefix.size() < 12) prefix.write(buffer, 0, minOf(n, 12 - prefix.size()))
-                                    if (prefix.size() >= 12 && !inputMp4(prefix.toByteArray()))
-                                        throw TransferFailure(FailureKind.NOT_VIDEO, "轨道不是完整 MP4 资源")
-                                    try { output.write(buffer, 0, n) }
-                                    catch (_: IOException) { throw TransferFailure(FailureKind.STORAGE, "双轨临时文件无法写入") }
-                                    count += n
-                                    progress(n)
+        // The source gate serves any closed interval but rejects open-ended ranges (T67 evidence),
+        // so a track is fetched as one strictly sequential chain of inclusive slices and reassembled
+        // in byte order. A failed track restarts from byte 0 on the next confirmed attempt; no slice
+        // is ever continued, joined, or resumed.
+        if (declared != null && declared !in 1..maximum)
+            throw TransferFailure(FailureKind.UNSUPPORTED, "双轨资源超出字节预算")
+        var opens = 0L
+        var budget = declared?.let(::chunkBudget) ?: Long.MAX_VALUE
+        repository.files!!.dualTrackWorkspace.check(file, id)
+        val fd = try { Os.open(file.path, OsConstants.O_WRONLY or OsConstants.O_CREAT or
+            OsConstants.O_EXCL or OsConstants.O_NOFOLLOW, 0x180) }
+            catch (_: Exception) { throw TransferFailure(FailureKind.STORAGE, "双轨临时文件无法安全创建") }
+        var count = 0L
+        try {
+            FileOutputStream(fd).use { output ->
+                val buffer = ByteArray(65536)
+                val prefix = java.io.ByteArrayOutputStream(12)
+                var total = declared
+                var start = 0L
+                while (total == null || start < total!!) {
+                    var url = source
+                    var hops = 0
+                    var credentialUsed = false
+                    var servedEnd = 0L
+                    var redirected = true
+                    while (redirected) {
+                        redirected = false
+                        check()
+                        // Every open (redirect hops included) is a chunk-form request; the whole
+                        // track may not exceed its chunk count plus a small overrun allowance.
+                        if (++opens > budget)
+                            throw TransferFailure(FailureKind.HTTP_REJECTED, CHUNK_BUDGET_MESSAGE)
+                        RequestPolicy.validateUrl(url, repository.allowLocalHttp)
+                        val cookie = if (RequestPolicy.cookieEligible(request, url)) try { access.cookieFor(url) }
+                            catch (_: Exception) { throw TransferFailure(FailureKind.ACCESS_CONDITION, "网站访问会话无法读取，请返回来源") }
+                            else null
+                        val headers = RequestPolicy.headers(request, url, cookie).toMutableMap()
+                        // One exact closed interval per request. Never open-ended, never a resume join.
+                        val wanted = if (total == null) start + chunkBytes - 1
+                            else minOf(start + chunkBytes, total!!) - 1
+                        headers["Range"] = "bytes=$start-$wanted"
+                        credentialUsed = credentialUsed || !headers["Cookie"].isNullOrBlank()
+                        transport.open(url, headers, cancel).use { response ->
+                            if (response.status in REDIRECTS) {
+                                if (hops++ >= 5) throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨服务器跳转次数过多")
+                                url = RequestPolicy.redirect(url, response.header("Location")
+                                    ?: throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨服务器缺少跳转地址"),
+                                    credentialUsed, repository.allowLocalHttp)
+                                redirected = true
+                            } else {
+                                if (response.status in setOf(401, 403, 410))
+                                    throw TransferFailure(FailureKind.ACCESS_CONDITION, "轨道地址失效或访问不足，请返回来源重新解析并确认下载")
+                                if (response.status !in setOf(200, 206))
+                                    throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨服务器未返回完整资源，请重新解析")
+                                val encoding = response.header("Content-Encoding")
+                                if (encoding != null && !encoding.equals("identity", true))
+                                    throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨响应编码不符合原始字节合同")
+                                if (response.header("Transfer-Encoding") != null && response.header("Content-Length") != null)
+                                    throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨响应长度与传输编码互相矛盾")
+                                if (response.status == 200) {
+                                    if (response.header("Content-Range") != null)
+                                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨完整响应包含矛盾的范围信息")
+                                    // A full body is only an honest empty resource, never slice bytes.
+                                    if (total != null || length(response.header("Content-Length")) != 0L)
+                                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨服务器未按闭区间分段返回，请重新解析")
+                                    throw TransferFailure(FailureKind.UNSUPPORTED, "双轨资源超出字节预算")
                                 }
-                                if (count < 12 || (total != null && count != total))
+                                val range = chunkRange(response.header("Content-Range"))
+                                    ?: throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨响应只是部分资源，不能拼接继续")
+                                if (range.first != start)
+                                    throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨响应范围与请求起点不符，请重新解析")
+                                val chunkLength: Long
+                                if (total != null) {
+                                    if (range.third != total || range.second != wanted)
+                                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨长度与确认方案不符，请重新解析")
+                                    servedEnd = wanted
+                                    chunkLength = wanted - start + 1
+                                } else {
+                                    // The first slice also discovers the length; its end may be clipped.
+                                    if (range.second !in start..wanted)
+                                        throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨长度与确认方案不符，请重新解析")
+                                    servedEnd = range.second
+                                    chunkLength = servedEnd - start + 1
+                                    val discovered = range.third
+                                    total = discovered
+                                    if (discovered !in 1..maximum)
+                                        throw TransferFailure(FailureKind.UNSUPPORTED, "双轨资源超出字节预算")
+                                    budget = chunkBudget(discovered)
+                                }
+                                val responseLength = length(response.header("Content-Length"))
+                                if (responseLength != null && responseLength != chunkLength)
+                                    throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨长度与确认方案不符，请重新解析")
+                                var received = 0L
+                                response.body().use { input ->
+                                    while (true) {
+                                        check()
+                                        val n = input.read(buffer)
+                                        if (n < 0) break
+                                        if (n == 0) continue
+                                        check()
+                                        if (received + n > chunkLength)
+                                            throw TransferFailure(FailureKind.HTTP_REJECTED, "双轨响应超过声明长度或预算")
+                                        if (prefix.size() < 12) prefix.write(buffer, 0, minOf(n, 12 - prefix.size()))
+                                        if (prefix.size() >= 12 && !inputMp4(prefix.toByteArray()))
+                                            throw TransferFailure(FailureKind.NOT_VIDEO, "轨道不是完整 MP4 资源")
+                                        try { output.write(buffer, 0, n) }
+                                        catch (_: IOException) { throw TransferFailure(FailureKind.STORAGE, "双轨临时文件无法写入") }
+                                        received += n
+                                        count += n
+                                        progress(n)
+                                    }
+                                }
+                                if (received != chunkLength)
                                     throw TransferFailure(FailureKind.NETWORK, "双轨响应未完整接收；请重新解析后确认下载")
-                                try { output.fd.sync() }
-                                catch (_: IOException) { throw TransferFailure(FailureKind.STORAGE, "双轨临时文件无法持久保存") }
                             }
                         }
-                    } finally { if (fd.valid()) Os.close(fd) }
-                    return
+                    }
+                    start = servedEnd + 1
                 }
+                if (count < 12 || count != total!!)
+                    throw TransferFailure(FailureKind.NETWORK, "双轨响应未完整接收；请重新解析后确认下载")
+                try { output.fd.sync() }
+                catch (_: IOException) { throw TransferFailure(FailureKind.STORAGE, "双轨临时文件无法持久保存") }
             }
-        }
+        } finally { if (fd.valid()) Os.close(fd) }
     }
+
+    private fun chunkBudget(total: Long) = (total + chunkBytes - 1) / chunkBytes + CHUNK_OPEN_ALLOWANCE
 
     private fun cancelOrFail(id: TaskId, cancel: TransferCancellation, kind: FailureKind, message: String, received: Long) {
         try { cancel.check() } catch (_: CancellationException) { return }
@@ -263,6 +315,11 @@ class DualTrackTransfer(
     companion object {
         internal const val MUX_FAILURE_MESSAGE = "双轨编码、声画时序或封装未通过校验"
         const val REPARSE_MESSAGE = "双轨不保留续传字节，请返回来源重新解析并确认下载"
+        /** Closed-range slice size; the final slice of a track is exact, never open-ended. */
+        internal const val CHUNK_BYTES = 4L * 1024 * 1024
+        /** Small overrun allowance over ceil(length/chunk) open requests per track, redirects included. */
+        internal const val CHUNK_OPEN_ALLOWANCE = 8
+        internal const val CHUNK_BUDGET_MESSAGE = "双轨分段请求超出预算，请重新解析后确认下载"
         private val REDIRECTS = setOf(301, 302, 303, 307, 308)
         private val RANGE = Regex("bytes ([0-9]{1,19})-([0-9]{1,19})/([0-9]{1,19})")
         internal fun fullRange(value: String?): Long? {
@@ -270,6 +327,15 @@ class DualTrackTransfer(
             val (start, end, total) = groups
             val size = total.toLongOrNull() ?: return null
             return size.takeIf { it > 0 && start.toLongOrNull() == 0L && end.toLongOrNull() == it - 1 }
+        }
+        /** Inclusive served slice (start, end, total); the slice must lie inside the declared resource. */
+        internal fun chunkRange(value: String?): Triple<Long, Long, Long>? {
+            val groups = value?.let(RANGE::matchEntire)?.destructured ?: return null
+            val (first, last, size) = groups
+            val start = first.toLongOrNull() ?: return null
+            val end = last.toLongOrNull() ?: return null
+            val total = size.toLongOrNull() ?: return null
+            return if (start in 0..end && end < total) Triple(start, end, total) else null
         }
         internal fun length(value: String?): Long? {
             if (value == null) return null

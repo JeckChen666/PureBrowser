@@ -108,4 +108,15 @@ class DualTrackPlanTest {
             assertTrue(runCatching { DualTrackTransfer.length(it) }.isFailure)
         }
     }
+    @Test fun chunkRangeMustBeAnInclusiveSliceInsideTheResource() {
+        assertEquals(Triple(0L, 99L, 100L), DualTrackTransfer.chunkRange("bytes 0-99/100"))
+        assertEquals(Triple(0L, 0L, 1L), DualTrackTransfer.chunkRange("bytes 0-0/1"))
+        assertEquals(Triple(1_048_576L, 2_097_151L, 170_210_373L),
+            DualTrackTransfer.chunkRange("bytes 1048576-2097151/170210373"))
+        listOf(null, "bytes 0-", "bytes 0-99/*", "bytes */100", "bytes 100-99/100", "bytes 0-100/100",
+            "bytes 0-99/99", "bytes 0-99/0", "bytes 0-99/100\n", "bytes -1-99/100",
+            "bytes 0-99/9223372036854775808").forEach {
+            assertNull("Rejected <$it>", DualTrackTransfer.chunkRange(it))
+        }
+    }
 }
