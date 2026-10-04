@@ -41,5 +41,19 @@
     "source": "docs/V0.1.5-ROUND-TWO.md",
     "strictCorpusFrozen": false,
     "observationsDoNotConstitutePairedGains": true
+  },
+  "planClosure": {
+    "version": "0.1.5",
+    "status": "FAILED_CLOSED",
+    "closedOn": "2026-10-04",
+    "timezone": "Asia/Shanghai",
+    "decision": "user terminated v0.1.5 plan; no release; failures and incomplete work handed to v0.1.6",
+    "closeoutDocument": "docs/V0.1.5-CLOSEOUT.md",
+    "carryoverDocument": "docs/V0.1.6-CARRYOVER.md",
+    "historicalRowsPreserved": true,
+    "strictCorpusFrozen": false,
+    "successRates": null,
+    "releaseApproved": false,
+    "v016ImplementationStarted": false
   }
 }

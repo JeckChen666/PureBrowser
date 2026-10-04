@@ -36,7 +36,9 @@ python3 -m unittest discover -s tools/verification -p 'test_*.py' -v
 
 终端计数只接受具备 class/test 身份的用例结束，不将 `sendStatus(0, evidence)` 的证据消息当作通过；匿名负状态仍拒绝放行。主机计数/构建拒绝回归现为9项。正式签名跨UID收尾使用独立 `SignedReleaseShareAudit`；androidTest APK单独开启debuggable用于读取接收器报告，生产APK不受影响。
 
-## v0.1.5 初步旧版观察汇总（不算配对增益）
+## v0.1.5 历史旧版观察汇总（计划失败关闭，不算配对增益）
+
+2026-10-04已按用户决定关闭v015计划，见[收尾结论](../../docs/V0.1.5-CLOSEOUT.md)。以下是离线历史证据工具，使用它不代表重开本版网站测试；v016须另立输入／合同。
 
 `summary_v015` 由 `summarize_v015_baseline.py` 离线生成：读取候选登记、已安装正式 code13 APK 的 hash／环境、逐行记录和脱敏证据，保留未测行。网址／版本错配、证据缺失／越界、伪成功状态拒绝接受。初步观察永远不输出成品率或跨站增益，不把 UI「已完成」、地址、前缀或主机文件检查当作 Android 声画／跨 UID 验收。
 
