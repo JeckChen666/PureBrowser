@@ -15,6 +15,8 @@
                 <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
+        <!-- No filters/URI handling: own-UID manual opt-in, not a share or grant shortcut. -->
+        <activity android:name="com.example.purebrowser.share.Code13ShareControlActivity" android:exported="true" />
         <!-- Opt-in only: leaves the existing fixture chooser/audits unchanged.
              Mainline enables this component after installing the DEBUG TEST APK,
              then selects it in the real code13 native share chooser. -->

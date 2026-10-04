@@ -148,6 +148,17 @@ public class Code13SharePolicyTest {
         assertEquals("timed_out", report.getJSONObject("frames").getString("status"));
     }
 
+    @Test public void manualOptInControlHasNoShareIntentFilterOrUriRouting() throws Exception {
+        android.content.Context test = InstrumentationRegistry.getInstrumentation().getContext();
+        ComponentName component = new ComponentName(test.getPackageName(), Code13ShareControlActivity.class.getName());
+        ActivityInfo info = test.getPackageManager().getActivityInfo(component, 0);
+        assertEquals(test.getPackageName(), info.packageName);
+        assertTrue(info.exported);
+        Intent share = new Intent(Intent.ACTION_SEND).setType("video/mp4").setPackage(test.getPackageName());
+        for (android.content.pm.ResolveInfo result : test.getPackageManager().queryIntentActivities(share, 0))
+            assertNotEquals(Code13ShareControlActivity.class.getName(), result.activityInfo.name);
+    }
+
     @Test public void componentBelongsToTestApkAndUsesPrivateAuditProcess() throws Exception {
         android.content.Context test = InstrumentationRegistry.getInstrumentation().getContext();
         android.content.Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
