@@ -80,6 +80,44 @@ class V016YouTubeGateDiagnostic {
         assertEquals("Every client arm must produce an observation record", clients.size, arms.size)
     }
 
+    /** Single-variable range-shape battery: ONE resolve (IOS baseline), then three bounded GETs —
+     * A closed prefix (control), B open-ended (bytes=0-), C closed mid-file 1 MiB — over the SAME
+     * resolved address. Observation only; asserts record count, never statuses. */
+    @Test(timeout = 120_000) fun segmentedRangeBoundedDiagnostic() {
+        val args = InstrumentationRegistry.getArguments()
+        val video = args.getString("video") ?: return // absent -> deliberate no-op
+        require(Regex("[A-Za-z0-9_-]{11}").matches(video)) { "video argument must be an 11-char id" }
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scheduler = scheduler()
+        val shapes = listOf("A" to "bytes=0-${Gate.RANGE_END}", "B" to "bytes=0-", "C" to "bytes=1048576-2097151")
+        val arms = mutableListOf<Pair<String, Gate.Arm>>()
+        try {
+            DualTrackTestSupport.test { repository ->
+                val started = SystemClock.elapsedRealtime()
+                val media = runBlocking {
+                    withTimeout(Gate.ARM_DEADLINE_MS) {
+                        YouTubeResolver(context, repository::guardedTransport).resolve(video, "IOS")
+                    }
+                }
+                val resolveMs = SystemClock.elapsedRealtime() - started
+                val track = media.videos.maxBy { it.height }
+                check(track.length > 2_097_152) { "track too small for a mid-file probe" }
+                for ((shape, range) in shapes) {
+                    val arm = Gate.probe("IOS", resolveMs, track, request(), repository.guardedTransport(UrlConnectionTransport()),
+                        SystemClock::elapsedRealtime, scheduler,
+                        deadlineMs = Gate.ARM_DEADLINE_MS, rangeHeader = range)
+                    arms += shape to arm
+                    println("SEG[range=$shape] ${arm.json()}")
+                }
+            }
+        } finally {
+            scheduler.shutdownNow()
+            println("SEG[summary] arms=${arms.size} expected=${shapes.size} twoXxOr206=" +
+                arms.filter { it.second.twoXxOr206 }.joinToString(",") { it.first })
+        }
+        assertEquals("Every range shape must produce an observation record", shapes.size, arms.size)
+    }
+
     @Test fun fixtureRangeGetUsesProductionHeaderPolicyAndObservesScalarsOnly() = withScheduler { scheduler ->
         var requestedUrl: String? = null
         var requestedHeaders: Map<String, String> = emptyMap()

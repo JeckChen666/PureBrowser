@@ -49,6 +49,7 @@ internal object V016YouTubeGateDiagnosticSupport {
         var contentRangeTotal: Long? = null
         var bodyBytesRead = 0
         var prefix = Prefix.NOT_OBSERVED
+        var rangeHeaderObserved = "bytes=0-$RANGE_END"
         var elapsedMs = 0L
         val hops = mutableListOf<JSONObject>()
         val twoXxOr206 get() = status?.let { it in 200..299 } == true
@@ -64,7 +65,7 @@ internal object V016YouTubeGateDiagnosticSupport {
             .put("contentRangeTotal", contentRangeTotal ?: JSONObject.NULL)
             .put("bodyBytesRead", bodyBytesRead).put("prefixFlag", prefix.name)
             .put("elapsedMs", elapsedMs).put("rangeEnd", RANGE_END)
-            .put("bodyReadLimit", MAX_BODY_BYTES).put("anonymous", true)
+            .put("bodyReadLimit", MAX_BODY_BYTES).put("anonymous", true).put("rangeHeader", rangeHeaderObserved)
             // A bounded prefix observation is never download success.
             .put("downloadSucceeded", false).put("completeTransferAttempted", false)
             .put("hops", JSONArray(hops))
@@ -90,9 +91,10 @@ internal object V016YouTubeGateDiagnosticSupport {
     fun probe(
         client: String, resolveMs: Long, track: YouTubeTrack, request: DownloadRecord,
         transport: HttpTransport, clock: () -> Long, scheduler: ScheduledThreadPoolExecutor,
-        deadlineMs: Long = ARM_DEADLINE_MS,
+        deadlineMs: Long = ARM_DEADLINE_MS, rangeHeader: String = "bytes=0-$RANGE_END",
     ): Arm {
         val result = Arm(client, resolveMs)
+        result.rangeHeaderObserved = rangeHeader
         val start = clock()
         val token = TransferCancellation()
         val expired = AtomicBoolean(false)
@@ -112,7 +114,7 @@ internal object V016YouTubeGateDiagnosticSupport {
                 // cookies/credentials, anonymous UA; the fixed Range is the single added header.
                 val headers = RequestPolicy.headers(request, url, null).toMutableMap()
                 check(headers.keys.none { it.equals("Cookie", true) || it.equals("Authorization", true) })
-                headers["Range"] = "bytes=0-$RANGE_END"
+                headers["Range"] = rangeHeader
                 result.layer = Layer.NETWORK_OPEN
                 transport.open(url, headers, token).use { response ->
                     result.status = response.status
