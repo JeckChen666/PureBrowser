@@ -114,8 +114,24 @@ class V016CrossSiteSaveSmoke {
             val hlsMaster = verified.filter { it.kind == MediaKind.HLS && !it.variants.isNullOrEmpty() }
                 .maxByOrNull { c -> c.variants!!.maxOf { it.height ?: 0 } }
             val fileBest = verified.filter { it.kind == MediaKind.FILE }.maxByOrNull { it.totalBytes ?: 0L }
-            val chosen = hlsMaster ?: fileBest
-            println("SAVE[$label] stage=select kind=${chosen?.kind} hlsMaster=${hlsMaster != null} fileFallback=${hlsMaster == null && fileBest != null} " +
+            // T89: an HLS master that the production resolver refuses (e.g. fMP4-only variants)
+            // is exactly what a user would see as an unsupported tier; the honest save path is
+            // then the best direct FILE candidate, mirroring picking the downloadable rule format.
+            val hlsPlanUsable = hlsMaster != null && runCatching {
+                val resolver = HlsResolver(UrlConnectionTransport(), WebsiteAccessContext(), false)
+                val probe = DownloadDraft(
+                    hlsMaster.copy(sources = hlsMaster.sources.toSet()),
+                    WebSettings.getDefaultUserAgent(instrument.targetContext),
+                    page.url.takeIf(BrowserAddress::isWebUrl), page.title.take(180),
+                    sourceTabId = session.recordId, sourceGeneration = session.engine.generation,
+                )
+                val options = resolver.resolveEntry(probe, TransferCancellation())
+                val variant = (options.playlist as? HlsPlaylist.Master)
+                    ?.let { HlsPlaylistParser.defaultVariant(it.variants) }
+                resolver.resolvePlan(probe, options, variant, TransferCancellation())
+            }.isSuccess
+            val chosen = if (hlsMaster != null && hlsPlanUsable) hlsMaster else fileBest
+            println("SAVE[$label] stage=select kind=${chosen?.kind} hlsMaster=${hlsMaster != null} hlsPlanUsable=$hlsPlanUsable fileFallback=${chosen === fileBest && fileBest != null} " +
                 "variants=${chosen?.variants?.size ?: 0} maxH=${chosen?.variants?.maxOf { it.height ?: 0 } ?: -1} bytes=${chosen?.totalBytes ?: -1}")
             assumeTrue("no VERIFIED HLS-with-variants or FILE candidate settled on $label", chosen != null)
             assumeTrue("chosen candidate is not downloadable (kind=${chosen!!.kind})", chosen.kind == MediaKind.HLS || chosen.kind == MediaKind.FILE)

@@ -235,13 +235,28 @@ class HlsPlaylistParserTest {
     @Test fun urlSchemesCredentialsFragmentsMalformedAddressesAndPortsAreRejectedSafely() {
         listOf("file:///tmp/a.ts", "data:video/mp2t,secret", "javascript:secret()", "content://media/secret",
             "http://foreign.example/secret", "https://user:secret@example.test/a.ts", "//user:secret@example.test/a.ts",
-            "https://example.test:0/a.ts", "https://example.test:65536/a.ts", "https://example.test/a.ts#secret",
+            "https://example.test:0/a.ts", "https://example.test:65536/a.ts",
             "https://example.test/a ts", "https://example.test/%secret", "https:///secret", "https:secret").forEach {
             rejected(media("#EXTINF:1,\n$it"))
             rejected(master("BANDWIDTH=100", it))
             rejected(media(), it)
         }
         rejected(media("#EXTINF:1,\na\u0000secret.ts"))
+    }
+
+    /**
+     * v0.1.8 (T89): a fragment on a playlist address is a client-side hint some CDNs attach to
+     * variant lines (Dailymotion tags a routing cell). HTTP never transmits it, so it is DROPPED
+     * instead of rejecting the whole playlist; every scheme/host/policy check still applies to
+     * what remains, and a bare-fragment line with nothing left still rejects.
+     */
+    @Test fun playlistAddressFragmentsAreDroppedNotTransmitted() {
+        val seg = parse(media("#EXTINF:1,\nhttps://cdn.example/a.ts#cell=cf3")) as HlsPlaylist.Media
+        assertEquals("https://cdn.example/a.ts", seg.segments.single().url)
+        val variant = parse(master("BANDWIDTH=100", "https://cdn.example/v.m3u8#cell=cf3")) as HlsPlaylist.Master
+        assertEquals("https://cdn.example/v.m3u8", variant.variants.single().url)
+        // A line that is nothing but a fragment has no addressable remainder.
+        rejected(media("#EXTINF:1,\n#cell"))
     }
 
     @Test fun debugNamedLoopbackHttpCanParseButRequestPolicyStillDecidesAuthorization() {

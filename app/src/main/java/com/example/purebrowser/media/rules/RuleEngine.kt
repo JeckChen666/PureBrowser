@@ -76,7 +76,12 @@ class RuleEngine(private val ruleSet: RuleSet, private val now: () -> Long = Sys
     ): List<RuleFinding> {
         val deadline = now() + budgetMs * 1_000_000L
         val pageHost = runCatching { URI(pageUrl).host?.lowercase(Locale.ROOT) }.getOrNull()
-        val requests = requestUrls.asSequence()
+        // The main document is part of the path face's input by contract. It is appended here
+        // instead of relying on the request window because the WebView's main-frame interception
+        // races the page-epoch flip (the document request is observed under the PREVIOUS epoch
+        // and dropped), so a page whose path face matches nothing but its own address would
+        // otherwise never bind its template groups.
+        val requests = (listOf(pageUrl) + requestUrls).asSequence()
             .filter { it.length in 1..MAX_URL_LENGTH }
             .distinct()
             .take(MAX_REQUESTS)

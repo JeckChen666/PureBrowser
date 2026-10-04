@@ -242,4 +242,52 @@ class AutoProbeQueueTest {
         assertEquals(2, results.size)
         assertEquals(2, fetcher.calls.size)
     }
+
+    /**
+     * T89 unblock: a same-origin page-session cookie must never cross an origin boundary. The
+     * redirect hop DROPS the cookie and retries anonymously instead of failing the probe — a
+     * public CDN redirect behind a cookie'd first hop still verifies.
+     */
+    @Test fun crossOriginRedirectStripsTheSessionCookieInsteadOfFailingTheProbe() = runTest {
+        val fetcher = FakeFetcher { url, headers ->
+            when {
+                url == "https://cdn.example/file.mp4" ->
+                    text(status = 302, headers = mapOf("Location" to "https://node.cdn.example/file.mp4"))
+                url == "https://node.cdn.example/file.mp4" ->
+                    text(status = 206, headers = mapOf(
+                        "Content-Type" to "video/mp4",
+                        "Content-Range" to "bytes 0-0/1234567",
+                    ), body = "x")
+                else -> text(status = 404)
+            }
+        }
+        val results = mutableListOf<ProbeResult>()
+        val queue = AutoProbeQueue(backgroundScope, fetcher)
+        queue.onResult = { _, _, result -> results += result }
+        queue.start()
+        queue.submit("https://cdn.example/file.mp4", MediaKind.FILE, 1L, ctx)
+        runCurrent()
+        val verified = results.single() as ProbeResult.Verified
+        assertEquals(1234567L, verified.totalBytes)
+        // The cookie left only on the same-origin first hop; the cross-origin node hop is anonymous.
+        val first = fetcher.calls[0]
+        val second = fetcher.calls[1]
+        assertEquals("sid=secret", first.second["Cookie"])
+        assertNull("cookie must not cross the origin boundary", second.second["Cookie"])
+    }
+
+    @Test fun httpsDowngradeAcrossARedirectStillRefuses() = runTest {
+        val fetcher = FakeFetcher { url, _ ->
+            if (url == "https://cdn.example/file.mp4") text(status = 302, headers = mapOf("Location" to "http://node.cdn.example/file.mp4"))
+            else text(status = 200, headers = mapOf("Content-Type" to "video/mp4"))
+        }
+        val results = mutableListOf<ProbeResult>()
+        val queue = AutoProbeQueue(backgroundScope, fetcher)
+        queue.onResult = { _, _, result -> results += result }
+        queue.start()
+        queue.submit("https://cdn.example/file.mp4", MediaKind.FILE, 1L, ctx)
+        runCurrent()
+        assertTrue(results.single() is ProbeResult.Unreachable)
+        assertEquals(1, fetcher.calls.size)
+    }
 }

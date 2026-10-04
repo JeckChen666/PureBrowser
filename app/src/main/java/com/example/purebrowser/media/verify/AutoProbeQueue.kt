@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
+import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.util.Locale
@@ -192,23 +193,38 @@ class AutoProbeQueue(
         return out
     }
 
-    /** Redirect chain bounded like MediaProbe; any policy or transport failure means unreachable. */
+    /**
+     * Redirect chain bounded like MediaProbe; any policy or transport failure means unreachable.
+     * A same-origin page-session cookie never travels to another origin: instead of failing the
+     * whole probe, the cookie is STRIPPED and the chain continues anonymously. Verification only
+     * needs the media's shape, and the cookie only ever left on same-origin hops, so no page
+     * session crosses an origin boundary either way.
+     */
     private fun openFollowing(initialUrl: String, extraHeaders: Map<String, String>, ctx: SessionContext): Opened? {
         var url = initialUrl
         var hops = 0
-        var credentialUsed = false
+        var cookieStripped = false
         while (true) {
             var response: FetchedResponse? = null
             try {
                 RequestPolicy.validateUrl(url, allowLocalHttp)
-                val headers = requestHeaders(ctx, url) + extraHeaders
-                credentialUsed = credentialUsed || headers.containsKey("Cookie")
+                val base = requestHeaders(ctx, url)
+                val headers = (if (cookieStripped) base.filterKeys { it != "Cookie" } else base) + extraHeaders
+                val credentialUsed = headers.containsKey("Cookie")
                 response = fetcher.open(url, headers)
                 if (response.status in setOf(301, 302, 303, 307, 308)) {
                     val location = response.header("Location")
                     response.close()
                     if (hops++ >= ProbePolicy.MAX_REDIRECTS || location.isNullOrBlank()) return null
-                    url = RequestPolicy.redirect(url, location, credentialUsed, allowLocalHttp)
+                    val next = URI(url).resolve(location).toString()
+                    if (credentialUsed && !RequestPolicy.sameOrigin(url, next)) {
+                        cookieStripped = true // drop the page session instead of leaking or failing
+                        RequestPolicy.validateUrl(next, allowLocalHttp)
+                        if (URI(url).scheme.equals("https", true) && !URI(next).scheme.equals("https", true)) return null
+                        url = next
+                    } else {
+                        url = RequestPolicy.redirect(url, location, credentialUsed, allowLocalHttp)
+                    }
                 } else return Opened(url, response)
             } catch (_: Exception) {
                 response?.let { runCatching { it.close() } }

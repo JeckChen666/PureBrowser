@@ -368,14 +368,18 @@ object HlsPlaylistParser {
         return uri
     }
 
-    private fun resolve(base: URI, reference: String): String {
+    private fun resolve(base: URI, rawReference: String): String {
+        // A fragment in a playlist address is a client-side hint (some CDNs tag variant lines
+        // with one); HTTP never transmits it and the downloader's URL policy would reject it.
+        // It is dropped here instead of failing the whole playlist — every scheme/host/policy
+        // check still applies to what remains.
+        val reference = rawReference.substringBefore('#')
         if (reference.isEmpty() || reference.length > MAX_URL_LENGTH || reference.contains("{$")) reject("资源地址格式无效或超过限制")
         val relative = try { URI(reference) } catch (_: Exception) { reject("资源地址格式无效") }
         // java.net.URI resolves '?query' against the directory, rather than the current file.
         // Handle this RFC 3986 reference explicitly; never inherit the parent's query for child paths.
         val resolved = if (relative.scheme == null && relative.rawAuthority == null && relative.rawPath.isNullOrEmpty() && relative.rawQuery != null) {
-            "${base.scheme}://${base.rawAuthority}${base.rawPath.orEmpty()}?${relative.rawQuery}" +
-                (relative.rawFragment?.let { "#$it" } ?: "")
+            "${base.scheme}://${base.rawAuthority}${base.rawPath.orEmpty()}?${relative.rawQuery}"
         } else base.resolve(relative).toString()
         checkedUrl(resolved)
         return resolved

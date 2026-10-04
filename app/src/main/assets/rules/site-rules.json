@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "rules": [
     {
       "id": "kvs-family",
@@ -113,6 +113,94 @@
         { "type": "domExtract", "selector": "video[src^='http'], video source[src^='http']", "attribute": "src" }
       ],
       "note": "通用 xplayer 播放器家族：slug 编号视频页复用 initials.xplayerSettings 配置提取"
+    },
+    {
+      "id": "archive-org-embed",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)archive\\.org$", "path": "\\/details\\/([A-Za-z0-9_.-]+)" },
+      "actions": [
+        { "type": "regexExtract", "pattern": "(https:\\/\\/archive\\.org\\/download\\/[^\"\\s]+\\.mp4)" }
+      ],
+      "fetch": [
+        { "id": "embed", "url": "https://archive.org/embed/{{m1}}", "maxBytes": 131072 }
+      ],
+      "note": "互联网档案馆条目页：受控抓取条目内嵌播放页，正则提取下载直链（只读、限量）"
+    },
+    {
+      "id": "ted-talks-inline",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)ted\\.com$", "path": "\\/talks\\/[A-Za-z0-9_-]+" },
+      "actions": [
+        { "type": "regexExtract", "pattern": "\"hlsUrl\"\\s*:\\s*\"(https:\\/\\/[^\"]+\\.m3u8[^\"]*)\"" }
+      ],
+      "note": "TED 演讲页：读取页面内联结构数据中的 HLS 主清单地址（只读，不执行，不发起额外请求）"
+    },
+    {
+      "id": "commons-file-videoinfo",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)wikimedia\\.org$", "path": "\\/wiki\\/(File:[A-Za-z0-9_%.,()+-]+)" },
+      "actions": [
+        { "type": "jsonExtract", "pointers": [
+          "query.pages[0].videoinfo[0].url",
+          "query.pages[0].videoinfo[0].derivatives[0].src"
+        ] }
+      ],
+      "fetch": [
+        { "id": "videoinfo", "url": "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=videoinfo&viprop=url%7Cderivatives&titles=File:{{m1}}", "maxBytes": 65536 }
+      ],
+      "note": "维基媒体公共库文件页：受控抓取 videoinfo 接口，提取原始与转码直链（只读、限量）"
+    },
+    {
+      "id": "dailymotion-metadata",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)dailymotion\\.com$", "path": "\\/video\\/([a-z0-9]+)" },
+      "actions": [
+        { "type": "jsonExtract", "pointers": [
+          "qualities.auto[0].url"
+        ] }
+      ],
+      "fetch": [
+        { "id": "metadata", "url": "https://www.dailymotion.com/player/metadata/video/{{m1}}", "maxBytes": 65536 }
+      ],
+      "note": "Dailymotion 视频页：受控抓取播放器元数据接口，按档位提取 HLS 清单（只读、限量）"
+    },
+    {
+      "id": "peertube-blender-files",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)video\\.blender\\.org$", "path": "\\/w\\/([0-9A-Za-z_-]{22,36})" },
+      "actions": [
+        { "type": "jsonExtract", "pointers": [
+          "files[0].fileDownloadUrl",
+          "files[1].fileDownloadUrl",
+          "files[2].fileDownloadUrl",
+          "files[3].fileDownloadUrl",
+          "files[4].fileDownloadUrl",
+          "files[5].fileDownloadUrl"
+        ] }
+      ],
+      "fetch": [
+        { "id": "video", "url": "https://video.blender.org/api/v1/videos/{{m1}}", "maxBytes": 65536 }
+      ],
+      "note": "PeerTube（Blender 实例）观看页：受控抓取实例视频接口，提取各分辨率直链（只读、限量）"
+    },
+    {
+      "id": "peertube-framatube-files",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)framatube\\.org$", "path": "\\/w\\/([0-9A-Za-z_-]{22,36})" },
+      "actions": [
+        { "type": "jsonExtract", "pointers": [
+          "files[0].fileDownloadUrl",
+          "files[1].fileDownloadUrl",
+          "files[2].fileDownloadUrl",
+          "files[3].fileDownloadUrl",
+          "files[4].fileDownloadUrl",
+          "files[5].fileDownloadUrl"
+        ] }
+      ],
+      "fetch": [
+        { "id": "video", "url": "https://framatube.org/api/v1/videos/{{m1}}", "maxBytes": 65536 }
+      ],
+      "note": "PeerTube（Framasoft 实例）观看页：受控抓取实例视频接口，提取各分辨率直链（只读、限量）"
     }
   ]
 }
