@@ -10,7 +10,8 @@ sealed interface ProbeResult {
      * The URL answered as media. [totalBytes] comes from a 206 Content-Range total; a plain 200
      * keeps it null. [resumable] reflects range support actually observed. [variants] is only set
      * when a master playlist was fetched and parsed; [playlistWarning] carries the parser's fixed
-     * safe reason when that playlist had to be rejected.
+     * safe reason when that playlist had to be rejected. [pageUrl] is the page whose session the
+     * probe ran with; it is metadata for consent gating and stays out of every diagnostic.
      */
     data class Verified(
         val totalBytes: Long?,
@@ -19,6 +20,7 @@ sealed interface ProbeResult {
         val kindHint: MediaKind?,
         val variants: List<VariantSummary>? = null,
         val playlistWarning: String? = null,
+        val pageUrl: String? = null,
     ) : ProbeResult {
         override fun toString() = "Verified(totalBytes=$totalBytes, resumable=$resumable, mime=$mime, " +
             "kindHint=$kindHint, variants=${variants?.size}, warned=${playlistWarning != null})"

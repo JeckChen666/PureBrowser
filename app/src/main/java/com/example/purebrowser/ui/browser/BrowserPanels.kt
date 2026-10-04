@@ -109,7 +109,11 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
             }
         } else {
             DownloadConfirmation(draft, defaultWifiOnly, { confirmDownload = null }) { name, wifiOnly, useContext ->
-                submit(draft.copy(useAccessContext = useContext), name, wifiOnly)
+                // A probe-verified, same-origin page association becomes the task's source only under explicit consent.
+                val probed = com.example.purebrowser.download.RequestPolicy.canUseProbedContext(draft.candidate.url,draft.candidate.pageUrl,draft.frameUrl)
+                submit(draft.copy(useAccessContext = useContext,
+                    sourceUrl = draft.sourceUrl ?: draft.candidate.pageUrl?.takeIf { useContext && probed },
+                    reliableSource = draft.reliableSource || (useContext && probed)), name, wifiOnly)
             }
         }
     }

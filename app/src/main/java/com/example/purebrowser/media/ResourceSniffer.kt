@@ -64,6 +64,7 @@ class ResourceSniffer {
             sizeBytes?.takeIf { it > 0 } ?: old?.sizeBytes,
             title?.takeIf { it.isNotBlank() }?.take(120) ?: old?.title,
             frameUrl ?: old?.frameUrl,
+            old?.pageUrl,
             if(source==Evidence.DOM)playing else old?.playing ?: false,
             reliableSource || old?.reliableSource == true,
             old?.totalBytes,
@@ -79,7 +80,7 @@ class ResourceSniffer {
             stored = old!!
         }
         val hook = autoVerifyHook
-        if (hook != null && stored.kind in setOf(MediaKind.FILE, MediaKind.UNKNOWN, MediaKind.HLS) &&
+        if (hook != null && stored.kind in setOf(MediaKind.FILE, MediaKind.UNKNOWN, MediaKind.HLS, MediaKind.DASH) &&
             isHttpUrl(stored.url) && hookedUrls.add(key)) {
             // The pending marker is visible even when the observation itself changed nothing.
             if (stored.probeState == ProbeState.NONE) {
@@ -100,15 +101,25 @@ class ResourceSniffer {
         val old = entries[key] ?: return
         val updated = when (result) {
             is ProbeResult.Verified -> {
-                val upgraded = result.kindHint == MediaKind.HLS && old.kind == MediaKind.UNKNOWN
+                // Verified manifests upgrade unknown endpoints; DASH stays display-only this version.
+                val upgraded = when {
+                    result.kindHint == MediaKind.HLS && old.kind == MediaKind.UNKNOWN -> MediaKind.HLS
+                    result.kindHint == MediaKind.DASH && old.kind == MediaKind.UNKNOWN -> MediaKind.DASH
+                    else -> old.kind
+                }
                 old.copy(
-                    kind = if (upgraded) MediaKind.HLS else old.kind,
-                    mimeType = if (upgraded) "application/vnd.apple.mpegurl" else old.mimeType,
+                    kind = upgraded,
+                    mimeType = when (upgraded) {
+                        MediaKind.HLS -> "application/vnd.apple.mpegurl"
+                        MediaKind.DASH -> "application/dash+xml"
+                        else -> old.mimeType
+                    },
                     totalBytes = result.totalBytes ?: old.totalBytes,
                     resumable = result.resumable,
                     verifiedMime = result.mime ?: old.verifiedMime,
                     probeState = ProbeState.VERIFIED,
                     variants = (variants ?: result.variants) ?: old.variants,
+                    pageUrl = result.pageUrl ?: old.pageUrl,
                 )
             }
             is ProbeResult.NotMedia, is ProbeResult.Unreachable -> old.copy(probeState = ProbeState.FAILED)

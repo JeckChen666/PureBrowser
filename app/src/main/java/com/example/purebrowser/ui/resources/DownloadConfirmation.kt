@@ -48,7 +48,8 @@ fun DownloadConfirmation(
     var fileName by rememberSaveable(frozen) { mutableStateOf(suggestion) }
     // Defaults seed a new draft only. A settings refresh must not undo this task's choice.
     var wifiOnly by rememberSaveable(frozen) { mutableStateOf(defaultWifiOnly) }
-    val contextAvailable = com.example.purebrowser.download.RequestPolicy.canUseContext(frozen.sourceUrl,frozen.frameUrl,frozen.reliableSource)
+    val contextAvailable = com.example.purebrowser.download.RequestPolicy.canUseContext(frozen.sourceUrl,frozen.frameUrl,frozen.reliableSource) ||
+        com.example.purebrowser.download.RequestPolicy.canUseProbedContext(frozen.candidate.url,frozen.candidate.pageUrl,frozen.frameUrl)
     var useContext by rememberSaveable(frozen) { mutableStateOf(contextAvailable && frozen.useAccessContext) }
     var submitted by remember(frozen) { mutableStateOf(false) }
     val safeName = DownloadRules.safeFileName(fileName)

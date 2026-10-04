@@ -32,6 +32,8 @@ data class MediaCandidate(
     val sizeBytes: Long? = null,
     val title: String? = null,
     val frameUrl: String? = null,
+    /** Page whose background probe verified this URL; merge keeps the latest non-null address. */
+    val pageUrl: String? = null,
     val playing: Boolean = false,
     val reliableSource: Boolean = false,
     val totalBytes: Long? = null,

@@ -66,13 +66,13 @@ class ResourceSnifferTest {
         sniffer.observe(page,"https://cdn.example/v.mp4?sig=one#frag",Evidence.DOM,videoElement=true)
         sniffer.observe(page,"https://cdn.example/manifest.mpd",Evidence.REQUEST)
         sniffer.observe(page,"blob:local-media",Evidence.DOM,videoElement=true)
-        org.junit.Assert.assertEquals(listOf("https://cdn.example/v.mp4?sig=one"),calls.map{it.first})
-        org.junit.Assert.assertEquals(listOf(MediaKind.FILE),calls.map{it.second})
+        org.junit.Assert.assertEquals(listOf("https://cdn.example/v.mp4?sig=one","https://cdn.example/manifest.mpd"),calls.map{it.first})
+        org.junit.Assert.assertEquals(listOf(MediaKind.FILE,MediaKind.DASH),calls.map{it.second})
         org.junit.Assert.assertEquals(ProbeState.PENDING,sniffer.candidates.value.first{it.url.contains("v.mp4")}.probeState)
         val next=sniffer.beginPage()
         sniffer.observe(next,"https://cdn.example/v.mp4?sig=one",Evidence.REQUEST)
-        org.junit.Assert.assertEquals(2,calls.size)
-        org.junit.Assert.assertEquals(next,calls[1].third)
+        org.junit.Assert.assertEquals(3,calls.size)
+        org.junit.Assert.assertEquals(next,calls[2].third)
     }
 
     @org.junit.Test fun applyProbeResultVerifiesFieldsAndKeepsThemAcrossMerges() {

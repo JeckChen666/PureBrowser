@@ -227,9 +227,17 @@ internal fun ResourceMetadata(candidate: MediaCandidate) {
             Text("已验证类型：$it", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        candidate.variants?.takeIf { it.isNotEmpty() }?.let {
-            Text("${it.size} 档位${if (it.any { variant -> variant.warning != null }) "（部分档位带兼容提示）" else ""}",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (candidate.kind == MediaKind.HLS) {
+            candidate.variants?.takeIf { it.isNotEmpty() }?.let {
+                Text("${it.size} 档位${if (it.any { variant -> variant.warning != null }) "（部分档位带兼容提示）" else ""}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else if (candidate.kind == MediaKind.DASH) {
+            // Display-only listing: this version has no DASH download path or variant dialog at all.
+            candidate.variants?.takeIf { it.isNotEmpty() }?.let {
+                Text("DASH · ${it.size} 档位（仅展示，本版暂不支持 DASH 下载）",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

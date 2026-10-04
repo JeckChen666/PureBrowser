@@ -127,6 +127,69 @@ class AutoProbeQueueTest {
         assertEquals(2, results.count { (it as ProbeResult.Verified).variants == null })
     }
 
+    @Test fun dashContentTypePathVerifiesDashAndCatalogsRepresentations() = runTest {
+        val mpd = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+              <Period><AdaptationSet mimeType="video/mp4" codecs="avc1.64001f">
+                <Representation id="v720" height="720" bandwidth="1200000"/>
+                <Representation id="v1080" height="1080" bandwidth="3000000"/>
+              </AdaptationSet></Period>
+            </MPD>
+        """.trimIndent()
+        // Neutral URL and kind: only the served dash+xml content type triggers manifest fetching.
+        val fetcher = FakeFetcher { _, headers ->
+            if ("Range" in headers) text(
+                status = 206,
+                headers = mapOf("Content-Type" to "application/dash+xml; charset=UTF-8",
+                    "Content-Range" to "bytes 0-0/4096"),
+                body = "x",
+            ) else text(mpd, headers = mapOf("Content-Type" to "application/dash+xml"))
+        }
+        val results = mutableListOf<ProbeResult>()
+        val queue = AutoProbeQueue(backgroundScope, fetcher)
+        queue.onResult = { _, _, result -> results += result }
+        queue.start()
+        queue.submit("https://cdn.example/manifest?token=abc", MediaKind.UNKNOWN, 3L, ctx)
+        runCurrent()
+        val verified = results.single() as ProbeResult.Verified
+        assertEquals(MediaKind.DASH, verified.kindHint)
+        assertEquals("application/dash+xml", verified.mime)
+        assertEquals(4096L, verified.totalBytes)
+        assertEquals(2, verified.variants!!.size)
+        // Sorted catalog order; no per-variant addresses, so entries point at the document.
+        assertEquals(1080, verified.variants!![0].height)
+        assertEquals(3_000_000L, verified.variants!![0].bandwidth)
+        assertEquals(720, verified.variants!![1].height)
+        assertEquals("https://cdn.example/manifest?token=abc", verified.variants!![0].url)
+        assertNull(verified.variants!![0].warning)
+        // The MPD fetch rode the same playlist budget: one header probe plus one text fetch.
+        assertEquals(1, fetcher.probeCalls())
+        assertEquals(1, fetcher.playlistCalls())
+    }
+
+    @Test fun dashManifestFetchesShareThePerEpochPlaylistBudget() = runTest {
+        val mpd = "<MPD><Period><AdaptationSet mimeType='video/mp4'>" +
+            "<Representation id='v' height='480' bandwidth='600000'/>" +
+            "</AdaptationSet></Period></MPD>"
+        val fetcher = FakeFetcher { _, headers ->
+            if ("Range" in headers) text(status = 200, headers = mapOf("Content-Type" to "application/dash+xml"))
+            else text(mpd)
+        }
+        val results = mutableListOf<ProbeResult>()
+        val queue = AutoProbeQueue(backgroundScope, fetcher)
+        queue.onResult = { _, _, result -> results += result }
+        queue.start()
+        repeat(5) { queue.submit("https://cdn.example/dash/v$it.mpd", MediaKind.DASH, 1L, ctx) }
+        runCurrent()
+        assertEquals(5, results.size)
+        // Same three-fetch budget as HLS playlists, shared, not additional.
+        assertEquals(3, fetcher.playlistCalls())
+        assertEquals(5, fetcher.probeCalls())
+        assertEquals(3, results.count { (it as ProbeResult.Verified).variants != null })
+        assertEquals(2, results.count { (it as ProbeResult.Verified).variants == null })
+    }
+
     @Test fun staleEpochRequestsAreDroppedAtSubmitAndAtProcessing() = runTest {
         val fetcher = FakeFetcher { _, headers ->
             text(status = 200, headers = mapOf("Content-Type" to "video/mp4"), body = "x")

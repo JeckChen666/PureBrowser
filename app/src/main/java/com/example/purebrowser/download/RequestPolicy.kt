@@ -22,6 +22,9 @@ object RequestPolicy {
     }
     fun canUseContext(source: String?, frame: String?, reliable: Boolean): Boolean = reliable && source != null &&
         origin(source) != null && (frame == null || sameOrigin(source,frame))
+    /** Probe-verified page association: consent may be offered only when the page is a valid web origin sharing the media and frame origin. */
+    fun canUseProbedContext(mediaUrl: String,pageUrl: String?,frameUrl: String?):Boolean = pageUrl!=null &&
+        canUseContext(pageUrl,frameUrl,true) && sameOrigin(pageUrl,mediaUrl)
     fun cookieEligible(record:DownloadRecord,target:String):Boolean = record.useAccessContext &&
         canUseContext(record.sourceUrl,record.frameUrl,record.reliableSource) && record.mediaUrl!=null &&
         sameOrigin(record.sourceUrl!!,record.mediaUrl) && sameOrigin(record.sourceUrl,target)

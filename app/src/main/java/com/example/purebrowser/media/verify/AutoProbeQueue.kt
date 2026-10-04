@@ -4,6 +4,8 @@ import com.example.purebrowser.download.RequestPolicy
 import com.example.purebrowser.download.hls.HlsParseException
 import com.example.purebrowser.download.hls.HlsPlaylistParser
 import com.example.purebrowser.media.MediaKind
+import com.example.purebrowser.media.VariantSummary
+import com.example.purebrowser.media.dash.MpdCatalog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -82,14 +84,20 @@ class AutoProbeQueue(
         if (probesUsed >= ProbePolicy.MAX_PROBES_PER_EPOCH) return
         probesUsed++
         var result = cheapProbe(request.url, request.ctx)
-        val wantsPlaylist = (result is ProbeResult.Verified && result.kindHint == MediaKind.HLS) ||
-            request.kind == MediaKind.HLS || looksLikePlaylistUrl(request.url)
-        if (wantsPlaylist && playlistFetchesUsed < ProbePolicy.MAX_PLAYLIST_FETCHES_PER_EPOCH) {
+        val hlsHint = result is ProbeResult.Verified && result.kindHint == MediaKind.HLS
+        // DASH manifests ride the same bounded text fetch and the same playlist budget; a served
+        // HLS content type outranks an .mpd-looking URL when the two shape hints disagree.
+        val dash = !hlsHint && ((result is ProbeResult.Verified && result.kindHint == MediaKind.DASH) ||
+            request.kind == MediaKind.DASH || looksLikeDashManifestUrl(request.url))
+        val wantsManifest = dash || hlsHint || request.kind == MediaKind.HLS || looksLikeHlsPlaylistUrl(request.url)
+        if (wantsManifest && playlistFetchesUsed < ProbePolicy.MAX_PLAYLIST_FETCHES_PER_EPOCH) {
             playlistFetchesUsed++
-            result = enrichWithPlaylist(request, result)
+            result = if (dash) enrichWithDashManifest(request, result) else enrichWithPlaylist(request, result)
         }
         if (request.epoch != latestEpoch) return
-        onResult?.invoke(request.url, request.epoch, result)
+        // Only Verified outcomes earn the page association; it is consent metadata, not evidence.
+        val outcome = if (result is ProbeResult.Verified) result.copy(pageUrl = request.ctx.pageUrl) else result
+        onResult?.invoke(request.url, request.epoch, outcome)
     }
 
     /** Anonymous header probe: Range 0-0 only; deep container sniffing stays with the explicit MediaProbe. */
@@ -113,6 +121,27 @@ class AutoProbeQueue(
             // Hard playlist rejects (live, encrypted, unsupported tags) keep the probe verdict honest.
             if (current is ProbeResult.Verified) current.copy(playlistWarning = e.safeReason) else current
         }
+    }
+
+    /**
+     * Display-tier MPD cataloging: the same bounded playlist fetch lists Representation summaries
+     * only — never segment addresses, and DASH download stays unsupported in this version.
+     */
+    private fun enrichWithDashManifest(request: ProbeRequest, current: ProbeResult): ProbeResult {
+        val fetched = fetchPlaylistText(request.url, request.ctx) ?: return current
+        val variants = MpdCatalog.representations(fetched.first, fetched.second).map { representation ->
+            // No per-variant addresses at this tier; every entry points at the document itself.
+            VariantSummary(
+                representation.height, representation.bandwidth, representation.codecs,
+                url = fetched.second, warning = null,
+            )
+        }
+        // Zero parsed representations still verifies the DASH hint; the surface stays generic.
+        return if (current is ProbeResult.Verified) current.copy(kindHint = MediaKind.DASH, variants = variants)
+        else ProbeResult.Verified(
+            totalBytes = null, resumable = false,
+            mime = "application/dash+xml", kindHint = MediaKind.DASH, variants = variants,
+        )
     }
 
     /** Bounded, policy-checked playlist text fetch mirroring HlsHttpClient.text with session headers. */
@@ -184,9 +213,14 @@ class AutoProbeQueue(
         }
     }
 
-    private fun looksLikePlaylistUrl(url: String): Boolean {
+    private fun looksLikeHlsPlaylistUrl(url: String): Boolean {
         val lower = url.lowercase(Locale.ROOT)
         return ".m3u8" in lower || "mpegurl" in lower
+    }
+
+    private fun looksLikeDashManifestUrl(url: String): Boolean {
+        val lower = url.lowercase(Locale.ROOT)
+        return ".mpd" in lower || "dash+xml" in lower
     }
 
     private class Opened(val finalUrl: String, val response: FetchedResponse)

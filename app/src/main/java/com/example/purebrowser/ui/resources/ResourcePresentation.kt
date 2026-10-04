@@ -20,7 +20,10 @@ internal fun MediaCandidate.unsupportedExplanation(): String = when {
     kind == MediaKind.HLS ->
         "这是 HLS 播放清单。可显式解析未加密的固定点播 MPEG-TS（H.264 / AAC），选择受支持档位并准备后保存为 MP4；不支持直播、DRM、独立音轨或 fMP4。"
     kind == MediaKind.DASH ->
-        "这是 DASH 播放清单，音频和视频可能分开传输。目前不支持分片下载与音视频合并。"
+        if (variants.isNullOrEmpty())
+            "这是 DASH 播放清单，音频和视频可能分开传输。目前不支持分片下载与音视频合并。"
+        else
+            "这是 DASH 播放清单，已列出检测到的档位。本版仅展示档位，暂不支持 DASH 下载与音视频合并。"
     kind == MediaKind.FILE ->
         "此地址不是可交给受控下载器的 HTTP / HTTPS 文件直链，暂时不能尝试保存。"
     else ->
