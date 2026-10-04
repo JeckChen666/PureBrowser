@@ -36,7 +36,12 @@ internal fun MediaCandidate.resourceType(): String {
 
 internal fun MediaCandidate.reliableSizeLabel(): String {
     val bytes = sizeBytes?.takeIf { it >= 0 } ?: return "大小未知"
-    if (bytes < 1024) return "响应大小 ${bytes} B"
+    return "响应大小 ${formatByteSize(bytes)}"
+}
+
+/** Same byte formatting for observed response sizes and auto-verified total sizes. */
+internal fun formatByteSize(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
     val units = listOf("KiB", "MiB", "GiB", "TiB", "PiB", "EiB")
     var value = bytes.toDouble() / 1024
     var index = 0
@@ -44,7 +49,7 @@ internal fun MediaCandidate.reliableSizeLabel(): String {
         value /= 1024
         index++
     }
-    return "响应大小 ${String.format(Locale.getDefault(), "%.1f", value)} ${units[index]}"
+    return "${String.format(Locale.getDefault(), "%.1f", value)} ${units[index]}"
 }
 
 internal fun sourceHost(url: String?): String? = url?.let {

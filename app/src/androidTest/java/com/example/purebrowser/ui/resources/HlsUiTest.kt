@@ -145,15 +145,15 @@ class HlsUiTest {
     }
 
     @Test(timeout = 60_000)
-    fun unsupportedVariantShowsReason_isDisabled_andCannotChangeSelectionOrFetch() {
+    fun warnedVariantIsSelectable_andKeepsDefaultChoiceUntilUserSwitch() {
         val fake = FakeTransport(mapOf(ENTRY to listOf(Reply(MASTER))))
         val submissions = show(draft(ENTRY), fake)
         click("hls-parse-playlist")
         awaitVariantList()
-        compose.onNodeWithTag("hls-variant-3").performScrollTo().assertIsNotEnabled().assertIsNotSelected().performClick()
+        compose.onNodeWithTag("hls-variant-3").performScrollTo().assertIsEnabled().assertIsNotSelected().performClick()
         compose.onNodeWithText("本版只支持 H.264 与 AAC 编码").assertExists()
-        compose.onNodeWithTag("hls-variant-1").assertIsSelected()
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("hls-variant-3").assertIsSelected()
+        compose.onNodeWithTag("hls-variant-1").assertIsNotSelected()
         assertEquals(listOf(ENTRY), fake.urls())
         compose.runOnIdle { assertTrue(submissions.isEmpty()) }
     }

@@ -162,14 +162,15 @@ class HlsPlaylistParserTest {
         assertEquals(123L, (parse(master("AVERAGE-BANDWIDTH=123")) as HlsPlaylist.Master).variants.single().bandwidth)
     }
 
-    @Test fun explicitOtherCodecFamiliesAreMarkedUnsupportedNotSelected() {
+    @Test fun explicitOtherCodecFamiliesBecomeSelectableWarnings() {
         listOf("hvc1.1.6.L93.B0,mp4a.40.2", "hev1.1,mp4a.40.2", "av01.0.08M.08,mp4a.40.2", "avc1.4d401f,ac-3", "vp09.00.10.08,opus").forEach {
             val v = (parse(master("CODECS=\"$it\"")) as HlsPlaylist.Master).variants.single()
-            assertFalse(v.supported)
+            assertTrue(v.supported)
             assertNotNull(v.unsupportedReason)
-            assertNull(HlsPlaylistParser.defaultVariant(listOf(v)))
+            assertSame(v, HlsPlaylistParser.defaultVariant(listOf(v)))
         }
         assertTrue((parse(master("CODECS=\"avc3.4d401f,mp4a.40.5\"")) as HlsPlaylist.Master).variants.single().supported)
+        assertNull((parse(master("CODECS=\"avc3.4d401f,mp4a.40.5\"")) as HlsPlaylist.Master).variants.single().unsupportedReason)
     }
 
     @Test fun attributesRejectDuplicatesUnclosedQuotesTrailingGarbageAndWrongTypes() {
@@ -218,11 +219,16 @@ class HlsPlaylistParserTest {
         rejected(master("AUDIO=\"a\"", extra = "$group\n$group"))
     }
 
-    @Test fun subtitleSelectionAndSeparateVideoGroupsAreUnsupportedWithoutBlockingOtherVariants() {
+    @Test fun subtitleSelectionsDowngradeToWarningsWhileSeparateVideoGroupsStayUnsupported() {
         val subtitles = "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"English\",URI=\"subs.m3u8\""
-        assertFalse((parse(master("SUBTITLES=\"subs\"", extra = subtitles)) as HlsPlaylist.Master).variants.single().supported)
+        val warned = (parse(master("SUBTITLES=\"subs\"", extra = subtitles)) as HlsPlaylist.Master).variants.single()
+        assertTrue(warned.supported)
+        assertNotNull(warned.unsupportedReason)
+        assertSame(warned, HlsPlaylistParser.defaultVariant(listOf(warned)))
         assertTrue((parse(master("BANDWIDTH=100", extra = subtitles)) as HlsPlaylist.Master).variants.single().supported)
-        assertFalse((parse(master("CLOSED-CAPTIONS=\"cc\"")) as HlsPlaylist.Master).variants.single().supported)
+        val captions = (parse(master("CLOSED-CAPTIONS=\"cc\"")) as HlsPlaylist.Master).variants.single()
+        assertTrue(captions.supported)
+        assertNotNull(captions.unsupportedReason)
         assertFalse((parse(master("VIDEO=\"separate\"")) as HlsPlaylist.Master).variants.single().supported)
     }
 
@@ -343,10 +349,11 @@ class HlsPlaylistParserTest {
         rejected(master("BANDWIDTH=1", extra = "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"b\",DEFAULT=MAYBE"))
         rejected(master("BANDWIDTH=1", extra = "#EXT-X-SESSION-DATA:DATA-ID=\"a\",VALUE=\"v\",URI=\"metadata\""))
     }
-    @org.junit.Test fun explicitAudioOnlyAndVideoOnlyVariantsAreUnsupported() {
+    @org.junit.Test fun explicitAudioOnlyAndVideoOnlyVariantsWarnButStaySelectable() {
         for(codec in listOf("mp4a.40.2","avc1.4d401f")) {
             val m=HlsPlaylistParser.parse("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100,CODECS=\"$codec\"\nv.m3u8\n","https://source.example/master.m3u8") as HlsPlaylist.Master
-            org.junit.Assert.assertFalse(m.variants.single().supported)
+            org.junit.Assert.assertTrue(m.variants.single().supported)
+            org.junit.Assert.assertNotNull(m.variants.single().unsupportedReason)
         }
     }
 

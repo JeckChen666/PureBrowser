@@ -1,5 +1,6 @@
 package com.example.purebrowser.download.hls
 
+import com.example.purebrowser.media.VariantSummary
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.net.URI
@@ -204,13 +205,16 @@ object HlsPlaylistParser {
         if (kind == Kind.MASTER) {
             if (variants.isEmpty()) reject("主清单没有视频档位")
             return HlsPlaylist.Master(variants.map { draft ->
-                val reason = draft.value.unsupportedReason ?: when {
-                    draft.subtitles != null -> "本版不支持字幕选择"
+                // Only separate A/V renditions still exclude a variant; codec/subtitle gates
+                // downgrade to a selectable warning so parse-on-detection can surface them.
+                val hardReason = when {
                     draft.video != null -> "本版不支持独立视频轨"
                     draft.audio != null && audioGroups[draft.audio] != false -> "本版不支持独立音轨或未定义音轨分组"
                     else -> null
                 }
-                draft.value.copy(supported = reason == null, unsupportedReason = reason)
+                val gateWarning = draft.value.unsupportedReason
+                    ?: if (draft.subtitles != null) "此档位声明了字幕轨，本版保存时不含字幕" else null
+                draft.value.copy(supported = hardReason == null, unsupportedReason = hardReason ?: gateWarning)
             })
         }
         if (!ended) reject("本版只支持具有结束标记的固定点播清单")
@@ -225,13 +229,29 @@ object HlsPlaylistParser {
     fun defaultVariant(variants: List<HlsVariant>): HlsVariant? {
         val supported = variants.filter { it.supported }
         if (supported.isEmpty()) return null
+        // Warned-but-selectable variants only qualify when no clean variant exists.
+        val clean = supported.filter { it.unsupportedReason == null }
+        return pickDefault(clean.ifEmpty { supported })
+    }
+
+    /** Master variant summaries for surface-level display; media playlists carry no variants. */
+    fun variantSummaries(body: String, finalUrl: String): List<VariantSummary> {
+        val master = parse(body, finalUrl) as? HlsPlaylist.Master ?: return emptyList()
+        return master.variants.map { variant ->
+            VariantSummary(variant.height, variant.bandwidth, variant.codecs, variant.url,
+                // An unsupported variant's reason is an exclusion, not a selectable warning.
+                variant.unsupportedReason?.takeIf { variant.supported })
+        }
+    }
+
+    private fun pickDefault(supported: List<HlsVariant>): HlsVariant {
         fun known(v: HlsVariant) = v.width != null && v.width > 0 && v.height != null && v.height > 0
         val quality = compareBy<HlsVariant> { it.height }.thenBy { it.width }.thenBy { it.bandwidth ?: -1L }
         supported.filter { known(it) && it.height!! <= 1080 }.maxWithOrNull(quality)?.let { return it }
         if (supported.all { known(it) && it.height!! > 1080 }) {
             val lowest = supported.minWithOrNull(compareBy<HlsVariant> { it.height }.thenBy { it.width })!!
             return supported.filter { it.height == lowest.height && it.width == lowest.width }
-                .maxByOrNull { it.bandwidth ?: -1L }
+                .maxByOrNull { it.bandwidth ?: -1L } ?: supported.first()
         }
         if (supported.all { !known(it) }) {
             val reliable = supported.filter { it.bandwidth != null && it.bandwidth > 0 }.sortedBy { it.bandwidth }
@@ -253,17 +273,19 @@ object HlsPlaylistParser {
         if (codecs != null && codecs.length > 1024) reject("档位编码属性超过限制")
         val names = codecs?.split(',')?.map { it.trim() }
         if (names?.any { it.length > 128 || !codecName.matches(it) } == true) reject("档位编码属性格式无效")
-        val reason = when {
-            names?.any { it.substringBefore('.') !in setOf("avc1", "avc3", "mp4a") } == true -> "本版只支持 H.264 与 AAC 编码"
-            names != null && (!names.any { it.startsWith("avc1") || it.startsWith("avc3") } || !names.any { it.startsWith("mp4a") }) -> "本版需要同组 H.264 视频与 AAC 音频"
-            a["CLOSED-CAPTIONS"] != null && a["CLOSED-CAPTIONS"] != "NONE" -> "本版不支持字幕选择"
+        // Codec and embedded-caption gates are warnings: the variant stays selectable and any
+        // later segment-level incompatibility fails honestly during resolution, never faked.
+        val warning = when {
+            names?.any { it.substringBefore('.') !in setOf("avc1", "avc3", "mp4a") } == true -> "此档位编码不是 H.264/AAC，保存时可能失败"
+            names != null && (!names.any { it.startsWith("avc1") || it.startsWith("avc3") } || !names.any { it.startsWith("mp4a") }) -> "此档位只声明单一 H.264 或 AAC 轨，可能不是完整视频"
+            a["CLOSED-CAPTIONS"] != null && a["CLOSED-CAPTIONS"] != "NONE" -> "此档位带内嵌字幕，本版保存时不含字幕"
             else -> null
         }
         a["CLOSED-CAPTIONS"]?.let {
             if (it == "NONE") a.number("CLOSED-CAPTIONS") else a.string("CLOSED-CAPTIONS")
         }
         return VariantDraft(
-            HlsVariant(url, peak ?: average, dimensions?.first, dimensions?.second, codecs, reason == null, reason),
+            HlsVariant(url, peak ?: average, dimensions?.first, dimensions?.second, codecs, warning == null, warning),
             a.string("AUDIO"), a.string("SUBTITLES"), a.string("VIDEO"),
         )
     }

@@ -48,3 +48,6 @@ tools/site-parser/node_modules/
 # V0.1.6-SNIFFING-ENHANCEMENT-RESEARCH.md §10-D4. Nothing under docs/research/
 # (reports included) may enter repo history.
 docs/research/
+
+# Hook-required local design spec for component writes
+out/

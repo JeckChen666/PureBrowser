@@ -2,9 +2,13 @@ package com.example.purebrowser.browser
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.webkit.*
+import com.example.purebrowser.browser.sniff.PageSignal
+import com.example.purebrowser.browser.sniff.PageSignalBridge
+import com.example.purebrowser.browser.sniff.PageSignalScript
 import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.ResourceSniffer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +21,7 @@ data class BrowserPage(
     val canGoBack: Boolean = false, val canGoForward: Boolean = false, val error: String? = null,
 )
 
-/** Passive request observation: never replaces WebView networking or exposes a JS/native bridge. */
+/** Passive page observation: never replaces WebView networking; the sole JS bridge is a read-only signal channel. */
 class BrowserEngine(
     val sniffer: ResourceSniffer,
     private val message: (String) -> Unit,
@@ -43,6 +47,9 @@ class BrowserEngine(
     private val scanner = object : Runnable {
         override fun run() { if (scanningActive && view != null) { scanMedia(); handler.postDelayed(this, 2000) } }
     }
+    /** Wired by the session layer; called on WebView's JS bridge thread with the epoch current at delivery. */
+    @Volatile var pageSignalListener: ((epoch: Long, signal: PageSignal) -> Unit)? = null
+    private val signalBridge = PageSignalBridge({ pageEpoch.get() }) { epoch, signal -> pageSignalListener?.invoke(epoch, signal) }
 
     private fun publish(next: BrowserPage) {
         mutablePage.value = next
@@ -65,6 +72,7 @@ class BrowserEngine(
             javaScriptCanOpenWindowsAutomatically = false
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
+        webView.addJavascriptInterface(signalBridge, "PbSniffBridge")
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(v: WebView, newProgress: Int) {
                 if (v !== view) return
@@ -82,6 +90,7 @@ class BrowserEngine(
                 sameDocumentUpdate=false
                 navigationStartedMs=System.currentTimeMillis()
                 pageEpoch.set(sniffer.beginPage())
+                v.evaluateJavascript(PageSignalScript.JS, null)
                 publish(BrowserPage(url = url ?: "about:blank", progress = 0))
             }
             override fun onPageFinished(v: WebView, url: String?) {
@@ -101,11 +110,7 @@ class BrowserEngine(
                 // Capture the epoch BEFORE checking the volatile owner: a concurrent teardown
                 // must not let an old view's request borrow the next page's generation.
                 val epoch = pageEpoch.get()
-                if (v === view && request.method == "GET") {
-                    val range=request.requestHeaders.entries.firstOrNull{it.key.equals("Range",true)}?.value
-                    val hasRange=range!=null && range.length<=80 && Regex("bytes=(?:[0-9]+-[0-9]*|-[0-9]+)").matches(range)
-                    sniffer.observe(epoch, request.url.toString(), Evidence.REQUEST, requestHasRange=hasRange)
-                }
+                if (v === view) observeGetRequest(epoch, request)
                 return null
             }
             override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -120,6 +125,20 @@ class BrowserEngine(
                 if (v === view) updateNavigation()
             }
             // SSL errors use WebView's default cancellation. Never silently bypass verification.
+        }
+        if (Build.VERSION.SDK_INT >= 24) runCatching {
+            // Service workers bypass the per-WebView client; feed them through the same passive
+            // observation path. Android 11 service-worker quirks still need runtime regression coverage; non-blocking.
+            if (serviceWorkerOwner !== this) {
+                ServiceWorkerController.getInstance().setServiceWorkerClient(object : ServiceWorkerClient() {
+                    override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? {
+                        // The process-global client has no owner view to check: only the live epoch admits evidence.
+                        observeGetRequest(pageEpoch.get(), request)
+                        return null
+                    }
+                })
+                serviceWorkerOwner = this
+            }
         }
         webView.setDownloadListener { url, _, _, mime, length ->
             if (view !== webView) return@setDownloadListener
@@ -168,6 +187,14 @@ class BrowserEngine(
         // old document's completion, and never let it unlock a newer scan.
         scanToken++
         domScanRunning = false
+    }
+
+    /** Shared passive GET observation used by both the WebView and service-worker clients. */
+    private fun observeGetRequest(epoch: Long, request: WebResourceRequest) {
+        if (request.method != "GET") return
+        val range=request.requestHeaders.entries.firstOrNull{it.key.equals("Range",true)}?.value
+        val hasRange=range!=null && range.length<=80 && Regex("bytes=(?:[0-9]+-[0-9]*|-[0-9]+)").matches(range)
+        sniffer.observe(epoch, request.url.toString(), Evidence.REQUEST, requestHasRange=hasRange)
     }
 
     private fun updateNavigation() {
@@ -225,16 +252,29 @@ class BrowserEngine(
             webView.onPause()
             invalidateScan()
             pageEpoch.set(sniffer.beginPage())
+            if (serviceWorkerOwner === this) {
+                serviceWorkerOwner = null
+                if (Build.VERSION.SDK_INT >= 24) runCatching {
+                    ServiceWorkerController.getInstance().setServiceWorkerClient(passiveServiceWorkerClient)
+                }
+            }
         }
         webView.stopLoading()
         webView.webChromeClient = null
         webView.webViewClient = WebViewClient()
         webView.setDownloadListener(null)
         webView.setOnLongClickListener(null)
+        webView.removeJavascriptInterface("PbSniffBridge")
         webView.destroy()
     }
 
     private companion object {
+        // The service-worker client is process-global: remember which engine installed it so a
+        // background tab's teardown cannot unhook the live tab's observation.
+        @Volatile private var serviceWorkerOwner: BrowserEngine? = null
+        private val passiveServiceWorkerClient = object : ServiceWorkerClient() {
+            override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? = null
+        }
         val MEDIA_SCAN = """
             (function() {
               try {

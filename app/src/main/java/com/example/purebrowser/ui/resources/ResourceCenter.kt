@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.MediaCandidate
 import com.example.purebrowser.media.MediaKind
+import com.example.purebrowser.media.ProbeState
 import com.example.purebrowser.ui.components.BrowserGlyph
 import com.example.purebrowser.ui.components.EmptyContent
 import com.example.purebrowser.ui.components.Glyph
@@ -211,6 +212,24 @@ internal fun ResourceMetadata(candidate: MediaCandidate) {
         } else {
             Text(candidate.reliableSizeLabel(), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (candidate.probeState == ProbeState.PENDING) {
+            Text("验证中", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        candidate.totalBytes?.takeIf { it > 0 }?.let {
+            Text("已验证大小：${formatByteSize(it)}（支持断点续传：${if (candidate.resumable == true) "是" else "否"}）",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        candidate.verifiedMime?.takeIf {
+            it.length <= 80 && Regex("[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+").matches(it)
+        }?.let {
+            Text("已验证类型：$it", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        candidate.variants?.takeIf { it.isNotEmpty() }?.let {
+            Text("${it.size} 档位${if (it.any { variant -> variant.warning != null }) "（部分档位带兼容提示）" else ""}",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

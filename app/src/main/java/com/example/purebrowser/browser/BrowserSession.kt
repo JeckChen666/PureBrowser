@@ -3,10 +3,26 @@ package com.example.purebrowser.browser
 import android.content.Context
 import android.content.MutableContextWrapper
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.WebView
 import android.widget.FrameLayout
+import com.example.purebrowser.browser.sniff.PageSignal
 import com.example.purebrowser.data.browser.TabRecord
+import com.example.purebrowser.download.UrlConnectionTransport
+import com.example.purebrowser.download.hls.HlsPlaylistParser
+import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.ResourceSniffer
+import com.example.purebrowser.media.fingerprint.FamilyDetector
+import com.example.purebrowser.media.fingerprint.PlayerConfigParser
+import com.example.purebrowser.media.verify.AutoProbeQueue
+import com.example.purebrowser.media.verify.HttpTransportUrlFetcher
+import com.example.purebrowser.media.verify.ParseOnDetectionCoordinator
+import com.example.purebrowser.media.verify.SessionContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import java.util.concurrent.atomic.AtomicReference
 
 /** A live, bounded tab session. Removing from a host does not destroy its browsing history. */
 class BrowserSession(
@@ -22,11 +38,48 @@ class BrowserSession(
     private val context = MutableContextWrapper(app)
     val sniffer = ResourceSniffer()
     val engine = BrowserEngine(sniffer, message, record.url, changed, visited, link)
-    private var webView: WebView? = null
+    private val mounted = AtomicReference<WebView?>()
+    private val webView: WebView? get() = mounted.get()
+    private val verifyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val probeQueue = AutoProbeQueue(verifyScope, HttpTransportUrlFetcher(UrlConnectionTransport()))
+    private val coordinator = ParseOnDetectionCoordinator(sniffer, probeQueue, verifyScope, ::sessionContext)
+
+    init {
+        coordinator.attach()
+        coordinator.start()
+        engine.pageSignalListener = ::onPageSignal
+    }
+
+    /** Page-session mirror for bounded auto-verification; read from the WebView, never persisted. */
+    private fun sessionContext(): SessionContext = SessionContext(
+        pageUrl = engine.page.value.url,
+        userAgent = webView?.settings?.userAgentString,
+        cookieFor = { url -> runCatching { CookieManager.getInstance().getCookie(url) }.getOrNull() },
+    )
+
+    /** Read-only page signals become sniffer evidence; config/blob payloads are parsed, never executed. */
+    private fun onPageSignal(epoch: Long, signal: PageSignal) {
+        when (signal) {
+            is PageSignal.MediaUrl -> sniffer.observe(epoch, signal.url, Evidence.REQUEST)
+            is PageSignal.IframeSrc -> sniffer.observe(epoch, signal.url, Evidence.REQUEST)
+            is PageSignal.MseMime -> Unit // mimeType only: no addressable candidate yet
+            is PageSignal.PlayerConfig -> {
+                val pageUrl = engine.page.value.url
+                val family = FamilyDetector.detect(setOf(signal.family))
+                PlayerConfigParser.parse(signal.rawJson, family, origin = pageUrl, baseUrl = pageUrl)
+                    .forEach { sniffer.observe(epoch, it.url, Evidence.DOM, title = it.qualityLabel) }
+            }
+            is PageSignal.BlobManifest -> {
+                val pageUrl = engine.page.value.url
+                HlsPlaylistParser.variantSummaries(signal.content, pageUrl)
+                    .forEach { sniffer.observe(epoch, it.url, Evidence.DOM) }
+            }
+        }
+    }
 
     fun mount(host: FrameLayout) {
         context.baseContext = host.context
-        val view = webView ?: WebView(context).also { webView = it; engine.attach(it) }
+        val view = acquireView()
         if (view.parent !== host) {
             (view.parent as? ViewGroup)?.removeView(view)
             host.removeAllViews()
@@ -35,7 +88,7 @@ class BrowserSession(
         }
     }
     /** Only the existing mounted view; callers must never construct an inactive tab for preview. */
-    fun mountedPreviewView(): WebView? = webView?.takeIf { it.parent != null }
+    fun mountedPreviewView(): WebView? = acquireView().takeIf { it.parent != null }
 
     fun unmount(host: FrameLayout) {
         val view = webView ?: return
@@ -46,8 +99,15 @@ class BrowserSession(
         }
     }
     fun destroy() {
+        coordinator.stop()
+        verifyScope.cancel()
+        engine.pageSignalListener = null
         webView?.let { (it.parent as? ViewGroup)?.removeView(it); engine.detach(it) }
-        webView = null
         context.baseContext = app
     }
+
+    private fun acquireView(): WebView =
+        mounted.get() ?: synchronized(this) {
+            mounted.get() ?: WebView(context).also { view -> mounted.set(view); engine.attach(view) }
+        }
 }

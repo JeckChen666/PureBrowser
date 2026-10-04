@@ -9,6 +9,21 @@ enum class MediaKind(val label: String) {
 enum class Evidence(val label: String) {
     REQUEST("网络请求"), DOM("视频元素"), TIMING("资源时间线"), DOWNLOAD("下载回调"), PROBE("受控媒体分析"), SITE("站点解析"), METADATA("页面媒体声明")
 }
+/** Background auto-verification state; NONE keeps the pre-verification behavior unchanged. */
+enum class ProbeState { NONE, PENDING, VERIFIED, FAILED }
+
+/** Surface-level master-playlist entry for parse-on-detection; warning marks a selectable-but-cautioned variant. */
+data class VariantSummary(
+    val height: Int?,
+    val bandwidth: Long?,
+    val codecs: String?,
+    val url: String,
+    val warning: String?,
+) {
+    // Never print a signed variant address or codec string in diagnostics.
+    override fun toString() = "VariantSummary(height=$height, bandwidth=$bandwidth, warned=${warning != null})"
+}
+
 data class MediaCandidate(
     val url: String,
     val kind: MediaKind,
@@ -19,6 +34,11 @@ data class MediaCandidate(
     val frameUrl: String? = null,
     val playing: Boolean = false,
     val reliableSource: Boolean = false,
+    val totalBytes: Long? = null,
+    val resumable: Boolean? = null,
+    val verifiedMime: String? = null,
+    val probeState: ProbeState = ProbeState.NONE,
+    val variants: List<VariantSummary>? = null,
 ) {
     val displayName: String get() = title?.takeIf { it.isNotBlank() }?.take(120) ?: runCatching {
         URI(url).path?.substringAfterLast('/')?.takeIf { it.isNotBlank() }

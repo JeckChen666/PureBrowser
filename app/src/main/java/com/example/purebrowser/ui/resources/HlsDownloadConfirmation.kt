@@ -143,7 +143,7 @@ fun HlsDownloadConfirmation(
         val master = preparation.options?.playlist as? HlsPlaylist.Master
         if (master != null) {
             Text("选择视频档位", style = MaterialTheme.typography.titleSmall)
-            Text("默认优先选择不超过 1080p 的受支持档位；仅作为选择建议，不代表内容已通过校验。分辨率或带宽缺失时不作推测。", style = MaterialTheme.typography.bodySmall)
+            Text("默认优先选择不超过 1080p 的受支持档位；仅作为选择建议，不代表内容已通过校验。带兼容提示的档位仍可尝试，失败会如实报告。分辨率或带宽缺失时不作推测。", style = MaterialTheme.typography.bodySmall)
             Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 master.variants.forEachIndexed { index, variant ->
                     Row(
@@ -160,6 +160,11 @@ fun HlsDownloadConfirmation(
                                 readableResourceName(variant.unsupportedReason ?: "此档位不在本版支持范围"),
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
                             )
+                            // Gate downgrades (codec/字幕) stay selectable and only warn here.
+                            else variant.unsupportedReason?.let {
+                                Text(readableResourceName(it), style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.tertiary)
+                            }
                         }
                     }
                 }
