@@ -43,3 +43,8 @@ __pycache__/
 
 # Pinned site-parser build tools; production bundle/provenance are tracked.
 tools/site-parser/node_modules/
+
+# Competitor APK reverse-engineering research: local-only per
+# V0.1.6-SNIFFING-ENHANCEMENT-RESEARCH.md §10-D4. Nothing under docs/research/
+# (reports included) may enter repo history.
+docs/research/
