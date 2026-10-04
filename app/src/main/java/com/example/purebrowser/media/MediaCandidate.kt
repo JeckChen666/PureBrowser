@@ -7,7 +7,7 @@ enum class MediaKind(val label: String) {
     FILE("视频直链"), HLS("HLS 清单"), DASH("DASH 清单"), LOCAL("页面本地媒体"), UNKNOWN("待确认媒体")
 }
 enum class Evidence(val label: String) {
-    REQUEST("网络请求"), DOM("视频元素"), TIMING("资源时间线"), DOWNLOAD("下载回调"), PROBE("受控媒体分析"), SITE("站点解析"), METADATA("页面媒体声明")
+    REQUEST("网络请求"), DOM("视频元素"), TIMING("资源时间线"), DOWNLOAD("下载回调"), PROBE("受控媒体分析"), SITE("站点解析"), METADATA("页面媒体声明"), RULE("站点规则")
 }
 /** Background auto-verification state; NONE keeps the pre-verification behavior unchanged. */
 enum class ProbeState { NONE, PENDING, VERIFIED, FAILED }

@@ -14,6 +14,8 @@ import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.ResourceSniffer
 import com.example.purebrowser.media.fingerprint.FamilyDetector
 import com.example.purebrowser.media.fingerprint.PlayerConfigParser
+import com.example.purebrowser.media.rules.RuleSet
+import com.example.purebrowser.media.rules.SiteRulesCoordinator
 import com.example.purebrowser.media.verify.AutoProbeQueue
 import com.example.purebrowser.media.verify.HttpTransportUrlFetcher
 import com.example.purebrowser.media.verify.ParseOnDetectionCoordinator
@@ -22,6 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicReference
 
 /** A live, bounded tab session. Removing from a host does not destroy its browsing history. */
@@ -43,11 +46,27 @@ class BrowserSession(
     private val verifyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val probeQueue = AutoProbeQueue(verifyScope, HttpTransportUrlFetcher(UrlConnectionTransport()))
     private val coordinator = ParseOnDetectionCoordinator(sniffer, probeQueue, verifyScope, ::sessionContext)
+    /** Latest harvested player configuration of the current epoch; family hint input for site rules. */
+    @Volatile private var playerConfigHarvest: Pair<Long, Pair<String, String>>? = null
+    val siteRules = SiteRulesCoordinator(
+        sniffer = sniffer,
+        scope = verifyScope,
+        ruleSet = { withContext(Dispatchers.IO) { RuleSet.load(app) } },
+        recentRequests = sniffer::recentRequests,
+        domSnapshot = engine::domSnapshot,
+        latestPlayerConfig = { playerConfigHarvest?.takeIf { it.first == engine.generation }?.second },
+    )
 
     init {
         coordinator.attach()
         coordinator.start()
         engine.pageSignalListener = ::onPageSignal
+        engine.pageSettleListener = ::onPageSettled
+    }
+
+    /** Built-in site rules run once per page settle; the engine filters non-web addresses before this. */
+    private fun onPageSettled(epoch: Long, url: String) {
+        siteRules.onPageSettled(epoch, url)
     }
 
     /** Page-session mirror for bounded auto-verification; read from the WebView, never persisted. */
@@ -65,6 +84,7 @@ class BrowserSession(
             is PageSignal.MseMime -> Unit // mimeType only: no addressable candidate yet
             is PageSignal.PlayerConfig -> {
                 val pageUrl = engine.page.value.url
+                playerConfigHarvest = epoch to (signal.family to signal.rawJson)
                 val family = FamilyDetector.detect(setOf(signal.family))
                 PlayerConfigParser.parse(signal.rawJson, family, origin = pageUrl, baseUrl = pageUrl)
                     .forEach { sniffer.observe(epoch, it.url, Evidence.DOM, title = it.qualityLabel) }
@@ -102,6 +122,8 @@ class BrowserSession(
         coordinator.stop()
         verifyScope.cancel()
         engine.pageSignalListener = null
+        engine.pageSettleListener = null
+        playerConfigHarvest = null
         webView?.let { (it.parent as? ViewGroup)?.removeView(it); engine.detach(it) }
         context.baseContext = app
     }

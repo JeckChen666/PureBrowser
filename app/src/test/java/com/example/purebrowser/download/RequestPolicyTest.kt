@@ -29,4 +29,23 @@ class RequestPolicyTest {
         assertFalse(RequestPolicy.cookieEligible(foreign,"https://site.example/state-changing"))
         assertNull(RequestPolicy.headers(foreign,"https://site.example/state-changing","session=demo")["Cookie"])
     }
+    // sessionCookieHeader is the pure session-header eligibility shared with the T74 session
+    // diagnostic harness: same value out when usable, null for anything unusable.
+    @Test fun sessionCookieHeaderAcceptsBoundedCookieValuesUnchanged() {
+        listOf("session=demo","a=1; b=2","x".repeat(16384)).forEach {
+            assertEquals(it,RequestPolicy.sessionCookieHeader(it))
+        }
+    }
+    @Test fun sessionCookieHeaderRejectsBlankOversizedAndControlValues() {
+        listOf(null,"","   ","a".repeat(16385),"s=a\r\nX-Bad: yes","s=a\nb","s=a\u0000b").forEach {
+            assertNull(it,RequestPolicy.sessionCookieHeader(it))
+        }
+    }
+    @Test fun sessionCookieHeaderRejectsCrossSiteMediaTargetsForSessionUse() {
+        // The WebView session is scoped to the media host family; a page-site cookie never
+        // becomes eligible for a cross-origin media target through the record policy either.
+        val crossSite=record().copy(mediaUrl="https://cdn.example/movie")
+        assertFalse(RequestPolicy.cookieEligible(crossSite,"https://cdn.example/movie"))
+        assertNull(RequestPolicy.headers(crossSite,"https://cdn.example/movie","session=demo")["Cookie"])
+    }
 }

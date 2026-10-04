@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "kvs-family",
+      "version": 1,
+      "match": { "path": "\\/video[0-9]{3,}\\/" },
+      "actions": [
+        { "type": "playerConfig", "family": "kvs" },
+        { "type": "domExtract", "selector": "#kt_player video[src], .video-js video[src], video[src^='http']", "attribute": "src" }
+      ],
+      "note": "KVS 播放器系站点视频页：按已知家族复用播放器配置提取，并直取播放器容器内 video 地址"
+    },
+    {
+      "id": "tube-flashvars-watch",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)pornhub\\.com$", "path": "viewkey=[A-Za-z0-9]+" },
+      "actions": [
+        { "type": "playerConfig", "family": "flashvars" },
+        { "type": "domExtract", "selector": ".video-wrapper video[src^='http'], video[src^='http']", "attribute": "src", "titleSelector": "h1" }
+      ],
+      "note": "flashvars 系大型 tube 站观看页：flashvars 全局配置提取加播放器内 video 直链"
+    },
+    {
+      "id": "tube-html5-watch",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)xvideos\\.com$", "path": "\\/video[0-9]+\\/" },
+      "actions": [
+        { "type": "playerConfig", "family": "html5player" },
+        { "type": "domExtract", "selector": "#html5video video[src^='http'], video source[src^='http']", "attribute": "src" }
+      ],
+      "note": "html5player 系大型 tube 站观看页：setter 脚本配置提取加 video/source 直链"
+    },
+    {
+      "id": "tube-html5-alt-watch",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)xnxx\\.(com|net)$", "path": "\\/video-[a-z0-9]+\\/" },
+      "actions": [
+        { "type": "playerConfig", "family": "html5player" },
+        { "type": "domExtract", "selector": "#html5video video[src^='http'], video source[src^='http']", "attribute": "src" }
+      ],
+      "note": "html5player 系同源姊妹站观看页：同族配置提取逻辑复用"
+    },
+    {
+      "id": "tube-xplayer-watch",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)xhamster[0-9]?\\.(com|net|desi)$", "path": "\\/videos\\/[a-z0-9-]+-[0-9]{6,}" },
+      "actions": [
+        { "type": "playerConfig", "family": "xplayer" },
+        { "type": "domExtract", "selector": "video[src^='http'], video source[src^='http']", "attribute": "src" }
+      ],
+      "note": "xplayer 系大型 tube 站观看页：initials.xplayerSettings 配置提取加 video 直链"
+    },
+    {
+      "id": "tube-kvs-alt-watch",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)anyporn\\.com$", "path": "\\/videos\\/[0-9]+\\/" },
+      "actions": [
+        { "type": "playerConfig", "family": "kvs" },
+        { "type": "domExtract", "selector": "#kt_player video[src^='http'], video source[src^='http']", "attribute": "src" }
+      ],
+      "note": "KVS 播放器系另一站点观看页：同族配置提取逻辑复用"
+    },
+    {
+      "id": "vimeo-player-config",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)vimeo\\.com$", "path": "player\\.vimeo\\.com\\/video\\/[0-9]+" },
+      "actions": [
+        { "type": "manifestHint", "kind": "unknown" }
+      ],
+      "note": "Vimeo 嵌入播放器配置请求：响应内含 progressive/HLS 地址；本版不截获响应，仅把端点标注为可分析线索"
+    },
+    {
+      "id": "vk-video-api",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)vk\\.com$", "path": "\\/method\\/video\\.get" },
+      "actions": [
+        { "type": "manifestHint", "kind": "unknown" }
+      ],
+      "note": "VK video.get API 调用：响应内含 mp4/HLS 地址；本版无凭据捕获，仅标注端点线索"
+    },
+    {
+      "id": "reddit-post",
+      "version": 1,
+      "match": { "hosts": "(^|\\.)reddit\\.com$" },
+      "actions": [
+        { "type": "domExtract", "selector": "video[src^='http'], video source[src^='http']", "attribute": "src", "titleSelector": "shreddit-title, h1" }
+      ],
+      "note": "Reddit 帖子页：提取内联 video 元素直链；打包媒体走跨域管线，本版不解析"
+    },
+    {
+      "id": "generic-flashvars-param",
+      "version": 1,
+      "match": { "path": "[?&]video_id=[0-9]+" },
+      "actions": [
+        { "type": "playerConfig", "family": "flashvars" },
+        { "type": "domExtract", "selector": "video[src^='http'], video source[src^='http']", "attribute": "src" }
+      ],
+      "note": "通用 flashvars 播放器家族：video_id 参数页复用配置提取加 video 直链"
+    },
+    {
+      "id": "generic-xplayer-page",
+      "version": 1,
+      "match": { "path": "\\/videos?\\/[a-z0-9][a-z0-9-]*-[0-9]{5,}" },
+      "actions": [
+        { "type": "playerConfig", "family": "xplayer" },
+        { "type": "domExtract", "selector": "video[src^='http'], video source[src^='http']", "attribute": "src" }
+      ],
+      "note": "通用 xplayer 播放器家族：slug 编号视频页复用 initials.xplayerSettings 配置提取"
+    }
+  ]
+}

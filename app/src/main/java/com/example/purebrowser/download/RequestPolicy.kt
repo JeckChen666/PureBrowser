@@ -28,6 +28,11 @@ object RequestPolicy {
     fun cookieEligible(record:DownloadRecord,target:String):Boolean = record.useAccessContext &&
         canUseContext(record.sourceUrl,record.frameUrl,record.reliableSource) && record.mediaUrl!=null &&
         sameOrigin(record.sourceUrl!!,record.mediaUrl) && sameOrigin(record.sourceUrl,target)
+    /** Pure session-header eligibility shared by the download policy and the diagnostic harness:
+     * a session cookie may become a Cookie header value only when non-blank, bounded and free of
+     * control characters; anything else is unusable (callers decide fail-vs-anonymous). */
+    fun sessionCookieHeader(cookie: String?): String? = cookie?.takeIf {
+        it.isNotBlank() && it.length <= 16384 && it.none(Char::isISOControl) }
     fun referer(source: String, target: String): String? = runCatching {
         val u = URI(source)
         if(sameOrigin(source,target)) URI("${u.scheme}://${u.rawAuthority}${u.rawPath.orEmpty().ifEmpty { "/" }}").toASCIIString()
@@ -38,8 +43,8 @@ object RequestPolicy {
         if(record.useAccessContext && canUseContext(record.sourceUrl,record.frameUrl,record.reliableSource)) {
             referer(record.sourceUrl!!,target)?.let { out["Referer"]=it }
             if(cookieEligible(record,target) && !cookie.isNullOrBlank()) {
-                if(cookie.length>16384 || cookie.any { it.isISOControl() }) throw TransferFailure(FailureKind.ACCESS_CONDITION,"网站会话无法安全用于此下载")
-                out["Cookie"]=cookie
+                out["Cookie"]=sessionCookieHeader(cookie)
+                    ?: throw TransferFailure(FailureKind.ACCESS_CONDITION,"网站会话无法安全用于此下载")
             }
         }
         return out

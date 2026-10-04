@@ -52,6 +52,7 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
         if(pending!=null) model.download(pending.draft,pending.wifiOnly,pending.name,pending.plan)
     }
     val sourcePage=model.engine?.page?.collectAsState()?.value?.url
+    val rulesMatched=model.siteRulesMatched()
     val siteAvailable=sourcePage?.let(model.siteResolver::supports)==true
     if(showResources) ResourceSheet(candidates, onDismissResources, { item ->
         if (pendingPermission != null) {
@@ -64,10 +65,15 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
             } else confirmDownload=draft
         } else model.notify("页面资源已更新，请重新打开资源面板")
         onDismissResources()
-    }, { onDismissResources() }, onAnalyzePage=if(siteAvailable) ({
-        val source=sourcePage ?: ""
-        sitePrivacyGeneration=runCatching{model.repository.requestGeneration()}.getOrDefault(-1L)
-        analyzeSite=model.downloadDraft(MediaCandidate(source,MediaKind.UNKNOWN,setOf(com.example.purebrowser.media.Evidence.SITE)),userAgent).copy(useAccessContext=false,reliableSource=false)
+    }, { onDismissResources() }, onAnalyzePage=if(siteAvailable||rulesMatched!=null) ({
+        if(siteAvailable) {
+            val source=sourcePage ?: ""
+            sitePrivacyGeneration=runCatching{model.repository.requestGeneration()}.getOrDefault(-1L)
+            analyzeSite=model.downloadDraft(MediaCandidate(source,MediaKind.UNKNOWN,setOf(com.example.purebrowser.media.Evidence.SITE)),userAgent).copy(useAccessContext=false,reliableSource=false)
+        } else {
+            // Rule-matched page without an adapter: the labeled clues already sit in the list below.
+            model.notify("已按站点规则识别本页（来源=站点规则）；线索已列入资源列表，可对“待确认媒体”执行分析媒体")
+        }
         onDismissResources()
     }) else null)
     fun submit(draft: DownloadDraft, name: String, wifiOnly: Boolean, plan: HlsDownloadPlan? = null) {

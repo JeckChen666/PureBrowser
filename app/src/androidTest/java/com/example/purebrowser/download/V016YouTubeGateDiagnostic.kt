@@ -12,6 +12,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
+import org.junit.Assume
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.InputStream
@@ -20,16 +21,19 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import com.example.purebrowser.download.V016YouTubeGateDiagnosticSupport as Gate
 
-/** ONLY #clientGateBoundedDiagnostic may use the network, and only with instrumentation argument
- * video=<11-char id> (plus optional clients= comma list, subset of IOS/ANDROID/ANDROID_VR/TV);
- * absent video argument makes it a deliberate no-op. Per client arm, sequentially and with a
- * fresh resolver/session, it resolves through the production resolver path (clientOverride), picks
- * the largest avc1 video-only track <=1080p, then performs ONE bounded anonymous media GET
- * (Range bytes=0-65535, body read <=64KiB+1, at most two redirect hops, 20s arm wall clock) using
- * the production media-open/header policy. Output is one masked JSON line per arm plus a summary
- * via println. Observation only: NO specific HTTP status is ever asserted; no download, mux,
- * enqueue or publish. The fixture* methods use in-memory HttpTransport only, without real-site
- * opt-in. Never run this method as part of a product/full suite. */
+/** ONLY the three arg-gated diagnostics (#clientGateBoundedDiagnostic, #segmentedRangeBoundedDiagnostic,
+ * #sessionRangeBoundedDiagnostic) may use the network, and only with instrumentation argument
+ * video=<11-char id> (plus optional clients= comma list, subset of IOS/ANDROID/ANDROID_VR/TV;
+ * #sessionRangeBoundedDiagnostic additionally honors session=true to attach the WebView's own
+ * session cookie to its bounded media GETs); absent video argument makes every one of them a
+ * deliberate no-op. Per arm, sequentially, each battery resolves through the production resolver
+ * path (clientOverride) with a fresh resolver/session, picks the largest avc1 video-only track
+ * <=1080p, then performs ONE bounded media GET (Range bytes=0-65535 or the arm's range shape,
+ * body read <=64KiB+1, at most two redirect hops, 20s arm wall clock) using the production
+ * media-open/header policy. Output is one masked JSON line per arm plus a summary via println.
+ * Observation only: NO specific HTTP status is ever asserted; no download, mux, enqueue or
+ * publish. The fixture* methods use in-memory HttpTransport only, without real-site opt-in.
+ * Never run this class as part of a product/full suite. */
 @RunWith(AndroidJUnit4::class)
 class V016YouTubeGateDiagnostic {
     @Test(timeout = 120_000) fun clientGateBoundedDiagnostic() {
@@ -197,6 +201,75 @@ class V016YouTubeGateDiagnostic {
         assertEquals("Every range shape must produce an observation record", shapes.size + 31, arms.size)
     }
 
+    /** T74 session-context variant of the range-shape battery: the SAME A/B/C shapes plus a D arm
+     * with the exact final-chunk window a 64 KiB segmented transfer would issue for the declared
+     * total (bytes=<total-65536>-<total-1>). Needs the video argument (absent -> deliberate
+     * no-op); the session argument selects the context. session absent/false: anonymous arms,
+     * identical policy to segmentedRangeBoundedDiagnostic. session=true: media GETs carry the
+     * WEBVIEW's session context — per hop, the cookie CookieManager holds for that hop's URL
+     * (youtube.com/googlevideo.com), validated by the shared pure session-header policy; the run
+     * first requires in-app login evidence and otherwise Assume-skips with instructions. One
+     * fresh resolve per run through the production resolver (anonymous worker, IOS); the battery
+     * shares <=6 media GETs total, per arm <=3 opens, a 20s deadline and a <=64KiB+1 body read;
+     * hops without a usable session cookie stay anonymous. Output is one masked SESS[shape] JSON
+     * line per arm plus a summary whose session flag is a boolean only — cookie contents, URLs
+     * and header values are never printed. The resolver itself never sees the session: logged-in
+     * playback is not observable from its output, so playability differences are skipped. */
+    @Test(timeout = 240_000) fun sessionRangeBoundedDiagnostic() {
+        val args = InstrumentationRegistry.getArguments()
+        val video = args.getString("video") ?: return // absent -> deliberate no-op
+        require(Regex("[A-Za-z0-9_-]{11}").matches(video)) { "video argument must be an 11-char id" }
+        val session = args.getString("session")?.equals("true", ignoreCase = true) == true
+        val cookieManager = android.webkit.CookieManager.getInstance()
+        val sessionCookieFor: ((String) -> String?)? = if (session) {
+            // Login guidance: without a youtube.com cookie in the WebView jar there is no session
+            // context to test — skip with instructions instead of silently running anonymous arms.
+            val loginEvidence = RequestPolicy.sessionCookieHeader(
+                runCatching { cookieManager.getCookie("https://www.youtube.com/") }.getOrNull()) != null
+            Assume.assumeTrue("需要先在应用内登录 YouTube（安装包启动后人工登录一次），再带 session=true 重跑", loginEvidence)
+            val lookup: (String) -> String? = { url -> runCatching { cookieManager.getCookie(url) }.getOrNull() }
+            lookup
+        } else null
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scheduler = scheduler()
+        val arms = mutableListOf<Pair<String, Gate.Arm>>()
+        val opens = java.util.concurrent.atomic.AtomicInteger()
+        try {
+            DualTrackTestSupport.test { repository ->
+                val started = SystemClock.elapsedRealtime()
+                val media = runBlocking {
+                    // Fresh resolve per run; the resolver is the anonymous production worker.
+                    withTimeout(40_000) { YouTubeResolver(context, repository::guardedTransport).resolve(video, "IOS") }
+                }
+                val resolveMs = SystemClock.elapsedRealtime() - started
+                println("SESS[resolve] client=IOS loggedInPlayback=NOT_OBSERVABLE resolveMs=$resolveMs")
+                val track = media.videos.maxBy { it.height }
+                check(track.length > 2_097_152) { "track too small for the mid-file and final-chunk probes" }
+                val shapes = listOf(
+                    "A" to "bytes=0-${Gate.RANGE_END}", "B" to "bytes=0-", "C" to "bytes=1048576-2097151",
+                    "D" to "bytes=${track.length - 65536}-${track.length - 1}")
+                // Battery-wide budget: at most 6 media GETs across every arm (per-arm cap still applies).
+                val budgeted = HttpTransport { url, headers, token ->
+                    check(opens.incrementAndGet() <= Gate.MAX_SESSION_HTTP_OPENS) { "Session battery media request budget exceeded" }
+                    UrlConnectionTransport().open(url, headers, token)
+                }
+                for ((shape, range) in shapes) {
+                    val arm = Gate.probe("IOS", resolveMs, track, request(), repository.guardedTransport(budgeted),
+                        SystemClock::elapsedRealtime, scheduler,
+                        deadlineMs = Gate.ARM_DEADLINE_MS, rangeHeader = range, sessionCookieFor = sessionCookieFor)
+                    arms += shape to arm
+                    println("SESS[shape=$shape] ${arm.json()}")
+                }
+            }
+        } finally {
+            scheduler.shutdownNow()
+            println("SESS[summary] arms=${arms.size} expected=4 session=${if (session) "on" else "off"} " +
+                "sessionArms=${arms.count { it.second.sessionContextOn }} twoXxOr206=" +
+                arms.filter { it.second.twoXxOr206 }.joinToString(",") { it.first })
+        }
+        assertEquals("Every session range shape must produce an observation record", 4, arms.size)
+    }
+
     @Test fun fixtureRangeGetUsesProductionHeaderPolicyAndObservesScalarsOnly() = withScheduler { scheduler ->
         var requestedUrl: String? = null
         var requestedHeaders: Map<String, String> = emptyMap()
@@ -229,6 +302,36 @@ class V016YouTubeGateDiagnostic {
             url = "https://fixture.googlevideo.com/videoplayback?n=sensitive-n&expire=1800000000"),
             request(), success206(), { 0 }, scheduler)
         assertFalse(clean.urlHasPotParam); assertFalse(clean.urlHasIpParam); assertFalse(clean.urlHasCpnParam)
+    }
+
+    @Test fun fixtureSessionProbeAttachesValidatedSessionCookieAsBooleanOnly() = withScheduler { scheduler ->
+        var requestedHeaders: Map<String, String> = emptyMap()
+        val arm = Gate.probe("IOS", 0, track(), request(), HttpTransport { url, headers, _ ->
+            requestedHeaders = headers.toMap()
+            response(206, mapOf("Content-Length" to "65536", "Content-Range" to "bytes 0-65535/1048576"), CountingBody())
+        }, { 0 }, scheduler, sessionCookieFor = { "VISITOR=sensitive-session; PREF=hidden" })
+        assertEquals("VISITOR=sensitive-session; PREF=hidden", requestedHeaders["Cookie"])
+        assertEquals("bytes=0-${Gate.RANGE_END}", requestedHeaders["Range"])
+        assertTrue(arm.sessionContextOn)
+        val json = arm.json()
+        assertEquals(false, json.get("anonymous")); assertEquals(true, json.get("sessionContext"))
+        val text = json.toString() + arm.toString()
+        for (forbidden in listOf("sensitive-session", "hidden", "VISITOR", "PREF", "Set-Cookie"))
+            assertFalse("Session diagnostic leaked a forbidden value", text.contains(forbidden))
+    }
+
+    @Test fun fixtureSessionProbeWithoutUsableCookieStaysAnonymous() = withScheduler { scheduler ->
+        for (lookup in listOf(null, "", "  ", "s=a\r\nX-Bad: yes", "a".repeat(16385))) {
+            var requestedHeaders: Map<String, String> = emptyMap()
+            val arm = Gate.probe("IOS", 0, track(), request(), HttpTransport { _, headers, _ ->
+                requestedHeaders = headers.toMap()
+                response(206, mapOf("Content-Range" to "bytes 0-65535/1048576"), CountingBody())
+            }, { 0 }, scheduler, sessionCookieFor = { lookup })
+            assertFalse(requestedHeaders.containsKey("Cookie"))
+            assertFalse(arm.sessionContextOn)
+            val json = arm.json()
+            assertEquals(true, json.get("anonymous")); assertEquals(false, json.get("sessionContext"))
+        }
     }
 
     @Test fun fixtureAccessDeniedIsRecordedWithoutReadingErrorBodyOrAssertingStatus() = withScheduler { scheduler ->

@@ -47,6 +47,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         { mutableLink.value = it })
     val engine get() = tabs.active.value?.engine
     val sniffer get() = tabs.active.value?.sniffer
+    /** Non-null source label while the active page was matched by a built-in site rule in this generation. */
+    fun siteRulesMatched(): String? {
+        val session=tabs.active.value ?: return null
+        return session.siteRules.matchedNote(session.engine.generation,session.engine.page.value.url)
+    }
     private val runtime = com.example.purebrowser.download.DownloadRuntime.get(application)
     val repository = runtime.repository
     // Same request/access policy as queue execution; constructing this never fetches a playlist.

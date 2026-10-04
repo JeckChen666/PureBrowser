@@ -11,10 +11,16 @@ import com.example.purebrowser.browser.sniff.PageSignalBridge
 import com.example.purebrowser.browser.sniff.PageSignalScript
 import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.ResourceSniffer
+import com.example.purebrowser.media.rules.DomNode
+import com.example.purebrowser.media.rules.RuleSelectorPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONArray
+import org.json.JSONObject
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.resume
 
 data class BrowserPage(
     val url: String = "about:blank", val title: String = "PureBrowser", val progress: Int = 100,
@@ -53,6 +59,8 @@ class BrowserEngine(
     /** Wired by the session layer; called on WebView's JS bridge thread with the epoch current at delivery. */
     @Volatile var pageSignalListener: ((epoch: Long, signal: PageSignal) -> Unit)? = null
     private val signalBridge = PageSignalBridge({ pageEpoch.get() }) { epoch, signal -> pageSignalListener?.invoke(epoch, signal) }
+    /** Wired by the session layer; invoked on the main thread from onPageFinished with the settled page. */
+    @Volatile var pageSettleListener: ((epoch: Long, url: String) -> Unit)? = null
 
     private fun publish(next: BrowserPage) {
         mutablePage.value = next
@@ -102,6 +110,7 @@ class BrowserEngine(
                 if (v !== view) return
                 updateNavigation()
                 scanMedia()
+                if (BrowserAddress.isWebUrl(url.orEmpty())) runCatching { pageSettleListener?.invoke(pageEpoch.get(), url!!) }
                 if (url == "about:blank") { v.clearHistory(); updateNavigation() }
                 else if (mutablePage.value.error == null && BrowserAddress.isWebUrl(url.orEmpty())) onVisited(url!!, mutablePage.value.title)
             }
@@ -247,6 +256,48 @@ class BrowserEngine(
         }
     }
 
+    /**
+     * Bounded read-only selector query for the rules layer. Masking and limits mirror MEDIA_SCAN:
+     * capped nodes, attributes and serialized size, stale-page suppression, and an empty answer for
+     * any selector outside the shared whitelist. The engine never executes captured strings; it
+     * only returns attribute values and text as data.
+     */
+    fun querySelectorAll(selector: String, onResult: (List<DomNode>) -> Unit) {
+        if (!RuleSelectorPolicy.isValid(selector)) { onResult(emptyList()); return }
+        val current = view
+        if (current == null || !BrowserAddress.isWebUrl(current.url.orEmpty())) { onResult(emptyList()); return }
+        val epoch = pageEpoch.get()
+        handler.post {
+            val owner = view
+            if (owner == null || owner !== current || epoch != pageEpoch.get()) { onResult(emptyList()); return@post }
+            current.evaluateJavascript(RULE_DOM_QUERY.replace("__SELECTOR__", JSONObject.quote(selector))) { result ->
+                if (epoch != pageEpoch.get() || current !== view || result.length > 65_536) {
+                    onResult(emptyList()); return@evaluateJavascript
+                }
+                val nodes = runCatching {
+                    val decoded = JSONArray("[$result]").getString(0)
+                    val data = JSONArray(decoded)
+                    (0 until data.length()).mapNotNull { index ->
+                        val item = data.optJSONObject(index) ?: return@mapNotNull null
+                        val attrs = LinkedHashMap<String, String>()
+                        val rawAttrs = item.optJSONObject("attrs")
+                        if (rawAttrs != null) for (key in rawAttrs.keys()) {
+                            val value = rawAttrs.optString(key, "")
+                            if (value.length in 1..2048) attrs[key.lowercase(Locale.ROOT)] = value
+                        }
+                        DomNode(attrs, item.optString("text").takeIf { it.isNotEmpty() })
+                    }
+                }.getOrDefault(emptyList())
+                onResult(nodes)
+            }
+        }
+    }
+
+    /** Snapshot callback handed to the rules engine; requests pages through the bounded runner above. */
+    suspend fun domSnapshot(selector: String): List<DomNode> = suspendCancellableCoroutine { continuation ->
+        querySelectorAll(selector) { nodes -> if (continuation.isActive) continuation.resume(nodes) }
+    }
+
     fun detach(webView: WebView) {
         if (view === webView) {
             // Revoke callback ownership before stopLoading/onPause can deliver final events.
@@ -333,6 +384,37 @@ class BrowserEngine(
                 }
                 walk(window,0); return JSON.stringify(out);
               } catch(e) { return '[]'; }
+            })();
+        """.trimIndent()
+
+        // Read-only selector runner for the rules layer: attribute values are resolved against the
+        // document only when they already look like addresses; everything is capped before returning.
+        val RULE_DOM_QUERY = """
+            (function () {
+              try {
+                var out = [], budget = 0;
+                function normalize(v) {
+                  try {
+                    if (/^https?:\/\//i.test(v)) return v;
+                    if (v.indexOf('//') === 0) return location.protocol + v;
+                    if (v.indexOf('/') === 0) return location.origin + v;
+                  } catch (e) {}
+                  return v;
+                }
+                var nodes = document.querySelectorAll(__SELECTOR__);
+                for (var i = 0; i < nodes.length && i < 24; i++) {
+                  var n = nodes[i], attrs = {}, list = n.attributes || [];
+                  for (var j = 0; j < list.length && j < 32; j++) {
+                    var v = list[j].value || '';
+                    if (v.length <= 2048) attrs[list[j].name] = normalize(v);
+                  }
+                  var item = { attrs: attrs, text: (n.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 256) };
+                  var cost = JSON.stringify(item).length;
+                  if (budget + cost > 60000) break;
+                  budget += cost; out.push(item);
+                }
+                return JSON.stringify(out);
+              } catch (e) { return '[]'; }
             })();
         """.trimIndent()
     }

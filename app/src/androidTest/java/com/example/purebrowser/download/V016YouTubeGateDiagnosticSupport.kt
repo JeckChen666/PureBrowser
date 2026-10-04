@@ -12,11 +12,13 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Test-only v0.1.6 client-gate observer; not an alternative downloader, not product acceptance.
- * One arm = ONE bounded anonymous media GET (Range bytes=0-65535, body read <=64KiB+1, at most two
+ * One arm = ONE bounded media GET (Range bytes=0-65535, body read <=64KiB+1, at most two
  * redirect hops) using the same production media-open/header policy as the V015 transfer support.
- * Reports carry scalar observations and URL query parameter NAMES as booleans only: never a URL,
- * param value, header value, Location, exception text or body bytes. No cookies, credentials,
- * retries or client rotation inside an arm. */
+ * Arms are anonymous by default; only an explicit sessionCookieFor opt-in appends the WebView's
+ * own cookie for the current hop's URL (validated by RequestPolicy.sessionCookieHeader, boolean
+ * presence only in reports). Reports carry scalar observations and URL query parameter NAMES as
+ * booleans only: never a URL, param value, header value, cookie content, Location, exception text
+ * or body bytes. No credentials, retries or client rotation inside an arm. */
 internal object V016YouTubeGateDiagnosticSupport {
     const val MAX_CLIENTS = 4
     const val MAX_REDIRECTS = 2
@@ -24,6 +26,8 @@ internal object V016YouTubeGateDiagnosticSupport {
     const val RANGE_END = 65535
     const val MAX_BODY_BYTES = 64 * 1024 + 1
     const val ARM_DEADLINE_MS = 20_000L
+    /** Whole-battery media GET budget for the session battery (T74): shared across all its arms. */
+    const val MAX_SESSION_HTTP_OPENS = 6
     const val USER_AGENT = "PureBrowser authorized Sintel audit"
     private val redirects = setOf(301, 302, 303, 307, 308)
     private val contentRange = Regex("bytes ([0-9]{1,19})-([0-9]{1,19})/([0-9]{1,19})")
@@ -52,6 +56,7 @@ internal object V016YouTubeGateDiagnosticSupport {
         var bodyBytesRead = 0
         var prefix = Prefix.NOT_OBSERVED
         var rangeHeaderObserved = "bytes=0-$RANGE_END"
+        var sessionContextOn = false
         var elapsedMs = 0L
         val hops = mutableListOf<JSONObject>()
         val twoXxOr206 get() = status?.let { it in 200..299 } == true
@@ -68,7 +73,10 @@ internal object V016YouTubeGateDiagnosticSupport {
             .put("contentLengthMatchesDeclared", contentLengthMatchesDeclared)
             .put("bodyBytesRead", bodyBytesRead).put("prefixFlag", prefix.name)
             .put("elapsedMs", elapsedMs).put("rangeEnd", RANGE_END)
-            .put("bodyReadLimit", MAX_BODY_BYTES).put("anonymous", true).put("rangeHeader", rangeHeaderObserved)
+            .put("bodyReadLimit", MAX_BODY_BYTES)
+            // Session context is a boolean only: whether a validated session cookie was attached.
+            .put("anonymous", !sessionContextOn).put("sessionContext", sessionContextOn)
+            .put("rangeHeader", rangeHeaderObserved)
             // A bounded prefix observation is never download success.
             .put("downloadSucceeded", false).put("completeTransferAttempted", false)
             .put("hops", JSONArray(hops))
@@ -102,6 +110,7 @@ internal object V016YouTubeGateDiagnosticSupport {
         transport: HttpTransport, clock: () -> Long, scheduler: ScheduledThreadPoolExecutor,
         deadlineMs: Long = ARM_DEADLINE_MS, rangeHeader: String = "bytes=0-$RANGE_END",
         queryRange: String? = null, noRange: Boolean = false,
+        sessionCookieFor: ((url: String) -> String?)? = null,
     ): Arm {
         val result = Arm(client, resolveMs)
         result.rangeHeaderObserved = when { noRange -> "none"; queryRange != null -> "query:$queryRange"; else -> rangeHeader }
@@ -127,6 +136,16 @@ internal object V016YouTubeGateDiagnosticSupport {
                 // (the browser-player carrier; the value is our own closed interval).
                 val headers = RequestPolicy.headers(request, url, null).toMutableMap()
                 check(headers.keys.none { it.equals("Cookie", true) || it.equals("Authorization", true) })
+                if (sessionCookieFor != null) {
+                    // Explicit session-context opt-in (T74): append ONLY the WebView's own cookie
+                    // for THIS hop's URL, validated by the shared pure session-header policy.
+                    // A null/blank/unusable lookup keeps the hop anonymous; the value is never
+                    // observed beyond the header write (reports carry a boolean only).
+                    RequestPolicy.sessionCookieHeader(sessionCookieFor(url))?.let {
+                        headers["Cookie"] = it
+                        result.sessionContextOn = true
+                    }
+                }
                 if (queryRange == null && !noRange) headers["Range"] = rangeHeader
                 val target = if (queryRange == null) url else {
                     check(!urlHasQueryParam(url, "range"))

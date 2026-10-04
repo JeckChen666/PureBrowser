@@ -117,4 +117,87 @@ class ResourceSnifferTest {
         org.junit.Assert.assertNull(sniffer.candidates.value.firstOrNull{it.url=="https://cdn.example/unknown.mp4"})
         org.junit.Assert.assertNull(sniffer.candidates.value.firstOrNull{it.url=="https://cdn.example/a.mp4"})
     }
+    // T76 ranking weighting: primary signals break ties WITHIN an evidence tier only.
+    @org.junit.Test fun variantMasterOutranksPreviewFileWithinTheSameEvidenceTier() {
+        val sniffer=ResourceSniffer();val page=sniffer.beginPage()
+        // Correct-but-not-main preview file (T61 跟进2 shape): 10 MB progressive file.
+        sniffer.observe(page,"https://cdn.example/preview.mp4",Evidence.REQUEST,sizeBytes=10_048_775L,mimeType="video/mp4")
+        sniffer.applyProbeResult("https://cdn.example/preview.mp4",page,
+            com.example.purebrowser.media.verify.ProbeResult.Verified(10_048_775L,true,"video/mp4",MediaKind.FILE))
+        // Main video: master manifest with a 720p first variant.
+        sniffer.observe(page,"https://cdn.example/master.m3u8",Evidence.REQUEST,mimeType="application/vnd.apple.mpegurl")
+        sniffer.applyProbeResult("https://cdn.example/master.m3u8",page,
+            com.example.purebrowser.media.verify.ProbeResult.Verified(145L,false,"application/vnd.apple.mpegurl",MediaKind.HLS,
+                listOf(VariantSummary(720,800_000L,null,"https://cdn.example/gear-720.m3u8",null))))
+        val order=sniffer.candidates.value
+        org.junit.Assert.assertEquals("https://cdn.example/master.m3u8",order.first().url)
+        org.junit.Assert.assertEquals("https://cdn.example/preview.mp4",order.last().url)
+    }
+    @org.junit.Test fun tinyLibraryFilesGetNoLengthBonusWithinTier() {
+        val sniffer=ResourceSniffer();val page=sniffer.beginPage()
+        sniffer.observe(page,"https://cdn.example/library.mp4",Evidence.REQUEST,sizeBytes=57_344L,mimeType="video/mp4")
+        sniffer.observe(page,"https://cdn.example/full.mp4",Evidence.REQUEST,sizeBytes=900_000_000L,mimeType="video/mp4")
+        // 57 KB < 5 MiB scores nothing; the in-window file leads despite being observed second.
+        org.junit.Assert.assertEquals("https://cdn.example/full.mp4",sniffer.candidates.value.first().url)
+        org.junit.Assert.assertEquals("https://cdn.example/library.mp4",sniffer.candidates.value.last().url)
+    }
+    @org.junit.Test fun rankingIsUnchangedWhenPrimarySignalFieldsAreAbsent() {
+        val sniffer=ResourceSniffer();val page=sniffer.beginPage()
+        sniffer.observe(page,"https://cdn.example/a.mp4",Evidence.REQUEST)
+        sniffer.observe(page,"https://cdn.example/b.mp4",Evidence.REQUEST)
+        // Equal tier, zero signal, equal probe state: insertion order survives (stable sort).
+        org.junit.Assert.assertEquals(listOf("https://cdn.example/a.mp4","https://cdn.example/b.mp4"),
+            sniffer.candidates.value.map{it.url})
+        sniffer.observe(page,"https://cdn.example/b.mp4",Evidence.TIMING)
+        org.junit.Assert.assertEquals(listOf("https://cdn.example/a.mp4","https://cdn.example/b.mp4"),
+            sniffer.candidates.value.map{it.url})
+    }
+    @org.junit.Test fun sALikeQualityMastersOutrankTheRequestTierPreviewWithinDomTier() {
+        val sniffer=ResourceSniffer();val page=sniffer.beginPage()
+        // Four DOM-evidence quality masters (240/480/720/1080), each with one ladder variant.
+        listOf(240,480,720,1080).forEach { height ->
+            sniffer.observe(page,"https://site.example/q/$height/index.m3u8",Evidence.DOM,mimeType="application/vnd.apple.mpegurl")
+            sniffer.applyProbeResult("https://site.example/q/$height/index.m3u8",page,
+                com.example.purebrowser.media.verify.ProbeResult.Verified(145L,false,"application/vnd.apple.mpegurl",MediaKind.HLS,
+                    listOf(VariantSummary(height,1_000_000L,null,"https://site.example/q/$height/gear.m3u8",null))))
+        }
+        // The 10 MB REQUEST-tier preview file has a +2 length signal but must never cross tiers.
+        sniffer.observe(page,"https://site.example/preview.mp4",Evidence.REQUEST,sizeBytes=10_048_775L,mimeType="video/mp4")
+        sniffer.applyProbeResult("https://site.example/preview.mp4",page,
+            com.example.purebrowser.media.verify.ProbeResult.Verified(10_048_775L,true,"video/mp4",MediaKind.FILE))
+        val order=sniffer.candidates.value
+        org.junit.Assert.assertEquals(5,order.size)
+        org.junit.Assert.assertTrue(order.take(4).all { it.kind==MediaKind.HLS && it.variants!=null })
+        // Inside the DOM tier the >=480p masters lead; the 240p one (no variant bonus) trails them.
+        org.junit.Assert.assertTrue(order.first().variants!!.first().height!!>=480)
+        org.junit.Assert.assertEquals(240,order[3].variants!!.first().height)
+        org.junit.Assert.assertEquals(MediaKind.FILE,order.last().kind)
+    }
+    @org.junit.Test fun ruleEvidenceAdmitsExtensionlessUrlsAsUnknownAndRanksAboveDownloadTier() {
+        val sniffer=ResourceSniffer();val page=sniffer.beginPage()
+        sniffer.observe(page,"https://site.example/dl",Evidence.DOWNLOAD,mimeType="video/mp4")
+        sniffer.observe(page,"https://api.example/video.get?id=1",Evidence.RULE,title="Clip")
+        val list=sniffer.candidates.value
+        org.junit.Assert.assertEquals(2,list.size)
+        org.junit.Assert.assertEquals("https://api.example/video.get?id=1",list.first().url)
+        org.junit.Assert.assertEquals(MediaKind.UNKNOWN,list.first{it.url.startsWith("https://api")}.kind)
+        org.junit.Assert.assertEquals(setOf(Evidence.RULE),list.first{it.url.startsWith("https://api")}.sources)
+        org.junit.Assert.assertEquals("Clip",list.first{it.url.startsWith("https://api")}.title)
+        // DOM evidence still outranks the rules tier.
+        sniffer.observe(page,"https://play.example/v.mp4",Evidence.DOM,videoElement=true,playing=true)
+        org.junit.Assert.assertEquals("https://play.example/v.mp4",sniffer.candidates.value.first().url)
+    }
+    @org.junit.Test fun recentRequestsRecordRawGetsIncludingUnclassifiedEndpointsAndResetPerEpoch() {
+        val sniffer=ResourceSniffer()
+        val old=sniffer.beginPage()
+        sniffer.observe(old,"https://api.example/method/video.get?v=1",Evidence.REQUEST)
+        sniffer.observe(old,"https://img.example/a.jpg",Evidence.DOM)
+        sniffer.observe(old,"ftp://not-http.example/x",Evidence.REQUEST)
+        org.junit.Assert.assertEquals(listOf("https://api.example/method/video.get?v=1"),sniffer.recentRequests())
+        val page=sniffer.beginPage()
+        org.junit.Assert.assertTrue(sniffer.recentRequests().isEmpty())
+        sniffer.observe(old,"https://stale.example/late.mp4",Evidence.REQUEST)
+        sniffer.observe(page,"https://cdn.example/video1234/title/",Evidence.REQUEST)
+        org.junit.Assert.assertEquals(listOf("https://cdn.example/video1234/title/"),sniffer.recentRequests())
+    }
 }

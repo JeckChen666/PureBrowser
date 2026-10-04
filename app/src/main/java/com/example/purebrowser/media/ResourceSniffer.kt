@@ -12,6 +12,8 @@ class ResourceSniffer {
     private val mutableCandidates = MutableStateFlow<List<MediaCandidate>>(emptyList())
     val candidates = mutableCandidates.asStateFlow()
     private val hookedUrls = hashSetOf<String>()
+    // Raw GET addresses of the current page in arrival order; rule-engine input only, never persisted.
+    private val recentRequests = ArrayDeque<String>()
 
     /**
      * Optional parse-on-detection sink. Invoked from observe for http(s) FILE/UNKNOWN/HLS candidates
@@ -24,6 +26,7 @@ class ResourceSniffer {
         epoch++
         entries.clear()
         hookedUrls.clear()
+        recentRequests.clear()
         mutableCandidates.value = emptyList()
         return epoch
     }
@@ -42,9 +45,11 @@ class ResourceSniffer {
         requestHasRange: Boolean = false,
     ) {
         if (pageEpoch != epoch) return
+        if (source == Evidence.REQUEST) recordRequest(url)
         val classified = MediaClassifier.classify(url, mimeType, videoElement)
         val kind = (if(source==Evidence.METADATA && classified==MediaKind.FILE)MediaKind.UNKNOWN else classified)
-            ?: if(source in setOf(Evidence.REQUEST,Evidence.TIMING) && (MediaClassifier.possibleEndpoint(url) || (requestHasRange && !MediaClassifier.isFragmentUrl(url) && runCatching{com.example.purebrowser.download.RequestPolicy.origin(url)!=null && java.net.URI(url).rawUserInfo==null}.getOrDefault(false)))) MediaKind.UNKNOWN else return
+            ?: if(source==Evidence.RULE) MediaKind.UNKNOWN
+            else if(source in setOf(Evidence.REQUEST,Evidence.TIMING) && (MediaClassifier.possibleEndpoint(url) || (requestHasRange && !MediaClassifier.isFragmentUrl(url) && runCatching{com.example.purebrowser.download.RequestPolicy.origin(url)!=null && java.net.URI(url).rawUserInfo==null}.getOrDefault(false)))) MediaKind.UNKNOWN else return
         val key = url.substringBefore('#')
         val old = entries[key]
         if (old == null) {
@@ -136,13 +141,22 @@ class ResourceSniffer {
         publish()
     }
 
-    // Verified entries outrank unverified ones only inside the same evidence tier.
+    /** Bounded, in-memory window of this page's GET addresses, main document included. */
+    private fun recordRequest(url: String) {
+        if (url.length > 8192 || !url.startsWith("http", true)) return
+        if (recentRequests.size >= 128) recentRequests.removeFirst()
+        recentRequests.addLast(url)
+    }
+
+    @Synchronized fun recentRequests(): List<String> = recentRequests.toList()
+
+    // Evidence tier first (DOM still beats REQUEST); RankWeight primary signals (variants/length/
+    // quality title/playing) break ties WITHIN a tier only; verified remains the last tiebreaker.
     private fun publish() {
         mutableCandidates.value = entries.values.sortedWith(
-            compareByDescending<MediaCandidate> {
-                when { it.playing && Evidence.DOM in it.sources -> 4; Evidence.DOM in it.sources -> 3
-                    Evidence.DOWNLOAD in it.sources -> 2; else -> 1 }
-            }.thenByDescending { it.probeState == ProbeState.VERIFIED }
+            compareByDescending<MediaCandidate> { RankWeight.evidenceTier(it) }
+                .thenByDescending { RankWeight.primarySignal(it) }
+                .thenByDescending { it.probeState == ProbeState.VERIFIED }
         )
     }
 
