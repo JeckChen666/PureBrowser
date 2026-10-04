@@ -46,7 +46,7 @@ class YouTubeMediaAdapter(private val resolver:YouTubeResolver):SiteMediaAdapter
 }
 
 /** A PeerTube public API shape, usable on independent deployments without a host whitelist.
- * Only exact UUID watch paths; validates response work identity and published complete MP4 URLs. */
+ * Only exact UUID/short-UUID watch paths; validates response work identity and published complete MP4 URLs. */
 class PeerTubeMediaAdapter(private val transport:HttpTransport,private val allowLocalHttp:Boolean=false):SiteMediaAdapter {
     override fun supports(pageUrl:String)=PeerTubeIdentity.videoId(pageUrl)!=null
     override suspend fun resolve(draft:DownloadDraft,cancel:TransferCancellation)=withContext(Dispatchers.IO) {
@@ -78,7 +78,7 @@ object PeerTubeIdentity {
         RequestPolicy.validateUrl(value,false)
         val uri=URI(value)
         if(uri.port !in setOf(-1,443) || uri.rawFragment!=null)return null
-        val full=Regex("/videos/watch/([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})/?").matchEntire(uri.path)?.groupValues?.get(1)?.lowercase()
+        val full=Regex("/(?:videos/watch|w)/([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})/?").matchEntire(uri.path)?.groupValues?.get(1)?.lowercase()
         if(full!=null)return full
         val short=Regex("/w/([1-9A-HJ-NP-Za-km-z]{22})/?").matchEntire(uri.path)?.groupValues?.get(1) ?: return null
         val alphabet="123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
