@@ -36,6 +36,8 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
     var analyzeSite by remember { mutableStateOf<DownloadDraft?>(null) }
     var analyzeMedia by remember { mutableStateOf<DownloadDraft?>(null) }
     var pendingPermission by remember { mutableStateOf<PendingSubmission?>(null) }
+    /** URL of the candidate whose format chooser already completed; prevents chooser re-entry loops. */
+    var formatPickedFor by remember { mutableStateOf<String?>(null) }
     SideEffect { onBusyChanged(confirmDownload != null || analyzeMedia != null || analyzeSite != null || pendingPermission != null) }
     DisposableEffect(Unit) { onDispose { onBusyChanged(false) } }
     val userAgent = remember { WebSettings.getDefaultUserAgent(context) }
@@ -62,7 +64,7 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
             if(item.kind==MediaKind.UNKNOWN){
                 mediaPrivacyGeneration=runCatching{model.repository.requestGeneration()}.getOrDefault(-1L)
                 analyzeMedia=draft
-            } else confirmDownload=draft
+            } else { formatPickedFor=null; confirmDownload=draft }
         } else model.notify("页面资源已更新，请重新打开资源面板")
         onDismissResources()
     }, { onDismissResources() }, onAnalyzePage=if(siteAvailable||rulesMatched!=null) ({
@@ -98,28 +100,59 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
             val plan=option.dualTrackPlan
             val ready=model.acceptAnalyzed(draft,candidate,sitePrivacyGeneration)
             analyzeSite=null
-            if(ready==null)model.notify("页面已变化，请返回来源重新分析") else confirmDownload=ready.copy(dualTrackPlan=plan,useAccessContext=false,reliableSource=false)
+            if(ready==null)model.notify("页面已变化，请返回来源重新分析") else { formatPickedFor=null; confirmDownload=ready.copy(dualTrackPlan=plan,useAccessContext=false,reliableSource=false) }
         }
     }
     analyzeMedia?.let { draft ->
         com.example.purebrowser.ui.resources.MediaAnalysisDialog(draft,model.mediaProbe,{analyzeMedia=null}) { candidate ->
             val ready=model.acceptAnalyzed(draft,candidate,mediaPrivacyGeneration)
             analyzeMedia=null
-            if(ready==null)model.notify("页面已变化，请返回来源重新分析") else confirmDownload=ready
+            if(ready==null)model.notify("页面已变化，请返回来源重新分析") else { formatPickedFor=null; confirmDownload=ready }
         }
     }
     confirmDownload?.let { draft ->
-        if (draft.candidate.kind == MediaKind.HLS) {
-            HlsDownloadConfirmation(draft, defaultWifiOnly, model.hlsResolver, { confirmDownload = null }) { frozen, name, wifiOnly, plan ->
-                submit(frozen, name, wifiOnly, plan)
-            }
+        // T87: rules-sourced candidates whose rule reported a structured format set first go through
+        // the chooser; the picked row then re-enters this block with its own URL/kind, so the
+        // existing HLS / direct confirmation paths do the actual planning and submission.
+        val variants = draft.candidate.variants.orEmpty()
+        val chooserEligible = draft.candidate.kind != MediaKind.HLS && draft.candidate.kind != MediaKind.DASH &&
+            com.example.purebrowser.media.Evidence.RULE in draft.candidate.sources &&
+            variants.size > 1 && formatPickedFor != draft.candidate.url
+        if (chooserEligible) {
+            com.example.purebrowser.ui.resources.RuleFormatConfirmation(
+                draft,
+                onDismiss = { formatPickedFor = null; confirmDownload = null },
+                onSelected = { row ->
+                    formatPickedFor = draft.candidate.url
+                    confirmDownload = draft.copy(candidate = draft.candidate.copy(url = row.url, kind = row.kind))
+                },
+            )
         } else {
-            DownloadConfirmation(draft, defaultWifiOnly, { confirmDownload = null }) { name, wifiOnly, useContext ->
-                // A probe-verified, same-origin page association becomes the task's source only under explicit consent.
-                val probed = com.example.purebrowser.download.RequestPolicy.canUseProbedContext(draft.candidate.url,draft.candidate.pageUrl,draft.frameUrl)
-                submit(draft.copy(useAccessContext = useContext,
-                    sourceUrl = draft.sourceUrl ?: draft.candidate.pageUrl?.takeIf { useContext && probed },
-                    reliableSource = draft.reliableSource || (useContext && probed)), name, wifiOnly)
+            // T86: the login-session toggle renders only while the ACTIVE page's matched rule
+            // declared a same-registrable-domain session and the user has not opted out (the offer
+            // is null otherwise); the download transport itself never carries the session.
+            val sessionOffer = model.siteRulesSessionOffer()
+            val onSessionChoice: (String, Boolean) -> Unit = { domain, enabled -> model.setRuleSessionOptIn(domain, enabled) }
+            if (draft.candidate.kind == MediaKind.HLS) {
+                HlsDownloadConfirmation(
+                    draft, defaultWifiOnly, model.hlsResolver,
+                    { formatPickedFor = null; confirmDownload = null },
+                    sessionOffer = sessionOffer, onSessionChoice = onSessionChoice,
+                ) { frozen, name, wifiOnly, plan ->
+                    submit(frozen, name, wifiOnly, plan)
+                }
+            } else {
+                DownloadConfirmation(
+                    draft, defaultWifiOnly,
+                    { formatPickedFor = null; confirmDownload = null },
+                    sessionOffer = sessionOffer, onSessionChoice = onSessionChoice,
+                ) { name, wifiOnly, useContext ->
+                    // A probe-verified, same-origin page association becomes the task's source only under explicit consent.
+                    val probed = com.example.purebrowser.download.RequestPolicy.canUseProbedContext(draft.candidate.url,draft.candidate.pageUrl,draft.frameUrl)
+                    submit(draft.copy(useAccessContext = useContext,
+                        sourceUrl = draft.sourceUrl ?: draft.candidate.pageUrl?.takeIf { useContext && probed },
+                        reliableSource = draft.reliableSource || (useContext && probed)), name, wifiOnly)
+                }
             }
         }
     }

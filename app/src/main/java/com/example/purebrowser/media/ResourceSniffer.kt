@@ -106,6 +106,32 @@ class ResourceSniffer {
         }
     }
 
+    /**
+     * Folds a rule finding's structured format set into an EXISTING candidate's variants (T87).
+     * Only the finding's own primary address is a legal target; a manifest/direct kind hint may
+     * upgrade an UNKNOWN entry (same conservatism as probe results) but never downgrades a known
+     * kind, and a shorter list never displaces variants already attached.
+     */
+    @Synchronized fun attachRuleVariants(
+        pageEpoch: Long,
+        url: String,
+        kindHint: MediaKind,
+        variants: List<VariantSummary>,
+    ) {
+        if (pageEpoch != epoch || variants.isEmpty()) return
+        val key = url.substringBefore('#')
+        val old = entries[key] ?: return
+        val kind = if (old.kind == MediaKind.UNKNOWN && (kindHint == MediaKind.HLS || kindHint == MediaKind.DASH)) kindHint else old.kind
+        val updated = old.copy(
+            kind = kind,
+            variants = if (variants.size >= (old.variants?.size ?: 0)) variants else old.variants,
+        )
+        if (updated != old) {
+            entries[key] = updated
+            publish()
+        }
+    }
+
     /** Applies one background verification outcome; stale epochs and unknown URLs are ignored. */
     @Synchronized fun applyProbeResult(url: String, epoch: Long, result: ProbeResult, variants: List<VariantSummary>? = null) {
         if (epoch != this.epoch) return

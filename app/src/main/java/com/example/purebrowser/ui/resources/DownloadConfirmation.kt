@@ -42,6 +42,10 @@ fun DownloadConfirmation(
     draft: DownloadDraft,
     defaultWifiOnly: Boolean,
     onDismiss: () -> Unit,
+    /** T86 session-reuse offer for rules-sourced candidates; null keeps the dialog unchanged. */
+    sessionOffer: com.example.purebrowser.media.rules.SessionToggleOffer? = null,
+    /** Persists the toggle choice (registrable domain + enabled) as it happens. */
+    onSessionChoice: ((domain: String, enabled: Boolean) -> Unit)? = null,
     onConfirm: (fileName: String, wifiOnly: Boolean, useContext: Boolean) -> Unit,
 ) {
     val frozen = remember(draft) { draft.copy(candidate = draft.candidate.copy(sources = draft.candidate.sources.toSet())) }
@@ -52,6 +56,7 @@ fun DownloadConfirmation(
     val contextAvailable = com.example.purebrowser.download.RequestPolicy.canUseContext(frozen.sourceUrl,frozen.frameUrl,frozen.reliableSource) ||
         com.example.purebrowser.download.RequestPolicy.canUseProbedContext(frozen.candidate.url,frozen.candidate.pageUrl,frozen.frameUrl)
     var useContext by rememberSaveable(frozen) { mutableStateOf(contextAvailable && frozen.useAccessContext) }
+    var sessionUse by rememberSaveable(frozen) { mutableStateOf(sessionOffer?.checkedByDefault == true) }
     var submitted by remember(frozen) { mutableStateOf(false) }
     val safeName = DownloadRules.safeFileName(fileName)
     val canConfirm = fileName.isNotBlank() && fileName.trim() !in setOf(".", "..") &&
@@ -102,6 +107,18 @@ fun DownloadConfirmation(
             onChange = { useContext = it },
             modifier = Modifier.testTag("download-use-context"),
         )
+        sessionOffer?.let { offer ->
+            ResourceSessionOption(
+                offer = offer,
+                checked = sessionUse,
+                enabled = !submitted,
+                onChange = { enabled ->
+                    sessionUse = enabled
+                    // The store write is the effect; the local state only mirrors it.
+                    onSessionChoice?.invoke(offer.domain, enabled)
+                },
+            )
+        }
         Text(
             if (frozen.candidate.canTryDownload() && frozen.candidate.kind != MediaKind.HLS) if(frozen.dualTrackPlan==null) "仅支持 MP4/WebM 文件直链；会话不写入任务记录，不跨源转发。签名可能过期，格式初检不等于完整播放保证。" else "将下载 H.264 视频轨和 AAC 音轨，合并并校验后保存为 MP4。只保存你有权下载的内容。不使用网站 Cookie；中断或链接失效后需主动重新分析，不承诺双轨续传。"
             else frozen.candidate.unsupportedExplanation(),

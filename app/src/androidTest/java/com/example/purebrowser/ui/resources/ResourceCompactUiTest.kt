@@ -149,7 +149,7 @@ class ResourceCompactUiTest {
         val submissions = mutableListOf<Triple<String, Boolean, Boolean>>()
         compose.setContent {
             PureBrowserTheme {
-                DownloadConfirmation(original, defaults.value, {}, { name, wifi, access ->
+                DownloadConfirmation(original, defaults.value, {}, null, null, { name, wifi, access ->
                     submissions.add(Triple(name, wifi, access))
                 })
             }
@@ -175,7 +175,7 @@ class ResourceCompactUiTest {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.8f)) {
                 MaterialTheme(colorScheme = darkColorScheme()) {
-                    DownloadConfirmation(DownloadDraft(candidate(), "test-agent"), true, { dismissed++ }, { _, _, _ -> submitted++ })
+                    DownloadConfirmation(DownloadDraft(candidate(), "test-agent"), true, { dismissed++ }, null, null, { _, _, _ -> submitted++ })
                 }
             }
         }

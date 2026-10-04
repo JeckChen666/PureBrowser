@@ -182,6 +182,12 @@ data class RuleDocument(
     val contentType: String? = null,
     /** Redirect target when [status] is a 3xx; the coordinator validates every hop before following. */
     val location: String? = null,
+    /**
+     * True when the adapter attached a login-session cookie to this hop (T86): the coordinator
+     * re-checks redirect targets against the stricter with-credentials rule and charges the shared
+     * ledger's credential accounting. Pure metadata — no credential value ever travels here.
+     */
+    val credentialUsed: Boolean = false,
 )
 
 /**

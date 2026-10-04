@@ -52,6 +52,30 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         val session=tabs.active.value ?: return null
         return session.siteRules.matchedNote(session.engine.generation,session.engine.page.value.url)
     }
+    /**
+     * T86 toggle offer for the confirmation surface: the active page's registrable domain when the
+     * matched rule declares a session covering it AND the user has not opted out (which removes the
+     * toggle entirely). The cookie itself is only read by the session layer after the same store
+     * says OPT_IN; nothing here touches a credential.
+     */
+    fun siteRulesSessionOffer(): com.example.purebrowser.media.rules.SessionToggleOffer? {
+        val session = tabs.active.value ?: return null
+        val domain = session.siteRules.matchedSessionDomain(session.engine.generation, session.engine.page.value.url) ?: return null
+        val state = ruleSessionStore.stateFor(domain)
+        if (state == com.example.purebrowser.media.rules.SessionOptInState.OPT_OUT) return null
+        return com.example.purebrowser.media.rules.SessionToggleOffer(domain, state)
+    }
+
+    /** Persists the confirmation toggle's choice for one registrable domain (OPT_IN/OPT_OUT). */
+    fun setRuleSessionOptIn(domain: String, enabled: Boolean) {
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    ruleSessionStore.setForDomain(domain, if (enabled) com.example.purebrowser.media.rules.SessionOptInState.OPT_IN else com.example.purebrowser.media.rules.SessionOptInState.OPT_OUT)
+                }
+            }.onFailure { notify("站点会话偏好未能保存，请检查本机存储") }
+        }
+    }
     private val runtime = com.example.purebrowser.download.DownloadRuntime.get(application)
     val repository = runtime.repository
     // Same request/access policy as queue execution; constructing this never fetches a playlist.
@@ -79,6 +103,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val refreshMutex = Mutex()
     private var downloadReadFailureReported = false
     private val preferences = DownloadPreferences(application)
+    /** Per-site rule-session opt-in store (T86); the confirmation toggle is its only writer. */
+    private val ruleSessionStore = com.example.purebrowser.media.rules.SessionOptInPreferences(application).sessionOptIn()
     private val mutableWifiOnly = MutableStateFlow(true)
     val defaultWifiOnly = mutableWifiOnly.asStateFlow()
     private val mutableBusy = MutableStateFlow<Set<String>>(emptySet())

@@ -42,8 +42,90 @@ class SiteRulesCoordinatorTest {
         assertNull(coordinator.matchedNote(epoch + 5, "https://tube.example/watch/1"))
     }
 
-    @Test fun newerEpochWhileRunningIsNotLostAndStaleSettlesAreIgnored() = runBlocking {
+    /** T87 wiring: a format-bearing finding folds its whole format set into the primary candidate. */
+    @Test fun formatFindingsFoldIntoCandidateVariantsAndKeepPerAddressClues() = runBlocking {
         val sniffer = ResourceSniffer()
+        val set = RuleSet.parse("""{"version":3,"rules":[
+            {"id":"r","version":1,"match":{"hosts":"(^|\\.)tube\\.example$"},
+             "actions":[{"type":"jsonExtract","pointers":["h1080","h720"]}]}]}""")
+        val coordinator = SiteRulesCoordinator(
+            sniffer = sniffer,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            ruleSet = { set },
+            recentRequests = { emptyList() },
+            domSnapshot = null,
+            latestPlayerConfig = { null },
+        )
+        val epoch = sniffer.beginPage()
+        coordinator.onInlineData(epoch, "ldjson", """{"h1080":"https://cdn.tube.example/1080.mp4","h720":"https://cdn.tube.example/720.mp4"}""")
+        coordinator.onPageSettled(epoch, "https://tube.example/watch/1")
+        val primary = sniffer.candidates.value.first { it.url == "https://cdn.tube.example/1080.mp4" }
+        assertTrue(Evidence.RULE in primary.sources)
+        assertEquals(2, primary.variants!!.size)
+        assertEquals(listOf(1080, 720), primary.variants!!.mapNotNull { it.height })
+        // The secondary address stays its own selectable clue, exactly like the pre-T87 surface.
+        assertTrue(sniffer.candidates.value.any { it.url == "https://cdn.tube.example/720.mp4" })
+    }
+
+    /** T87 wiring: a manifest-derived finding upgrades the primary candidate's kind and attaches variants. */
+    @Test fun manifestFindingsUpgradeKindAndAttachTheirVariantList() = runBlocking {
+        val sniffer = ResourceSniffer()
+        val set = RuleSet.parse("""{"version":3,"rules":[
+            {"id":"m","version":1,"match":{"hosts":"(^|\\.)tube\\.example$"},
+             "actions":[{"type":"parseManifest","kind":"hls"}]}]}""")
+        val coordinator = SiteRulesCoordinator(
+            sniffer = sniffer,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            ruleSet = { set },
+            recentRequests = { emptyList() },
+            domSnapshot = null,
+            latestPlayerConfig = { null },
+        )
+        val epoch = sniffer.beginPage()
+        coordinator.onInlineData(epoch, "script", """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x1080,CODECS="avc1.4d401f,mp4a.40.2"
+            https://cdn.tube.example/v1080.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+            https://cdn.tube.example/v720.m3u8
+        """.trimIndent())
+        coordinator.onPageSettled(epoch, "https://tube.example/watch/1")
+        // The manifest page URL itself is the primary address; its kind upgrades UNKNOWN → HLS and
+        // the child playlists become its variants.
+        val primary = sniffer.candidates.value.first { it.url == "https://tube.example/watch/1" }
+        assertEquals(MediaKind.HLS, primary.kind)
+        assertEquals(2, primary.variants!!.size)
+        assertEquals(listOf(1080, 720), primary.variants!!.mapNotNull { it.height })
+        assertTrue(primary.variants!!.any { it.url.endsWith("v1080.m3u8") })
+        // Every child playlist also remains its own selectable clue.
+        assertTrue(sniffer.candidates.value.any { it.url.endsWith("v1080.m3u8") })
+        assertTrue(sniffer.candidates.value.any { it.url.endsWith("v720.m3u8") })
+    }
+
+    /** T86 visibility: the confirmation offer's registrable domain, only for session-declaring rules. */
+    @Test fun matchedSessionDomainReportsThePagesRegistrableDomainOnlyForDeclaredSessions() = runBlocking {
+        val sniffer = ResourceSniffer()
+        val set = RuleSet.parse("""{"version":3,"rules":[
+            {"id":"s","version":1,"match":{"hosts":"(^|\\.)tube\\.example$"},
+             "actions":[{"type":"manifestHint","kind":"unknown"}],
+             "session":{"hosts":["api.tube.example"]}}]}""")
+        val coordinator = SiteRulesCoordinator(
+            sniffer = sniffer,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            ruleSet = { set },
+            recentRequests = { emptyList() },
+            domSnapshot = null,
+            latestPlayerConfig = { null },
+        )
+        val epoch = sniffer.beginPage()
+        coordinator.onPageSettled(epoch, "https://www.tube.example/watch/1")
+        assertEquals("tube.example", coordinator.matchedSessionDomain(epoch, "https://www.tube.example/watch/1"))
+        assertNull(coordinator.matchedSessionDomain(epoch, "https://other.example/watch/2"))
+        assertNull(coordinator.matchedSessionDomain(epoch + 5, "https://www.tube.example/watch/1"))
+        assertNull(coordinator.matchedSessionDomain(null, "https://www.tube.example/watch/1"))
+    }
+
+    @Test fun newerEpochWhileRunningIsNotLostAndStaleSettlesAreIgnored() = runBlocking {        val sniffer = ResourceSniffer()
         val set = RuleSet.parse("""{"version":1,"rules":[
             {"id":"p","version":1,"match":{"hosts":"(^|\\.)tube\\.example$"},"actions":[{"type":"manifestHint","kind":"unknown"}]}]}""")
         var gate = kotlinx.coroutines.CompletableDeferred<Unit>()

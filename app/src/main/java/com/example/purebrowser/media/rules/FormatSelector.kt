@@ -1,7 +1,9 @@
 package com.example.purebrowser.media.rules
 
+import com.example.purebrowser.media.MediaClassifier
 import com.example.purebrowser.media.MediaKind
 import com.example.purebrowser.media.VariantSummary
+import java.net.URI
 
 /**
  * One normalized playback address produced by a rule action (T84). Field semantics follow 开源
@@ -100,4 +102,85 @@ object FormatSelector {
                 warning = null,
             )
         }
+}
+
+/**
+ * One selectable row of the T87 chooser. `MediaCandidate.variants` stores only the transport-level
+ * [VariantSummary] shape, so the chooser rebuilds the richer per-row facts (container, kind) from
+ * the variant URL itself — the same derivation `RuleEngine.formatFromUrl` uses at extraction time.
+ * Pure data; no requests are made for rows that are only rendered.
+ */
+data class FormatChoiceRow(
+    val url: String,
+    val height: Int?,
+    val ext: String?,
+    val tbr: Long?,
+    val kind: MediaKind,
+) {
+    internal val entry: FormatEntry get() = FormatEntry(url = url, height = height, ext = ext, tbr = tbr, kind = kind)
+}
+
+/**
+ * Pure list-building and preference→row decisions for the rules-format chooser (T87). Selection
+ * itself DELEGATES to [FormatSelector.select] so the canonical ordering and fallback ladder stay
+ * single-sourced; this object only rebuilds rows, dedups the height/container pickers and formats
+ * labels. No IO, no store, fully JVM-testable.
+ */
+object FormatChoice {
+    private val EXT = Regex("\\.([a-z0-9]{1,5})$")
+
+    /** Rebuilds chooser rows from a candidate's variants, canonically ordered, never mutating input. */
+    fun rows(variants: List<VariantSummary>): List<FormatChoiceRow> {
+        if (variants.isEmpty()) return emptyList()
+        val rows = variants.map { variant ->
+            val ext = extOf(variant.url)
+            val kind = MediaClassifier.classify(variant.url)
+                ?: if (ext != null) MediaKind.FILE else MediaKind.UNKNOWN
+            FormatChoiceRow(
+                url = variant.url,
+                height = variant.height,
+                ext = ext,
+                tbr = variant.bandwidth?.let { it / 1000 },
+                kind = kind,
+            )
+        }
+        return FormatSelector.order(rows.map { it.entry }).map { entry -> rows.first { it.url == entry.url } }
+    }
+
+    /** Deduped selectable heights, best first; null heights never populate the picker. */
+    fun heights(rows: List<FormatChoiceRow>): List<Int> =
+        rows.mapNotNull { it.height }.distinct().sortedDescending()
+
+    /** Selectable containers present among the rows, in canonical preference order (mp4/webm/ts). */
+    fun containers(rows: List<FormatChoiceRow>): List<String> {
+        val present = rows.mapNotNull { it.ext?.lowercase() }.toSet()
+        return listOf("mp4", "webm", "ts").filter { it in present }
+    }
+
+    /**
+     * One row label, e.g. "1080p · mp4 · 3500kbps". Missing facts drop their segment instead of
+     * being invented; a row with nothing to say stays honest about it.
+     */
+    fun label(row: FormatChoiceRow): String {
+        val parts = listOfNotNull(
+            row.height?.let { "${it}p" },
+            row.ext?.lowercase(),
+            row.tbr?.takeIf { it > 0 }?.let { "${it}kbps" },
+        )
+        return if (parts.isEmpty()) "未知格式" else parts.joinToString(" · ")
+    }
+
+    /** The row [FormatSelector.select] picks for [preference]; delegates ordering and fallbacks. */
+    fun select(rows: List<FormatChoiceRow>, preference: FormatPreference): FormatChoiceRow? {
+        if (rows.isEmpty()) return null
+        val entries = rows.map { it.entry }
+        val picked = FormatSelector.select(entries, preference) ?: return null
+        return rows[entries.indexOf(picked)]
+    }
+
+    /** Leaf path extension, lowercased and length-bounded; null when the address has none. */
+    private fun extOf(url: String): String? = runCatching {
+        val leaf = URI(url).path.orEmpty().substringAfterLast('/')
+        EXT.find(leaf)?.groupValues?.get(1)?.lowercase()
+    }.getOrNull()
 }

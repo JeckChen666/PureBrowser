@@ -62,6 +62,10 @@ fun HlsDownloadConfirmation(
     resolver: HlsResolver,
     onDismiss: () -> Unit,
     canUseWifi: (() -> Boolean)? = null,
+    /** T86 session-reuse offer for rules-sourced candidates; null keeps the dialog unchanged. */
+    sessionOffer: com.example.purebrowser.media.rules.SessionToggleOffer? = null,
+    /** Persists the toggle choice (registrable domain + enabled) as it happens. */
+    onSessionChoice: ((domain: String, enabled: Boolean) -> Unit)? = null,
     onConfirm: (draft: DownloadDraft, fileName: String, wifiOnly: Boolean, plan: HlsDownloadPlan) -> Unit,
 ) {
     val frozen = remember(draft) { draft.copy(candidate = draft.candidate.copy(sources = draft.candidate.sources.toSet())) }
@@ -92,6 +96,7 @@ fun HlsDownloadConfirmation(
     }
     val contextAvailable = RequestPolicy.canUseContext(frozen.sourceUrl, frozen.frameUrl, frozen.reliableSource)
     var useContext by rememberSaveable(frozen) { mutableStateOf(contextAvailable && frozen.useAccessContext) }
+    var sessionUse by rememberSaveable(frozen) { mutableStateOf(sessionOffer?.checkedByDefault == true) }
     var submitted by remember(frozen) { mutableStateOf(false) }
     val requestDraft = frozen.copy(useAccessContext = useContext)
     val safeName = hlsFileName(fileName)
@@ -129,6 +134,18 @@ fun HlsDownloadConfirmation(
             },
             modifier = Modifier.testTag("download-use-context"),
         )
+        sessionOffer?.let { offer ->
+            ResourceSessionOption(
+                offer = offer,
+                checked = sessionUse,
+                enabled = !submitted,
+                onChange = { enabled ->
+                    sessionUse = enabled
+                    // Rule-session reuse only affects future rule fetches, never this download.
+                    onSessionChoice?.invoke(offer.domain, enabled)
+                },
+            )
+        }
         OutlinedButton(
             onClick = { if (previewAllowed()) preparation.parse(requestDraft) },
             enabled = !submitted && !preparation.busy,

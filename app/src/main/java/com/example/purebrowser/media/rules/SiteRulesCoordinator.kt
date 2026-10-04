@@ -48,7 +48,7 @@ class SiteRulesCoordinator(
         private const val MAX_FETCH_CACHE = 64
     }
 
-    private data class Matched(val epoch: Long, val url: String, val ruleId: String)
+    private data class Matched(val epoch: Long, val url: String, val ruleId: String, val sessionDomain: String?)
 
     private val guard = Any()
     @Volatile private var lastEpoch = Long.MIN_VALUE
@@ -215,7 +215,14 @@ class SiteRulesCoordinator(
             fetcher = channel,
             inlineData = if (set.wantsInlineData()) { { inline } } else null,
         )
-        findings.firstOrNull()?.let { first -> matched = Matched(epoch, pageUrl, first.ruleId) }
+        findings.firstOrNull()?.let { first ->
+            // T86 可见 clause input: the registrable domain a confirmation page may offer a session
+            // toggle for — non-null only when the matched rule DECLARES a session block whose hosts
+            // sit inside the page's own registrable domain (SessionTogglePolicy.coveredDomain).
+            val sessionDomain = set.byId(first.ruleId)?.session
+                ?.let { SessionTogglePolicy.coveredDomain(it, pageUrl) }
+            matched = Matched(epoch, pageUrl, first.ruleId, sessionDomain)
+        }
         val familiesDone = mutableSetOf<String>()
         for (finding in findings) {
             val url = finding.url
@@ -231,10 +238,16 @@ class SiteRulesCoordinator(
             } else {
                 sniffer.observe(epoch, url, Evidence.RULE, title = finding.title)
             }
-            // Every extracted format surfaces as its own rule candidate, exactly like v0.1.7's
-            // per-address observations; folding them into MediaCandidate.variants is T87's wiring.
+            // T87 wiring: a format-bearing finding folds its whole format set into the PRIMARY
+            // candidate's variants (kind per manifest/direct hint) on top of the per-address
+            // observations, which remain the fallback surface (the finding's own address is already
+            // observed above, so it is excluded here).
             if (finding.formats.isNotEmpty()) {
-                finding.formats.drop(1).forEach { format -> sniffer.observe(epoch, format.url, Evidence.RULE) }
+                val target = url ?: finding.formats.first().url
+                sniffer.attachRuleVariants(epoch, target, finding.kindHint, FormatSelector.toVariantSummaries(finding.formats))
+                finding.formats.filter { it.url != target }.forEach { format ->
+                    sniffer.observe(epoch, format.url, Evidence.RULE)
+                }
             }
         }
     }
@@ -244,9 +257,11 @@ class SiteRulesCoordinator(
      * (https + host whitelist + no IP/private/link-local), budget acquire, adapter call, byte
      * charge, then the same checks again on every redirect hop. A refusal or exhausted budget
      * returns null — the engine downgrades by skipping the rule's fetch actions — and marks the
-     * epoch in [fetchOverflowEpoch] for observability. No session credential is attached on this
-     * channel in this version, so [FetchDeny.CROSS_ORIGIN_WITH_CREDENTIALS] cannot fire yet; when
-     * T86 enables the session opt-in, the credential flag must travel with the hop loop.
+     * epoch in [fetchOverflowEpoch] for observability. Session credentials (T86) attach only in the
+     * host adapter, after the per-site opt-in and [RuleFetchPolicy.sessionCookie] agree; the hop
+     * learns about it through [RuleDocument.credentialUsed], which both charges the ledger's
+     * credential accounting and makes [FetchDeny.CROSS_ORIGIN_WITH_CREDENTIALS] refuse cross-origin
+     * redirects for that fetch.
      */
     private suspend fun controlledFetch(
         set: RuleSet,
@@ -272,8 +287,11 @@ class SiteRulesCoordinator(
             }
             val document = runCatching { io(spec, current) }.getOrNull() ?: return null
             fetchBudget.chargeBytes(epoch, document.body.length.toLong())
+            // T86: a credential-bearing hop charges the ledger and is held to the stricter
+            // with-credentials redirect rule (cross-origin with a session cookie refuses).
+            if (document.credentialUsed) fetchBudget.noteCredentialUse(epoch)
             if (document.status in 300..399 && document.location != null) {
-                val next = RuleFetchPolicy.redirectHop(current, document.location, hosts, credentialUsed = false)
+                val next = RuleFetchPolicy.redirectHop(current, document.location, hosts, credentialUsed = document.credentialUsed)
                 if (!next.allowed) {
                     fetchOverflowEpoch = epoch
                     return null
@@ -318,6 +336,18 @@ class SiteRulesCoordinator(
         val hit = matched ?: return null
         if (generation == null || pageUrl == null || hit.epoch != generation || hit.url != pageUrl) return null
         return "站点规则"
+    }
+
+    /**
+     * Registrable domain whose login session the confirmation surface may offer (T86 可见 clause):
+     * non-null only while the matched page generation is live AND the matched rule declares a
+     * session block covering the page's own registrable domain. Carries no cookie, host list or
+     * credential value — the caller pairs it with the per-site opt-in store.
+     */
+    fun matchedSessionDomain(generation: Long?, pageUrl: String?): String? {
+        val hit = matched ?: return null
+        if (generation == null || pageUrl == null || hit.epoch != generation || hit.url != pageUrl) return null
+        return hit.sessionDomain
     }
 
     private fun isHttpUrl(url: String): Boolean = runCatching {

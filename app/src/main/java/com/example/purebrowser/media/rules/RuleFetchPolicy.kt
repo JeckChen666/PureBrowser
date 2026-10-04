@@ -212,6 +212,7 @@ class RuleFetchBudget(
     private var fetches = 0
     private var externalRequests = 0
     private var bytes = 0L
+    private var credentialFetches = 0
     private var startNs = 0L
 
     /** Opens (or continues) the accounting window for one page epoch; a new epoch resets everything. */
@@ -225,6 +226,17 @@ class RuleFetchBudget(
     fun noteExternalRequest(epoch: Long) {
         synchronized(guard) { rollIfNeeded(epoch); externalRequests++ }
     }
+
+    /**
+     * Credential accounting (T86, R4 可见 clause): the coordinator charges one unit whenever a rule
+     * fetch carried a login-session cookie, so the per-site opt-in's effect stays observable.
+     */
+    fun noteCredentialUse(epoch: Long) {
+        synchronized(guard) { rollIfNeeded(epoch); credentialFetches++ }
+    }
+
+    /** How many of this epoch's rule fetches used a login session; 0 while the opt-in stays off. */
+    fun credentialsUsed(epoch: Long): Int = synchronized(guard) { rollIfNeeded(epoch); credentialFetches }
 
     /**
      * Reserves one rule fetch; false means the per-action or shared-epoch budget is exhausted and
@@ -257,6 +269,7 @@ class RuleFetchBudget(
         fetches = 0
         externalRequests = 0
         bytes = 0L
+        credentialFetches = 0
         startNs = now()
         return true
     }

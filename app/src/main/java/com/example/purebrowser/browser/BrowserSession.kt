@@ -21,6 +21,8 @@ import com.example.purebrowser.media.rules.RuleDocument
 import com.example.purebrowser.media.rules.RuleFetchBudget
 import com.example.purebrowser.media.rules.RuleFetchPolicy
 import com.example.purebrowser.media.rules.RuleSet
+import com.example.purebrowser.media.rules.SessionOptIn
+import com.example.purebrowser.media.rules.SessionOptInPreferences
 import com.example.purebrowser.media.rules.SiteRulesCoordinator
 import com.example.purebrowser.media.verify.AutoProbeQueue
 import com.example.purebrowser.media.verify.HttpTransportUrlFetcher
@@ -65,6 +67,13 @@ class BrowserSession(
      * nothing calls it from there yet — the shared ceiling stays slack until that hop lands.
      */
     private val ruleFetchBudget = RuleFetchBudget()
+    /**
+     * Per-site login-session opt-in for the rule fetch channel (T86): default UNKNOWN ≡ off, keyed
+     * by the current page's registrable domain, persisted through the thin SharedPreferences
+     * adapter. The confirmation surface's visible toggle (BrowserPanels → BrowserViewModel) is the
+     * only writer; this session only reads it.
+     */
+    private val sessionOptIn: SessionOptIn = SessionOptInPreferences(app).sessionOptIn()
     /** Latest harvested player configuration of the current epoch; family hint input for site rules. */
     @Volatile private var playerConfigHarvest: Pair<Long, Pair<String, String>>? = null
     val siteRules = SiteRulesCoordinator(
@@ -100,11 +109,13 @@ class BrowserSession(
     )
 
     /**
-     * One bounded, anonymous open for the rule fetch channel (T83). Headers come exclusively from
-     * the RuleFetchPolicy whitelist (UA/Accept/Accept-Language/Referer); Cookie can never pass that
-     * filter by design. The session channel is wired but INERT this version: the per-site opt-in
-     * defaults to false (T86 attaches the UI switch and flips it). Redirects are NOT followed here
-     * — the coordinator re-validates every hop against the rule's host whitelist before re-opening.
+     * One bounded open for the rule fetch channel (T83). Headers come exclusively from the
+     * RuleFetchPolicy whitelist (UA/Accept/Accept-Language/Referer); Cookie can never pass that
+     * filter by design. The session channel (T86) reuses the browser's login cookie ONLY when the
+     * per-site opt-in store says OPT_IN for the current page's registrable domain AND the rule's
+     * session block covers the target host — anything else goes out anonymously, exactly like
+     * v0.1.7. Redirects are NOT followed here — the coordinator re-validates every hop against the
+     * rule's host whitelist before re-opening.
      */
     private fun openRuleFetch(spec: FetchSpec, url: String): RuleDocument? = runCatching {
         val base = LinkedHashMap<String, String>()
@@ -113,11 +124,12 @@ class BrowserSession(
         base["Accept-Language"] = Locale.getDefault().toLanguageTag()
         RequestPolicy.referer(engine.page.value.url, url)?.let { base["Referer"] = it }
         val headers = RuleFetchPolicy.headersFor(base)
-        // Session channel (inert until T86): policy requires the rule's session block to cover the
-        // target host AND the user's per-site opt-in before any cookie is pulled from the WebView.
+        // Session channel: opt-in is read per page from the store (default UNKNOWN ≡ off); the
+        // policy additionally requires the rule's session block to cover the target host and the
+        // target itself to pass the fetch policy before any cookie leaves the WebView store.
         val rule = RuleSet.load(app).byId(spec.ruleId)
         val sessionCookie = rule?.let {
-            RuleFetchPolicy.sessionCookie(it, url, optIn = false, cookieFor = { target ->
+            RuleFetchPolicy.sessionCookie(it, url, optIn = sessionOptIn.isOptedIn(engine.page.value.url), cookieFor = { target ->
                 runCatching { CookieManager.getInstance().getCookie(target) }.getOrNull()
             })
         }
@@ -142,6 +154,7 @@ class BrowserSession(
                 body = buffer.toString("UTF-8"),
                 contentType = response.header("Content-Type"),
                 location = response.header("Location"),
+                credentialUsed = sessionCookie != null,
             )
         }
     }.getOrNull()

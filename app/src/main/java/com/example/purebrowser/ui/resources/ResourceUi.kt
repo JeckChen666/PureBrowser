@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -75,6 +76,33 @@ internal fun ResourceSource(draft: DownloadDraft) {
         Text("来源主机：${sourceHost(draft.sourceUrl) ?: "未记录"}",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/**
+ * T86 login-session reuse toggle, mirroring the "download-use-context" row interaction. Rendering
+ * this row is the user-visible half of D6 ("规则声明 ≠ 生效"): it appears only when the matched rule
+ * declares a session inside the page's registrable domain and the user has not opted out, and it
+ * defaults OFF unless an explicit OPT_IN was persisted. Toggling persists immediately through the
+ * caller; the download transport itself is unaffected (no cookie rides the download request).
+ */
+@Composable
+internal fun ResourceSessionOption(
+    offer: com.example.purebrowser.media.rules.SessionToggleOffer,
+    checked: Boolean,
+    enabled: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    ResourceOption(
+        label = "使用网站登录会话（${offer.domain}）",
+        description = if (offer.checkedByDefault)
+            "已为该站点开启：仅 ${offer.domain} 同注册域的站点规则抓取会携带登录会话；不导出、不落盘，下载请求不受影响"
+        else
+            "默认关闭：开启后仅 ${offer.domain} 同注册域的站点规则抓取可能携带登录会话；不导出、不落盘，下载请求不受影响",
+        checked = checked,
+        enabled = enabled,
+        onChange = onChange,
+        modifier = Modifier.testTag("rule-session-use"),
+    )
 }
 
 @Composable

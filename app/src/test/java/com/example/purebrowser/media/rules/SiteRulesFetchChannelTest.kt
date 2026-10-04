@@ -95,6 +95,35 @@ class SiteRulesFetchChannelTest {
         assertNotNull(sniffer.candidates.value.firstOrNull { it.url == "https://cdn.tube.example/720.mp4" })
     }
 
+    /**
+     * T86: a credential-bearing hop charges the ledger's credential accounting and is held to the
+     * stricter with-credentials redirect rule — a cross-ORIGIN redirect is refused even though the
+     * target stays inside the rule's (registrable-domain-wide) host whitelist. The anonymous form of
+     * the same hop is the test above, which follows it.
+     */
+    @Test fun credentialBearingFetchesChargeTheLedgerAndRefuseCrossOriginRedirects() = runBlocking {
+        val sniffer = ResourceSniffer()
+        val budget = RuleFetchBudget()
+        val opened = mutableListOf<String>()
+        val c = coordinator(sniffer, budget, fetcher = { _, url ->
+            opened += url
+            if (opened.size == 1) RuleDocument(url, 302, "", location = "https://www.tube.example/real.json", credentialUsed = true)
+            else RuleDocument(url, 200, """{"h720":"https://cdn.tube.example/720.mp4"}""")
+        })
+        val epoch = sniffer.beginPage()
+        c.onPageSettled(epoch, "https://tube.example/watch/7")
+        assertEquals(listOf("https://api.tube.example/v/7"), opened)
+        assertEquals(1, budget.credentialsUsed(epoch))
+        assertTrue(sniffer.candidates.value.none { it.url.contains("720.mp4") })
+        assertTrue(c.fetchOverflowed(epoch))
+        // Anonymous hops keep the v0.1.7 accounting: zero credential charges for the epoch.
+        val anonymousBudget = RuleFetchBudget()
+        val quiet = coordinator(sniffer, anonymousBudget, fetcher = { _, url -> RuleDocument(url, 200, "{}") })
+        val later = sniffer.beginPage()
+        quiet.onPageSettled(later, "https://tube.example/watch/7")
+        assertEquals(0, anonymousBudget.credentialsUsed(later))
+    }
+
     @Test fun offWhitelistAndDowngradeRedirectsStopTheFetch() = runBlocking {
         listOf(
             "https://evil.example/steal",          // outside the rule's hosts face
