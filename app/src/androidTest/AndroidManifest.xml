@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <!-- Visibility only, never a storage/network permission or URI grant. -->
+        <package android:name="io.github.jeckchen666.purebrowser" />
+        <provider android:authorities="io.github.jeckchen666.purebrowser.files;media;downloads" />
+    </queries>
     <application android:debuggable="true">
         <!-- Only the separate test APK is debuggable, allowing shell to read receiver evidence. -->
         <!-- Test APK only: controlled cross-UID receiver to verify real temporary file grants. -->
@@ -8,6 +13,25 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+        <!-- Opt-in only: leaves the existing fixture chooser/audits unchanged.
+             Mainline enables this component after installing the DEBUG TEST APK,
+             then selects it in the real code13 native share chooser. -->
+        <activity
+            android:name="com.example.purebrowser.share.Code13ShareReceiver"
+            android:enabled="false"
+            android:exported="true"
+            android:process=":code13_share_audit"
+            android:launchMode="singleTask"
+            android:label="code13 跨UID媒体验收 ${applicationId}">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
     </application>

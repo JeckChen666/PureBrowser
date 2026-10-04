@@ -22,11 +22,66 @@ data class YouTubeMedia(val videoId:String,val title:String,val videos:List<YouT
     override fun toString()="YouTubeMedia(formats=${videos.size+audios.size})"
 }
 
+/** Test-only, single-resolution capability. No data-class copy/component/JSON or raw value getter.
+ * Production resolve() never creates this object. Consumption clears the session cpn reference. */
+class YouTubeCpnDiagnosticSession internal constructor(val media: YouTubeMedia, private var cpn: String?) {
+    private val diagnosticVideos = media.videos.toList()
+    init { require(cpn != null && cpn!!.length == 16 && Regex("[A-Za-z0-9_-]{16}").matches(cpn!!)) { "Invalid diagnostic session" } }
+    override fun toString() = "YouTubeCpnDiagnosticSession(testOnly=true)"
+
+    @Synchronized
+    internal fun consumeVideoPair(track: YouTubeTrack, testOnlyCpnOptIn: Boolean = false): YouTubeCpnDiagnosticPair {
+        check(testOnlyCpnOptIn) { "Diagnostic opt-in required" }
+        check(diagnosticVideos.any { it === track }) { "Diagnostic track identity mismatch" }
+        val value = cpn ?: error("Diagnostic session already consumed")
+        validateCpnDiagnosticUrl(track.url, cpnExpected = false)
+        val appended = track.url + if (URI(track.url).rawQuery == null) "?cpn=$value" else "&cpn=$value"
+        validateCpnDiagnosticUrl(appended, cpnExpected = true)
+        cpn = null
+        return YouTubeCpnDiagnosticPair(track, appended)
+    }
+}
+
+/** Internal in-memory URLs only; no task/plan/store/schema integration. */
+internal class YouTubeCpnDiagnosticPair(val track: YouTubeTrack, val withCpnUrl: String) {
+    override fun toString() = "YouTubeCpnDiagnosticPair(testOnly=true)"
+}
+
+internal fun validateCpnDiagnosticUrl(url: String, cpnExpected: Boolean) {
+    RequestPolicy.validateUrl(url, false)
+    val u = URI(url)
+    check(u.scheme == "https" && u.host.lowercase().endsWith(".googlevideo.com") &&
+        u.port in setOf(-1, 443) && u.rawUserInfo == null && u.rawFragment == null) { "Diagnostic URL policy" }
+    // Decode names so encoded/duplicate range, cpn or credential parameters cannot hide in a URL.
+    val entries = u.rawQuery?.split('&')?.map {
+        java.net.URLDecoder.decode(it.substringBefore('='), "UTF-8").lowercase() to it.substringAfter('=', "")
+    }.orEmpty()
+    check(entries.none { it.first in setOf("range", "pot", "po_token", "cookie", "authorization", "auth", "token") }) {
+        "Diagnostic query policy"
+    }
+    val cpns = entries.filter { it.first == "cpn" }
+    check(if (cpnExpected) cpns.size == 1 && Regex("[A-Za-z0-9_-]{16}").matches(cpns.single().second)
+        else cpns.isEmpty()) { "Diagnostic cpn policy" }
+}
+
 /** A local worker with NO network/native/storage authority; a polled, validated metadata queue.
  * All actual IO uses the repository's privacy lease wrapper and anonymous native HTTPS requests. */
 class YouTubeResolver(private val context:Context,private val guard:(HttpTransport)->HttpTransport={it}) {
+    suspend fun resolve(videoId:String):YouTubeMedia = parse(resolveOutput(videoId), videoId)
+
+    /** Explicit test-only entry; false rejects BEFORE assets/WebView/metadata IO. */
+    suspend fun resolveForCpnDiagnostic(videoId: String, testOnlyCpnOptIn: Boolean = false): YouTubeCpnDiagnosticSession {
+        check(testOnlyCpnOptIn) { "Diagnostic opt-in required" }
+        val output = resolveOutput(videoId, testOnlyCpnOptIn = true)
+        val media = parse(output, videoId)
+        val cpn = output.opt("diagnosticCpn")
+        require(cpn is String && cpn.length == 16 && Regex("[A-Za-z0-9_-]{16}").matches(cpn)) { "Invalid diagnostic session" }
+        output.remove("diagnosticCpn")
+        return YouTubeCpnDiagnosticSession(media, cpn)
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun resolve(videoId:String):YouTubeMedia {
+    private suspend fun resolveOutput(videoId:String, testOnlyCpnOptIn:Boolean=false):JSONObject {
         require(Regex("[A-Za-z0-9_-]{11}").matches(videoId))
         val script=withContext(Dispatchers.IO){context.assets.open("site-parser/youtube-worker.js").bufferedReader().use { it.readText() }}
         val cancel=TransferCancellation()
@@ -48,7 +103,7 @@ class YouTubeResolver(private val context:Context,private val guard:(HttpTranspo
                     window.__queue=[];window.__output=null;window.__failure=null;
                     const worker=new Worker(URL.createObjectURL(new Blob([$encoded],{type:'application/javascript'})));
                     window.__worker=worker;worker.onmessage=e=>{if(e.data.request)window.__queue.push(e.data.request);if(e.data.result)window.__output=e.data.result;if(e.data.failure)window.__failure=e.data.failure;};
-                    worker.onerror=()=>{window.__failure='解析运行环境不支持此站点';};worker.postMessage({videoId:$id});
+                    worker.onerror=()=>{window.__failure='解析运行环境不支持此站点';};worker.postMessage({videoId:$id,testOnlyCpnOptIn:$testOnlyCpnOptIn});
                     </script>"""
                 web.loadDataWithBaseURL("https://purebrowser.invalid/","$html","text/html","UTF-8",null)
                 withTimeout(45000) {
@@ -58,7 +113,7 @@ class YouTubeResolver(private val context:Context,private val guard:(HttpTranspo
                         val wire=web.json("JSON.stringify({requests:window.__queue?window.__queue.splice(0,2):[],output:window.__output||null,failure:window.__failure||null})")
                         if(wire!=null) {
                             if(!wire.isNull("failure"))throw TransferFailure(FailureKind.UNSUPPORTED,"YouTube 当前解析或访问条件不受支持；未创建任务")
-                            if(!wire.isNull("output"))return@withTimeout parse(wire.getJSONObject("output"),videoId)
+                            if(!wire.isNull("output"))return@withTimeout wire.getJSONObject("output")
                             val queue=wire.optJSONArray("requests") ?: JSONArray()
                             for(i in 0 until queue.length()) {
                                 if(++requests>20)throw TransferFailure(FailureKind.UNSUPPORTED,"站点解析超过请求预算")
