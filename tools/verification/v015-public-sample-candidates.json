@@ -81,12 +81,16 @@
       "Cosmos current full-film asset BY 4.0 corroborates Archive metadata; legacy Gooseberry pages separately grant BY 3.0. Caminandes uses current official complete-film BY 4.0, while Archive still asserts BY 3.0.",
       "Author movie grants cover unchanged identified movies, not arbitrary uploader collections or added third-party works; selected rendition content/credits are not byte-verified.",
       "Anonymous page playback, player paths, old successful direct/HLS controls and all paired app baselines remain pending. No corpus freeze, T51 completion or release claim.",
-      "Four distinct playback platforms; shared Blender creator provenance does NOT mean four independent authors."
+      "Four distinct playback platforms; shared Blender creator provenance does NOT mean four independent authors.",
+      "2026-10-04 revision2 records both Commons canonical/upload/size/shape/service-license corrections from primary imageinfo. Prior assertions are not erased or treated as verified historical uploads. Original-file bytes/hash and credits remain pending; no source substitution or freeze.",
+      "2026-10-04 revision3: code13 original Tears WebM571346576B whole-file SHA1 matches revision2 Commons current rendition. This resolves that service file-byte identity only; unmodified-work/credits and Android playback/listening remain unverified, so strict freeze remains false."
     ],
     "pendingPrimaryAuthorCorroborations": 0,
     "followupPrimaryAuthorCorroboratedCount": 4,
     "renditionIdentityDiscrepanciesPending": 2,
-    "allRenditionIdentitiesValidated": false
+    "allRenditionIdentitiesValidated": false,
+    "metadataIdentityReconciliations": 2,
+    "metadataIdentityDiscrepanciesPending": 0
   },
   "samples": [
     {
@@ -448,7 +452,47 @@
         "deviceEvidence": null
       },
       "metadataOnly": true,
-      "corpusFrozen": false
+      "corpusFrozen": false,
+      "currentRenditionMetadataRevision": {
+        "revision": 2,
+        "date": "2026-10-04",
+        "supersedesCurrentUseOfPriorAssertions": true,
+        "priorRegistrationAssertionsPreserved": true,
+        "pageId": 40033389,
+        "canonicalTitle": "File:Tears of Steel 1080p.webm",
+        "upload": {
+          "timestamp": "2015-05-07T09:43:26Z",
+          "size": 571346576,
+          "width": 1920,
+          "height": 800,
+          "mime": "video/webm",
+          "sha1": "cf4e06a2d7e60e41cff98fa8163a0a0a5b03d3d9"
+        },
+        "serviceLicense": {
+          "LicenseShortName": "CC BY 3.0",
+          "LicenseUrl": "https://creativecommons.org/licenses/by/3.0",
+          "AttributionRequired": "true",
+          "Copyrighted": "True"
+        },
+        "selection": "original file named by canonicalTitle, NOT a substituted transcode",
+        "identityBasis": "current anonymous primary imageinfo metadata; exact original-file bytes/SHA1 pending device download",
+        "authorWorkGrantUnchanged": true,
+        "unchangedMovieAndCreditsVerified": false,
+        "strictRenditionAccepted": false
+      },
+      "currentRenditionByteObservation": {
+        "date": "2026-10-04",
+        "versionCode": 13,
+        "source": "native original WebM selection; anonymous full transfer on dedicated API37 lab",
+        "bytes": 571346576,
+        "sha1": "cf4e06a2d7e60e41cff98fa8163a0a0a5b03d3d9",
+        "sha256": "328253280a05e6b14a92f1f43d818d9b7d38ab5d3f6d5d98606198fd3daef2ff",
+        "matchesCurrentServiceFileAssertion": true,
+        "wholeWorkCreditsAndUnmodifiedAudioVerified": false,
+        "androidPlaybackAndListeningVerified": false,
+        "newVersionGain": false,
+        "corpusFrozen": false
+      }
     },
     {
       "sampleId": "PUB-WC-ELEPHANTS",
@@ -534,6 +578,33 @@
         "unchangedMovieConditionRequired": true,
         "renditionBytesCompared": false,
         "playbackOrAppTestPerformed": false
+      },
+      "currentRenditionMetadataRevision": {
+        "revision": 2,
+        "date": "2026-10-04",
+        "supersedesCurrentUseOfPriorAssertions": true,
+        "priorRegistrationAssertionsPreserved": true,
+        "pageId": 8819826,
+        "canonicalTitle": "File:Elephants Dream.ogv",
+        "upload": {
+          "timestamp": "2009-12-24T02:08:36Z",
+          "size": 35614993,
+          "width": 426,
+          "height": 240,
+          "mime": "application/ogg",
+          "sha1": "9a6272dc01919e2b891f0dadb8cbabf9a61d23ad"
+        },
+        "serviceLicense": {
+          "LicenseShortName": "CC BY-SA 2.5",
+          "LicenseUrl": "https://creativecommons.org/licenses/by-sa/2.5",
+          "AttributionRequired": "true",
+          "Copyrighted": "True"
+        },
+        "selection": "original file named by canonicalTitle, NOT a substituted transcode",
+        "identityBasis": "current anonymous primary imageinfo metadata; exact original-file bytes/SHA1 pending device download",
+        "authorWorkGrantUnchanged": true,
+        "unchangedMovieAndCreditsVerified": false,
+        "strictRenditionAccepted": false
       }
     },
     {

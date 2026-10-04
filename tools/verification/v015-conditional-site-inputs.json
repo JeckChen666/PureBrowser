@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "v015-conditional-old-first/1",
+  "date": "2026-10-04",
+  "scope": "two conditionally authorized old-first observations; NOT frozen corpus/denominator/gain",
+  "samples": [
+    {
+      "sampleId": "CH-PF-01-CHARGE",
+      "serviceGroup": "blender-peertube",
+      "title": "Charge - Blender Open Movie",
+      "playbackPage": "https://video.blender.org/videos/watch/04da454b-9893-4184-98f3-248d00625efe",
+      "authorizationBasis": "Author-operated exact-UUID public video API downloadEnabled=true; author project corroboration; preserve whole movie/credits. Unknown service licence field remains separate.",
+      "authorProject": "https://studio.blender.org/projects/charge/",
+      "authorSource": "https://video.blender.org/api/v1/videos/04da454b-9893-4184-98f3-248d00625efe",
+      "v014": "actual native anonymous full fragmented MP4 saved54578863B; Android duration ambiguity4s versus host262.834675s; wholefilm Android acceptance pending, NOT classified old failure",
+      "v015": "pre-fix canonical /w/fullUUID site entry missing;357442d fixed path; native720p progressive MP4 saved54603117B, host262.749s/library4:22; real native system Open with Photos differentUID displays0:10/2:11/4:18; sound/sync and receiver whole-file hash pending, NOT old-fail-new-success",
+      "renderedWorkLicenseObservation": {
+        "date": "2026-10-04",
+        "source": "actual native Open with/Photos rendering of producer public full MP4 at4:18/4:22",
+        "textObserved": "Licensed as Creative Commons Attribution4.0; Blender Foundation; studio.blender.org/charge",
+        "serviceApiLicenceUnknownNotRewritten": true,
+        "fullUnmodifiedEveryFrameAndAudioNotProven": true
+      }
+    },
+    {
+      "sampleId": "CH-PF-02-TED92",
+      "serviceGroup": "ted-native-hls",
+      "title": "The best stats you've ever seen",
+      "playbackPage": "https://www.ted.com/talks/hans_rosling_the_best_stats_you_ve_ever_seen",
+      "authorizationBasis": "Official TED usage policy: personal noncommercial unchanged complete talk test; retain attribution; no modified/reposted excerpts.",
+      "authorSource": "https://www.ted.com/about/our-organization/our-policies-terms/ted-talks-usage-policy",
+      "independentPlaybackServiceVerified": true,
+      "v014": "native anonymous master HLS parse:7 variants, all subtitle-selection unsupported, no supported variant/no task; this HLS route only, not all TED sources failed",
+      "v015": "observed generic JSON-LD TED HLS declaration; same native HLS parse7variants all subtitle-selection unsupported; no task/fulloutput, NO_GAIN",
+      "independentPlaybackEvidence": "Anonymous normal browser player after ad exposes hls.ted.com talk manifest; no backend injection, no advertising MP4 downloaded"
+    }
+  ],
+  "strictCorpusFrozen": false,
+  "candidateResultsUsedForSelection": false,
+  "executionFollowup": {
+    "date": "2026-10-04",
+    "source": "docs/V0.1.5-ROUND-TWO.md",
+    "strictCorpusFrozen": false,
+    "observationsDoNotConstitutePairedGains": true
+  }
+}
