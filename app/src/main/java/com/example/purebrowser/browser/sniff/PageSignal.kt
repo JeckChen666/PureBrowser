@@ -10,6 +10,13 @@ sealed interface PageSignal {
 
     /** Bounded JSON body of a rule-matched fetch/XHR endpoint; the request URL is [url]. */
     data class ApiPayload(val url: String, val content: String) : PageSignal
+
+    /**
+     * Bounded inline data block harvested read-only from the page (T85): JSON / JSON-LD script
+     * elements or a generic player-config script idiom. Only reported while a loaded rule
+     * declares inline-extract actions; the content is data for the rules engine, never executed.
+     */
+    data class InlineData(val kind: String, val content: String) : PageSignal
 }
 
 /**
@@ -38,9 +45,17 @@ object PageSignalParser {
                 val content = fields["content"] as? String
                 if (url.isNullOrEmpty() || content.isNullOrEmpty()) null else PageSignal.ApiPayload(url, content.take(262_144))
             }
+            "inlineData" -> {
+                val kind = fields["kind"] as? String
+                val content = fields["content"] as? String
+                if (kind == null || kind !in INLINE_KINDS || content.isNullOrEmpty()) null
+                else content!!.take(262_144).let { PageSignal.InlineData(kind, it) }
+            }
             else -> null
         }
     }
+
+    private val INLINE_KINDS = setOf("json", "ldjson", "script")
 
     // Minimal flat-object scanner: string/boolean/number/null values only, nested structures are malformed.
     private fun flatObject(json: String): Map<String, Any?>? {

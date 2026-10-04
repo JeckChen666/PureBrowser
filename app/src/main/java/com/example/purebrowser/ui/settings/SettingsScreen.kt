@@ -1,5 +1,7 @@
 package com.example.purebrowser.ui.settings
 
+import android.os.Build
+import com.example.purebrowser.download.PublishRoutePolicy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -108,9 +110,10 @@ fun SettingsScreen(
                 Column(Modifier.fillMaxWidth().testTag("downloadSavePath"),
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("保存位置（只读）", style = MaterialTheme.typography.bodyMedium)
-                    SelectionContainer { Text("Download/PureBrowser", style = MaterialTheme.typography.bodyMedium) }
+                    SelectionContainer { Text(PublishRoutePolicy.savePathLabel(Build.VERSION.SDK_INT), style = MaterialTheme.typography.bodyMedium) }
                 }
-                SettingsNote("本机公共目录，不提供目录选择。显示名称可修改，实际文件名保留唯一前缀。移除记录不会删除文件，删除文件需要另行确认。")
+                SettingsNote(if (Build.VERSION.SDK_INT >= 29) "本机公共目录，不提供目录选择。显示名称可修改，实际文件名保留唯一前缀。移除记录不会删除文件，删除文件需要另行确认。"
+                else "此系统版本不允许应用直接写入公共下载，成品保存在应用专属外部目录，可通过打开或分享另存。不提供目录选择。显示名称可修改，实际文件名保留唯一前缀。移除记录不会删除文件，删除文件需要另行确认。")
             }
             SettingsGroup("本地数据") {
                 SettingsNote("每次只清理你确认的类别，不提供一键全删。网站数据与网页缓存面向本应用的所有网站，不只是当前网页；任何清理都不会删除已保存的视频。")
@@ -318,7 +321,9 @@ fun AboutScreen() {
                 SettingsNote("不支持 HLS 直播、加密分片、HLS 独立音轨／fMP4、通用 DASH、MSE 全覆盖、跨站敏感鉴权或 DRM。blob 本身不是文件地址。版本号以本机安装包为准；开发候选不代表正式发布。")
             }
             SettingsGroup("文件与存储") {
-                SettingsNote("已保存的视频位于本机公共 Download/PureBrowser 目录。续传缓存与临时分片留在应用私有存储，会额外占用空间；确认清理已停止任务的缓存后，受影响任务必须重新下载。仅移除记录不会删除设备文件。")
+                SettingsNote(if (Build.VERSION.SDK_INT >= 29) "已保存的视频位于本机公共 Download/PureBrowser 目录。"
+                else "此系统版本不允许应用直接写入公共下载，已保存的视频位于应用专属外部目录，可通过打开或分享另存。")
+                SettingsNote("续传缓存与临时分片留在应用私有存储，会额外占用空间；确认清理已停止任务的缓存后，受影响任务必须重新下载。仅移除记录不会删除设备文件。")
                 SettingsNote("Android 10 及以上，发布中的公共副本处于 pending 状态，不作为视频库成品展示；旧版系统使用独立临时文件。下载、封装、校验和发布成功后，才在视频库提供本地预览、打开或分享。")
                 SettingsNote("视频库仅索引本应用保存的文件，不扫描整机媒体。文件分享通过 Android 系统选择器交给你选定的应用；不会由本应用自动上传。")
             }

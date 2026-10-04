@@ -2,6 +2,7 @@ package com.example.purebrowser.ui.resources
 
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -213,7 +214,8 @@ fun HlsDownloadConfirmation(
             keyboardActions = KeyboardActions(onDone = { focus.clearFocus(force = true); keyboard?.hide() }),
             modifier = Modifier.fillMaxWidth().testTag("download-file-name"),
         )
-        Text("保存至本机公共 Download/PureBrowser 目录，添加唯一前缀避免覆盖。", style = MaterialTheme.typography.bodySmall)
+        Text(if (Build.VERSION.SDK_INT >= 29) "保存至本机公共 Download/PureBrowser 目录，添加唯一前缀避免覆盖。"
+        else "此系统版本不允许写入公共下载；保存至应用专属外部目录，可打开或分享后另存。仍添加唯一前缀避免覆盖。", style = MaterialTheme.typography.bodySmall)
         ResourceOption(
             label = "仅 Wi-Fi",
             description = if (wifiOnly) "无 Wi-Fi 时等待连接" else "允许使用移动网络，可能产生流量费用",

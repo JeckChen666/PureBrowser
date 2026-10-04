@@ -4,6 +4,7 @@ import com.example.purebrowser.media.verify.ProbeResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.net.URI
+import java.util.Locale
 
 /** Bounded, navigation-scoped store. Called by both WebView workers and main-thread DOM callbacks. */
 class ResourceSniffer {
@@ -63,7 +64,13 @@ class ResourceSniffer {
         }
         val candidate = MediaCandidate(
             key,
-            if (kind == MediaKind.UNKNOWN && old != null) old.kind else kind,
+            when {
+                // Unknown endpoints keep the stored kind; a probe-verified manifest likewise
+                // survives later re-sightings whose URL shape alone still says FILE.
+                kind == MediaKind.UNKNOWN && old != null -> old.kind
+                old != null && old.probeState == ProbeState.VERIFIED && old.kind == MediaKind.HLS && kind == MediaKind.FILE -> old.kind
+                else -> kind
+            },
             old?.sources.orEmpty() + source,
             mimeType?.takeIf { it.isNotBlank() } ?: old?.mimeType,
             sizeBytes?.takeIf { it > 0 } ?: old?.sizeBytes,
@@ -107,8 +114,13 @@ class ResourceSniffer {
         val updated = when (result) {
             is ProbeResult.Verified -> {
                 // Verified manifests upgrade unknown endpoints; DASH stays display-only this version.
+                // A content-verified mpegurl body also corrects a master whose URL shape (e.g. a
+                // trailing .mp4) pinned it as FILE at first sight — the probe already knows the
+                // truth, so the kind follows the served media type, not the suffix (v0.1.7 S-E).
+                val verifiedMime = result.mime?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)
                 val upgraded = when {
                     result.kindHint == MediaKind.HLS && old.kind == MediaKind.UNKNOWN -> MediaKind.HLS
+                    result.kindHint == MediaKind.HLS && old.kind == MediaKind.FILE && verifiedMime?.contains("mpegurl") == true -> MediaKind.HLS
                     result.kindHint == MediaKind.DASH && old.kind == MediaKind.UNKNOWN -> MediaKind.DASH
                     else -> old.kind
                 }

@@ -208,8 +208,10 @@ class HlsBrowserJourneyTest {
                         assertEquals(0, it.getInt(2))
                     } ?: error("Published MediaStore row was not readable")
                 } else {
-                    assertEquals(AssetLocation.LEGACY_PUBLIC_FILE, saved.location)
-                    val directory = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "PureBrowser")
+                    assertEquals(AssetLocation.APP_EXTERNAL_FILE, saved.location)
+                    // Android 9-: no public-write gid for a targetSdk-30+ app, so the finished
+                    // file lands in the app-specific external folder with a relocation hint.
+                    val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "PureBrowser")
                     assertTrue(File(directory, saved.name).isFile)
                 }
                 val extractor = MediaExtractor()

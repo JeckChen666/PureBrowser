@@ -8,6 +8,7 @@ import android.webkit.WebView
 import android.widget.FrameLayout
 import com.example.purebrowser.browser.sniff.PageSignal
 import com.example.purebrowser.data.browser.TabRecord
+import com.example.purebrowser.download.RequestPolicy
 import com.example.purebrowser.download.UrlConnectionTransport
 import com.example.purebrowser.download.hls.HlsPlaylistParser
 import com.example.purebrowser.media.Evidence
@@ -15,6 +16,10 @@ import com.example.purebrowser.media.ResourceSniffer
 import com.example.purebrowser.media.fingerprint.FamilyDetector
 import com.example.purebrowser.media.fingerprint.PlayerConfigParser
 import com.example.purebrowser.media.fingerprint.PlayerFamily
+import com.example.purebrowser.media.rules.FetchSpec
+import com.example.purebrowser.media.rules.RuleDocument
+import com.example.purebrowser.media.rules.RuleFetchBudget
+import com.example.purebrowser.media.rules.RuleFetchPolicy
 import com.example.purebrowser.media.rules.RuleSet
 import com.example.purebrowser.media.rules.SiteRulesCoordinator
 import com.example.purebrowser.media.verify.AutoProbeQueue
@@ -27,6 +32,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicReference
 
 /** A live, bounded tab session. Removing from a host does not destroy its browsing history. */
@@ -48,6 +55,16 @@ class BrowserSession(
     private val verifyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val probeQueue = AutoProbeQueue(verifyScope, HttpTransportUrlFetcher(UrlConnectionTransport()))
     private val coordinator = ParseOnDetectionCoordinator(sniffer, probeQueue, verifyScope, ::sessionContext)
+    /** Single-hop opener for the rule fetch channel; policy/budget/cache live in the coordinator. */
+    private val ruleFetchOpener = HttpTransportUrlFetcher(UrlConnectionTransport())
+    /**
+     * ONE merged per-epoch ledger shared by the rule fetch channel and (via the documented hook)
+     * the probe queue: rule fetches charge through the coordinator, probe-side requests report
+     * through [ruleFetchBudget.noteExternalRequest]. The AutoProbeQueue -> ledger hop is the
+     * orchestrator's wiring point (T83 note): media/verify is outside the rules change set, so
+     * nothing calls it from there yet — the shared ceiling stays slack until that hop lands.
+     */
+    private val ruleFetchBudget = RuleFetchBudget()
     /** Latest harvested player configuration of the current epoch; family hint input for site rules. */
     @Volatile private var playerConfigHarvest: Pair<Long, Pair<String, String>>? = null
     val siteRules = SiteRulesCoordinator(
@@ -57,6 +74,8 @@ class BrowserSession(
         recentRequests = sniffer::recentRequests,
         domSnapshot = engine::domSnapshot,
         latestPlayerConfig = { playerConfigHarvest?.takeIf { it.first == engine.generation }?.second },
+        fetcher = { spec, url -> withContext(Dispatchers.IO) { openRuleFetch(spec, url) } },
+        fetchBudget = ruleFetchBudget,
     )
 
     init {
@@ -79,6 +98,53 @@ class BrowserSession(
         userAgent = engine.observedUserAgent,
         cookieFor = { url -> runCatching { CookieManager.getInstance().getCookie(url) }.getOrNull() },
     )
+
+    /**
+     * One bounded, anonymous open for the rule fetch channel (T83). Headers come exclusively from
+     * the RuleFetchPolicy whitelist (UA/Accept/Accept-Language/Referer); Cookie can never pass that
+     * filter by design. The session channel is wired but INERT this version: the per-site opt-in
+     * defaults to false (T86 attaches the UI switch and flips it). Redirects are NOT followed here
+     * — the coordinator re-validates every hop against the rule's host whitelist before re-opening.
+     */
+    private fun openRuleFetch(spec: FetchSpec, url: String): RuleDocument? = runCatching {
+        val base = LinkedHashMap<String, String>()
+        engine.observedUserAgent?.takeIf { it.isNotBlank() }?.let { base["User-Agent"] = it }
+        base["Accept"] = "application/json, text/plain, */*"
+        base["Accept-Language"] = Locale.getDefault().toLanguageTag()
+        RequestPolicy.referer(engine.page.value.url, url)?.let { base["Referer"] = it }
+        val headers = RuleFetchPolicy.headersFor(base)
+        // Session channel (inert until T86): policy requires the rule's session block to cover the
+        // target host AND the user's per-site opt-in before any cookie is pulled from the WebView.
+        val rule = RuleSet.load(app).byId(spec.ruleId)
+        val sessionCookie = rule?.let {
+            RuleFetchPolicy.sessionCookie(it, url, optIn = false, cookieFor = { target ->
+                runCatching { CookieManager.getInstance().getCookie(target) }.getOrNull()
+            })
+        }
+        val requestHeaders = if (sessionCookie != null) headers + ("Cookie" to sessionCookie) else headers
+        ruleFetchOpener.open(url, requestHeaders).use { response ->
+            if (response.status >= 400) return null
+            // A declared length beyond the rule's own bound skips the fetch outright.
+            val declared = response.header("Content-Length")?.trim()?.toLongOrNull()
+            if (declared != null && declared > spec.maxBytes) return null
+            val buffer = ByteArrayOutputStream(spec.maxBytes.coerceIn(64, 262_144))
+            val chunk = ByteArray(8192)
+            var read = 0
+            while (read < spec.maxBytes) {
+                val n = response.body.read(chunk, 0, minOf(chunk.size, spec.maxBytes - read))
+                if (n < 0) break
+                buffer.write(chunk, 0, n)
+                read += n
+            }
+            RuleDocument(
+                url = url,
+                status = response.status,
+                body = buffer.toString("UTF-8"),
+                contentType = response.header("Content-Type"),
+                location = response.header("Location"),
+            )
+        }
+    }.getOrNull()
 
     /** Read-only page signals become sniffer evidence; config/blob/payload contents are parsed, never executed. */
     private fun onPageSignal(epoch: Long, signal: PageSignal) {
@@ -112,6 +178,11 @@ class BrowserSession(
                 PlayerConfigParser.parse(signal.content, PlayerFamily.UNKNOWN, origin = pageUrl, baseUrl = signal.url)
                     .forEach { sniffer.observe(epoch, it.url, Evidence.RULE, title = it.qualityLabel) }
                 siteRules.onPageSignal(epoch)
+            }
+            is PageSignal.InlineData -> {
+                // T85: bounded read-only harvest reaches the rules engine through the coordinator's
+                // per-epoch buffer; no DOM writes, no execution, no separate network use.
+                siteRules.onInlineData(epoch, signal.kind, signal.content)
             }
         }
     }

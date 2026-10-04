@@ -4,6 +4,7 @@ import android.app.DownloadManager
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.net.Uri
+import android.os.Build
 import android.webkit.URLUtil
 import com.example.purebrowser.browser.BrowserAddress
 import com.example.purebrowser.media.MediaCandidate
@@ -167,7 +168,9 @@ class DownloadRepository(
         TaskStatus.QUEUED->"排队等待下载";TaskStatus.WAITING_WIFI->"等待 Wi-Fi；连接后返回应用可继续尝试"
         TaskStatus.RUNNING->if(r.protocol==DownloadProtocol.DUAL_TRACK)"正在依次下载双轨；尚未保存成品，不支持部分续传" else if(r.protocol==DownloadProtocol.HLS)"正在下载分片 ${r.completedSegments}/${r.segmentCount ?: 0}" else "正在保存视频";
         TaskStatus.MUXING->"正在封装独立 MP4，尚未保存成品";TaskStatus.VERIFYING->"正在检查视频格式";TaskStatus.PUBLISHING->"正在写入公共下载目录"
-        TaskStatus.SUCCEEDED->when(a?.availability) { FileAvailability.AVAILABLE->"视频已保存";FileAvailability.MISSING->"文件已丢失";else->"文件暂不可读" }
+        TaskStatus.SUCCEEDED->when(a?.availability) {
+            FileAvailability.AVAILABLE->if(a.location==AssetLocation.APP_EXTERNAL_FILE && Build.VERSION.SDK_INT<29) ManagedFileStore.APP_EXTERNAL_HINT else "视频已保存"
+            FileAvailability.MISSING->"文件已丢失";else->"文件暂不可读" }
         TaskStatus.CANCELLED->"已取消，可以重新下载";TaskStatus.INTERRUPTED->if(r.failure==FailureKind.SYSTEM_LIMIT)"系统未允许继续下载；返回应用后主动恢复或重新下载" else if(r.resumeAvailable)"下载已中断；可验证进度后继续" else "下载已中断，没有可靠续传检查点，请重新下载"
         TaskStatus.FAILED->r.safeFailure ?: when(r.failure) {
             FailureKind.NETWORK->"网络连接失败，请检查网络后重新下载"

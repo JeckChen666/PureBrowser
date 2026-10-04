@@ -14,6 +14,28 @@ class PageSignalParserTest {
             PageSignal.ApiPayload("https://api.example/video/1/config", """{"files":{}}"""),
             PageSignalParser.parse("""{"type":"apiPayload","url":"https://api.example/video/1/config","content":"{\"files\":{}}"}"""),
         )
+        assertEquals(
+            PageSignal.InlineData("ldjson", """{"@type":"VideoObject"}"""),
+            PageSignalParser.parse("""{"type":"inlineData","kind":"ldjson","content":"{\"@type\":\"VideoObject\"}"}"""),
+        )
+        assertEquals(
+            PageSignal.InlineData("script", "var flashvars = {};"),
+            PageSignalParser.parse("""{"type":"inlineData","kind":"script","content":"var flashvars = {};"}"""),
+        )
+        assertEquals(
+            PageSignal.InlineData("json", "{}"),
+            PageSignalParser.parse("""{"type":"inlineData","kind":"json","content":"{}"}"""),
+        )
+    }
+    @Test fun inlineDataKindIsWhitelistedAndContentIsCapped() {
+        // Unknown kinds and empty content never reach a listener.
+        listOf("html", "css", "", "JSON").forEach { kind ->
+            assertNull(kind, PageSignalParser.parse("""{"type":"inlineData","kind":"$kind","content":"{}"}"""))
+        }
+        assertNull(PageSignalParser.parse("""{"type":"inlineData","kind":"json"}"""))
+        assertNull(PageSignalParser.parse("""{"type":"inlineData","kind":42,"content":"{}"}"""))
+        val huge = PageSignalParser.parse("""{"type":"inlineData","kind":"script","content":"${"a".repeat(300_000)}"}""") as PageSignal.InlineData
+        assertEquals(262_144, huge.content.length)
     }
     @Test fun apiPayloadContentIsCappedAtTheBound() {
         val signal = PageSignalParser.parse("""{"type":"apiPayload","url":"https://api.example/c","content":"${"a".repeat(300_000)}"}""") as PageSignal.ApiPayload

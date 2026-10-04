@@ -117,6 +117,45 @@ class ResourceSnifferTest {
         org.junit.Assert.assertNull(sniffer.candidates.value.firstOrNull{it.url=="https://cdn.example/unknown.mp4"})
         org.junit.Assert.assertNull(sniffer.candidates.value.firstOrNull{it.url=="https://cdn.example/a.mp4"})
     }
+    // v0.1.7 S-E leftover: a master whose URL ends .mp4 (no m3u8 marker anywhere) is pinned FILE
+    // at first sight; the probe's served Content-Type must correct the kind so the HLS path runs.
+    @org.junit.Test fun applyProbeResultUpgradesMp4SuffixedMasterToHlsOnVerifiedMime() {
+        val sniffer=ResourceSniffer();val page=sniffer.beginPage()
+        sniffer.observe(page,"https://cdn.example/media/hls4/multi=1920x1080:1080p/_TPL_.mp4",Evidence.REQUEST)
+        org.junit.Assert.assertEquals(MediaKind.FILE,sniffer.candidates.value.single().kind)
+        val variants=listOf(
+            VariantSummary(1080,3_000_000L,"avc1.640028,mp4a.40.2","https://cdn.example/gear1080.m3u8",null),
+            VariantSummary(720,1_800_000L,"avc1.4d401f,mp4a.40.2","https://cdn.example/gear720.m3u8",null),
+            VariantSummary(480,900_000L,"avc1.4d401e,mp4a.40.2","https://cdn.example/gear480.m3u8",null))
+        sniffer.applyProbeResult("https://cdn.example/media/hls4/multi=1920x1080:1080p/_TPL_.mp4",page,
+            com.example.purebrowser.media.verify.ProbeResult.Verified(null,false,"application/vnd.apple.mpegurl",MediaKind.HLS,variants))
+        val upgraded=sniffer.candidates.value.single()
+        org.junit.Assert.assertEquals(MediaKind.HLS,upgraded.kind)
+        org.junit.Assert.assertEquals("application/vnd.apple.mpegurl",upgraded.mimeType)
+        org.junit.Assert.assertEquals("application/vnd.apple.mpegurl",upgraded.verifiedMime)
+        org.junit.Assert.assertEquals(3,upgraded.variants!!.size)
+        org.junit.Assert.assertEquals(1080,upgraded.variants!!.first().height)
+        // A late re-sighting of the same address must not revert the corrected kind to FILE.
+        sniffer.observe(page,"https://cdn.example/media/hls4/multi=1920x1080:1080p/_TPL_.mp4",Evidence.TIMING)
+        val reseen=sniffer.candidates.value.single{it.url.contains("_TPL_.mp4")}
+        org.junit.Assert.assertEquals(MediaKind.HLS,reseen.kind)
+        org.junit.Assert.assertEquals(3,reseen.variants!!.size)
+        org.junit.Assert.assertEquals(setOf(Evidence.REQUEST,Evidence.TIMING),reseen.sources)
+        // A real video/mp4 answer keeps the FILE routing and never invents a manifest.
+        sniffer.observe(page,"https://cdn.example/real.mp4",Evidence.REQUEST)
+        sniffer.applyProbeResult("https://cdn.example/real.mp4",page,
+            com.example.purebrowser.media.verify.ProbeResult.Verified(6_180_220L,true,"video/mp4",MediaKind.FILE))
+        val keptFile=sniffer.candidates.value.first{it.url=="https://cdn.example/real.mp4"}
+        org.junit.Assert.assertEquals(MediaKind.FILE,keptFile.kind)
+        org.junit.Assert.assertEquals("video/mp4",keptFile.verifiedMime)
+        org.junit.Assert.assertNull(keptFile.variants)
+        // Without a served mpegurl mime the suffix correction stays off: kind follows evidence only.
+        sniffer.observe(page,"https://cdn.example/no-mime.mp4",Evidence.REQUEST)
+        sniffer.applyProbeResult("https://cdn.example/no-mime.mp4",page,
+            com.example.purebrowser.media.verify.ProbeResult.Verified(null,false,null,MediaKind.HLS))
+        org.junit.Assert.assertEquals(MediaKind.FILE,sniffer.candidates.value.first{it.url=="https://cdn.example/no-mime.mp4"}.kind)
+    }
+
     // T76 ranking weighting: primary signals break ties WITHIN an evidence tier only.
     @org.junit.Test fun variantMasterOutranksPreviewFileWithinTheSameEvidenceTier() {
         val sniffer=ResourceSniffer();val page=sniffer.beginPage()

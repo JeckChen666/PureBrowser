@@ -1,5 +1,6 @@
 package com.example.purebrowser.ui.resources
 
+import android.os.Build
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -83,7 +84,9 @@ fun DownloadConfirmation(
             keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(force = true); keyboard?.hide() }),
             modifier = Modifier.fillMaxWidth().testTag("download-file-name"),
         )
-        Text("保存至系统 Download/PureBrowser 目录。保存时会添加唯一前缀，避免覆盖同名文件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(if (Build.VERSION.SDK_INT >= 29) "保存至系统 Download/PureBrowser 目录。保存时会添加唯一前缀，避免覆盖同名文件。"
+        else "此系统版本不允许写入公共下载；保存至应用专属外部目录，可打开或分享后另存。保存时会添加唯一前缀，避免覆盖同名文件。",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         ResourceOption(
             label = "仅 Wi-Fi",
             description = if (wifiOnly) "无 Wi-Fi 时等待连接" else "允许使用移动网络，可能产生流量费用",

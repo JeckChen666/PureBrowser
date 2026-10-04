@@ -214,10 +214,13 @@ class BrowserEngine(
     /**
      * Builds the injected observation script per navigation. The capture-endpoint list comes from
      * the loaded rule set (all rules' patterns, deduped by [RuleSet.captureEndpointSources]); a
-     * missing or empty set simply leaves response capture off, never blocks injection.
+     * missing or empty set simply leaves response capture off, never blocks injection. The inline
+     * harvest switch (T85) follows [RuleSet.wantsInlineData]: only rules that declare
+     * inline-extract actions ever turn the bounded harvest on.
      */
     private fun pageSignalScript(): String = PageSignalScript.build(
         runCatching { ruleSetProvider()?.captureEndpointSources() }.getOrNull().orEmpty(),
+        inlineHarvest = runCatching { ruleSetProvider()?.wantsInlineData() == true }.getOrDefault(false),
     )
 
     /** Shared passive GET observation used by both the WebView and service-worker clients. */

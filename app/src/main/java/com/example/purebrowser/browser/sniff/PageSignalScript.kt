@@ -15,6 +15,11 @@ object MediaUrlFilter {
  * URL matches one, a bounded copy of the JSON response body is reported as an apiPayload. Only the
  * page's own promise/instance is handed back untouched — capture reads a clone or a property and
  * never consumes the original body.
+ *
+ * With [inlineHarvest] (T85) the script also reports bounded inline data blocks — JSON and JSON-LD
+ * script elements plus a small set of generic player-config script idioms — but ONLY when a loaded
+ * rule declared inline-extract actions; the default build keeps the harvest code inert. No content
+ * is ever executed, evaluated or written back: it travels as string data to the bridge.
  */
 object PageSignalScript {
     private val TEMPLATE = """
@@ -88,6 +93,47 @@ object PageSignalScript {
                   pump();
                 } else if (typeof copy.text === 'function') {
                   copy.text().then(function (text) { reportPayload(url, text); }, function () {});
+                }
+              } catch (e) {}
+            }
+            var INLINE = __INLINE_HARVEST__;
+            var INLINE_CAP = 262144, INLINE_MAX = 8, INLINE_PAGE_CAP = 1048576;
+            var inlineSeen = typeof WeakSet === 'function' ? new WeakSet() : null;
+            var inlineCount = 0, inlineBudget = 0;
+            var IDIOMS = ['flashvars', 'video_url', 'videoalturl', '"sources"', 'sources:', 'playlist:'];
+            function harvestInline() {
+              // Bounded, read-only text harvest: JSON/JSON-LD script elements plus generic
+              // player-config script idioms. Never executes, never writes back.
+              try {
+                if (!INLINE) return;
+                if (!document || !document.querySelectorAll) return;
+                var scripts = document.querySelectorAll('script');
+                for (var i = 0; i < scripts.length; i++) {
+                  try {
+                    if (inlineCount >= INLINE_MAX || inlineBudget >= INLINE_PAGE_CAP) return;
+                    var s = scripts[i];
+                    if (inlineSeen && inlineSeen.has(s)) continue;
+                    var type = (s.getAttribute('type') || '').toLowerCase();
+                    var kind = null;
+                    if (type === 'application/ld+json') kind = 'ldjson';
+                    else if (type === 'application/json') kind = 'json';
+                    else if (type === '' || type === 'text/javascript' || type === 'application/javascript') {
+                      var probe = s.text || s.textContent || '';
+                      if (!probe || probe.length > INLINE_CAP) continue;
+                      var lower = probe.toLowerCase(), hit = false;
+                      if (lower.indexOf('http') === -1) continue;
+                      for (var j = 0; j < IDIOMS.length; j++) {
+                        if (lower.indexOf(IDIOMS[j]) !== -1) { hit = true; break; }
+                      }
+                      if (!hit) continue;
+                      kind = 'script';
+                    } else continue;
+                    var content = s.text || s.textContent || '';
+                    if (!content || content.length > INLINE_CAP || inlineBudget + content.length > INLINE_PAGE_CAP) continue;
+                    if (inlineSeen) inlineSeen.add(s);
+                    inlineCount++; inlineBudget += content.length;
+                    report({ type: 'inlineData', kind: kind, content: content });
+                  } catch (e) {}
                 }
               } catch (e) {}
             }
@@ -207,8 +253,9 @@ object PageSignalScript {
                 }
               } catch (e) {}
             }
-            function secondPass() { harvestConfigs(); scanIframes(); }
+            function secondPass() { harvestConfigs(); harvestInline(); scanIframes(); }
             harvestConfigs();
+            harvestInline();
             scanIframes();
             try {
               if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { try { secondPass(); } catch (e) {} });
@@ -224,9 +271,11 @@ object PageSignalScript {
     /**
      * Materializes the script with the rules layer's capture-endpoint pattern sources embedded as a
      * JSON string array. Patterns are quoted with backslash/control escaping so regex sources stay
-     * string data in the script — they are never interpolated as code.
+     * string data in the script — they are never interpolated as code. [inlineHarvest] switches the
+     * bounded inline-data harvest on; it is only ever passed as true when the loaded rule set
+     * declares inline-extract actions (RuleSet.wantsInlineData).
      */
-    fun build(captureEndpoints: List<String>): String = TEMPLATE
+    fun build(captureEndpoints: List<String>, inlineHarvest: Boolean = false): String = TEMPLATE
         .replace(
             "__MEDIA_KEYWORDS__",
             MediaUrlFilter.KEYWORDS.joinToString(prefix = "[", postfix = "]") { quote(it) },
@@ -235,6 +284,7 @@ object PageSignalScript {
             "__CAPTURE_ENDPOINTS__",
             captureEndpoints.joinToString(prefix = "[", postfix = "]") { quote(it) },
         )
+        .replace("__INLINE_HARVEST__", inlineHarvest.toString())
 
     private fun quote(value: String): String = buildString {
         append('"')

@@ -181,7 +181,7 @@ class HlsTransferTest {
             val asset = repo.stateSnapshot().assets.single { it.recordId == id }
             assertEquals(FormatCheck.PASSED, asset.format)
             assertEquals(FileAvailability.AVAILABLE, asset.availability)
-            assertEquals(if (Build.VERSION.SDK_INT >= 29) AssetLocation.MEDIASTORE_DOWNLOAD else AssetLocation.LEGACY_PUBLIC_FILE, asset.location)
+            assertEquals(if (Build.VERSION.SDK_INT >= 29) AssetLocation.MEDIASTORE_DOWNLOAD else AssetLocation.APP_EXTERNAL_FILE, asset.location)
             val uri = repo.fileUri(id)!!
             assertEquals(if (Build.VERSION.SDK_INT >= 29) "media" else "${app.packageName}.files", uri.authority)
             // Read the published file, not a private stage or remuxer-only result.

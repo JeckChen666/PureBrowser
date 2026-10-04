@@ -1,8 +1,6 @@
 package com.example.purebrowser.download
 
-import android.Manifest
 import android.content.ContentValues
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -87,12 +85,13 @@ class PublishRecoveryGapTest {
         assertTrue(exists(pending))
     }
 
-    @Test fun legacyMissingUriDeletesOnlyItsDeterministicPartial() {
+    @Test fun apiBelow29MissingUriDeletesOnlyItsDeterministicPartial() {
         assumeTrue(Build.VERSION.SDK_INT in 26..28)
-        // Parent/device harness must grant this legacy permission; this test never changes grants.
-        assumeTrue(app.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)
+        // targetSdk-30+ apps get no public-write gid on Android 9-, so publishes land in the
+        // app-specific external folder and the deterministic partial is created there; cleanup
+        // must stay scoped to this task's own partial and never touch unrelated files.
         val task = record()
-        val base = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "PureBrowser")
+        val base = File(app.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "PureBrowser")
         check(base.isDirectory || base.mkdirs())
         val ownedPartial = File(base, ".pb-${task.recordId}.part")
         val unrelatedPartial = File(base, ".pb-${UUID.randomUUID()}.part")

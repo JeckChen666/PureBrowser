@@ -14,8 +14,29 @@ import androidx.core.content.FileProvider
 import java.io.File
 import java.security.MessageDigest
 
+/** Where publish() mints a finished file for a given platform level. */
+enum class PublishRoute { MEDIASTORE, APP_EXTERNAL }
+
+/**
+ * Pure publish-route decision (SDK injected for tests). A targetSdk-30+ app never receives the
+ * sdcard_rw gid for WRITE_EXTERNAL_STORAGE on Android 9 and below, so the legacy public
+ * Download write fails deterministically (v0.1.7 E3 field evidence: createNewFile EACCES with
+ * the runtime grant present). Those devices publish into app-specific external storage instead.
+ */
+object PublishRoutePolicy {
+    fun forSdk(sdkInt: Int): PublishRoute = if (sdkInt >= 29) PublishRoute.MEDIASTORE else PublishRoute.APP_EXTERNAL
+
+    /** User-facing save-location label for the same decision (settings and pre-save copy). */
+    fun savePathLabel(sdkInt: Int): String = if (sdkInt >= 29) "Download/PureBrowser" else "应用专属外部目录（Download）"
+}
+
 /** All public outputs are minted here; never accepts webpage file paths. */
 class ManagedFileStore(private val app: Context) {
+    companion object {
+        /** User-visible relocation note for app-external outputs (Android 9-: no public write). */
+        const val APP_EXTERNAL_HINT = "已保存到应用专属目录；此系统版本不允许直接写入公共下载，可打开或分享后另存"
+    }
+
     val directCheckpoints=DirectCheckpointStore(app.filesDir)
     val dualTrackWorkspace=DualTrackWorkspace(app.filesDir)
     val hlsWorkspace=com.example.purebrowser.download.hls.HlsWorkspace(File(app.filesDir,"hls"))
@@ -128,22 +149,39 @@ class ManagedFileStore(private val app: Context) {
         catch(_:Exception) { MediaInspection(FormatCheck.UNCONFIRMED) } finally { extractor.release() }
     }
 
-    private fun legacyFile(name:String):File {
-        require(name==DownloadRules.safeFileName(name) || (name.length<=200 && Regex("[\\p{L}\\p{N}._-]+").matches(name)))
+    private fun legacyFile(name: String): File {
+        require(name == DownloadRules.safeFileName(name) || (name.length <= 200 && Regex("[\\p{L}\\p{N}._-]+").matches(name)))
         // Android's legacy emulated-storage root itself is a legitimate platform alias.
-        val downloads=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val base=File(downloads,"PureBrowser")
-        if(base.exists()) require(OsConstants.S_ISDIR(Os.lstat(base.path).st_mode) && !OsConstants.S_ISLNK(Os.lstat(base.path).st_mode))
-        val f=File(base,name)
-        require(f.canonicalFile.parentFile==base.canonicalFile)
+        val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val base = File(downloads, "PureBrowser")
+        if (base.exists()) require(OsConstants.S_ISDIR(Os.lstat(base.path).st_mode) && !OsConstants.S_ISLNK(Os.lstat(base.path).st_mode))
+        val f = File(base, name)
+        require(f.canonicalFile.parentFile == base.canonicalFile)
         return f
     }
-    fun publish(record:DownloadRecord,file:File,inspection:MediaInspection,onPending:(String)->Unit,cancel:TransferCancellation):VideoAsset {
+
+    /** App-specific external root for the API<29 route; null while external storage is unavailable. */
+    private fun appExternalBase(): File? {
+        val root = app.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return null
+        val base = File(root, "PureBrowser")
+        if (base.exists()) require(OsConstants.S_ISDIR(Os.lstat(base.path).st_mode) && !OsConstants.S_ISLNK(Os.lstat(base.path).st_mode))
+        return base
+    }
+
+    private fun appExternalFile(name: String): File {
+        require(name == DownloadRules.safeFileName(name) || (name.length <= 200 && Regex("[\\p{L}\\p{N}._-]+").matches(name)))
+        val base = appExternalBase() ?: throw TransferFailure(FailureKind.STORAGE, "外部存储暂不可用，无法保存成品")
+        val f = File(base, name)
+        require(f.canonicalFile.parentFile == base.canonicalFile)
+        return f
+    }
+
+    fun publish(record: DownloadRecord, file: File, inspection: MediaInspection, onPending: (String) -> Unit, cancel: TransferCancellation): VideoAsset {
         cancel.check()
-        val mime=inspection.mimeType ?: error("容器未确认")
-        val uri:Uri
-        val location:AssetLocation
-        if(Build.VERSION.SDK_INT>=29) {
+        val mime = inspection.mimeType ?: error("容器未确认")
+        val uri: Uri
+        val location: AssetLocation
+        if (PublishRoutePolicy.forSdk(Build.VERSION.SDK_INT) == PublishRoute.MEDIASTORE) {
             val values=ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME,record.name);put(MediaStore.MediaColumns.MIME_TYPE,mime)
                 put(MediaStore.MediaColumns.RELATIVE_PATH,"Download/PureBrowser/");put(MediaStore.MediaColumns.IS_PENDING,1)
@@ -166,23 +204,25 @@ class ManagedFileStore(private val app: Context) {
             } catch(e:Exception) { runCatching { app.contentResolver.delete(uri,null,null) };throw e }
             location=AssetLocation.MEDIASTORE_DOWNLOAD
         } else {
-            val out=legacyFile(record.name)
+            // Android 9-: no public-write gid, so the finished file lands in the app's own
+            // external folder (user-reachable on those versions) with a relocation hint in the UI.
+            val out = appExternalFile(record.name)
             out.parentFile!!.mkdirs()
             check(!out.exists()) { "目标文件已存在，未覆盖" }
-            val partial=File(out.parentFile,".pb-${record.recordId}.part")
+            val partial = File(out.parentFile, ".pb-${record.recordId}.part")
             check(partial.createNewFile()) { "临时公共文件已存在，未覆盖" }
-            uri=FileProvider.getUriForFile(app,"${app.packageName}.files",out)
+            uri = FileProvider.getUriForFile(app, "${app.packageName}.files", out)
             try {
                 onPending(uri.toString())
-                partial.outputStream().use { output ->file.inputStream().use { input ->
-                    val buffer=ByteArray(65536)
+                partial.outputStream().use { output -> file.inputStream().use { input ->
+                    val buffer = ByteArray(65536)
                     while(true) { cancel.check();val n=input.read(buffer);if(n<0)break;output.write(buffer,0,n) }
                 } }
                 cancel.check();check(hash(partial)==hash(file)) { "成品写入校验失败" }
                 check(!out.exists()) { "目标文件已存在，未覆盖" }
                 java.nio.file.Files.move(partial.toPath(),out.toPath(),java.nio.file.StandardCopyOption.ATOMIC_MOVE)
             } catch(e:Exception) { partial.delete();throw e }
-            location=AssetLocation.LEGACY_PUBLIC_FILE
+            location = AssetLocation.APP_EXTERNAL_FILE
         }
         return VideoAsset(record.recordId,null,uri.toString(),record.name,record.displayName,System.currentTimeMillis(),
             sizeBytes=file.length(),mimeType=mime,format=FormatCheck.PASSED,availability=FileAvailability.AVAILABLE,
@@ -206,6 +246,11 @@ class ManagedFileStore(private val app: Context) {
     fun owned(asset:VideoAsset):Boolean=when(asset.location) {
         AssetLocation.SYSTEM_DOWNLOAD -> false
         AssetLocation.MEDIASTORE_DOWNLOAD -> mediaOwned(Uri.parse(asset.uri),asset.name)
+        AssetLocation.APP_EXTERNAL_FILE -> runCatching {
+            val f=appExternalFile(asset.name)
+            asset.uri==FileProvider.getUriForFile(app,"${app.packageName}.files",f).toString() &&
+                (!f.exists() || OsConstants.S_ISREG(Os.lstat(f.path).st_mode))
+        }.getOrDefault(false)
         AssetLocation.LEGACY_PUBLIC_FILE -> runCatching {
             val f=legacyFile(asset.name)
             asset.uri==FileProvider.getUriForFile(app,"${app.packageName}.files",f).toString() &&
@@ -233,6 +278,7 @@ class ManagedFileStore(private val app: Context) {
                 val uri=Uri.parse(asset.uri)
                 app.contentResolver.delete(uri,null,null)>0 && app.contentResolver.query(uri,arrayOf("_id"),null,null,null)?.use { !it.moveToFirst() }==true
             }.getOrDefault(false)
+            AssetLocation.APP_EXTERNAL_FILE -> runCatching { val f=appExternalFile(asset.name); f.delete() && !f.exists() }.getOrDefault(false)
             AssetLocation.LEGACY_PUBLIC_FILE -> runCatching { val f=legacyFile(asset.name); f.delete() && !f.exists() }.getOrDefault(false)
             else -> false
         }
@@ -270,11 +316,16 @@ class ManagedFileStore(private val app: Context) {
                 }
             }
         } else {
-            val f=legacyFile(record.name)
-            val partial=File(f.parentFile,".pb-${record.recordId}.part")
-            require(!java.nio.file.Files.isSymbolicLink(partial.toPath()) && partial.canonicalFile.parentFile==f.parentFile!!.canonicalFile)
-            if(partial.exists())check(partial.delete())
-            if(uri!=null && uri==FileProvider.getUriForFile(app,"${app.packageName}.files",f).toString() && f.exists())check(f.delete())
+            // The current API<29 route is app-specific external storage; the legacy public file
+            // stays covered for records published by older versions while the gid was granted.
+            listOf(appExternalBase(), runCatching { legacyFile(record.name).parentFile }.getOrNull())
+                .filterNotNull().distinctBy { it.canonicalPath }.forEach { base ->
+                    val partial=File(base,".pb-${record.recordId}.part")
+                    require(!java.nio.file.Files.isSymbolicLink(partial.toPath()) && partial.canonicalFile.parentFile==base.canonicalFile)
+                    if(partial.exists())check(partial.delete())
+                    val out=File(base,record.name)
+                    if(uri!=null && uri==FileProvider.getUriForFile(app,"${app.packageName}.files",out).toString() && out.exists())check(out.delete())
+                }
         }
     }
 }

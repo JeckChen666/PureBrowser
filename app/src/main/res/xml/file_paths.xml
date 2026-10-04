@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-path name="downloads" path="Download/PureBrowser/" />
+    <!-- Publish route below API 29: getExternalFilesDir(DIRECTORY_DOWNLOADS)/PureBrowser. -->
+    <external-files-path name="app_downloads" path="Download/PureBrowser/" />
 </paths>

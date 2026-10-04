@@ -49,4 +49,29 @@ class PageSignalScriptTest {
         // Default script carries an empty capture list and reports no payloads to match.
         assertTrue(js.contains("var patterns = [];"))
     }
+    @Test fun inlineHarvestIsOffByDefaultAndGatedByTheBuildFlag() {
+        // Default script: the harvest code is present but inert, and no placeholder leaks.
+        assertTrue(js.contains("var INLINE = false;"))
+        assertFalse(js.contains("__INLINE_HARVEST__"))
+        assertTrue(js.contains("if (!INLINE) return;"))
+        // The flag switches the same code path on without changing anything else.
+        val built = PageSignalScript.build(emptyList(), inlineHarvest = true)
+        assertTrue(built.contains("var INLINE = true;"))
+        assertTrue(built.contains("if (!INLINE) return;") && built.contains("harvestInline();"))
+    }
+    @Test fun inlineHarvestStaysReadonlyAndBounded() {
+        listOf(
+            "var INLINE_CAP = 262144, INLINE_MAX = 8, INLINE_PAGE_CAP = 1048576;",
+            "if (inlineCount >= INLINE_MAX || inlineBudget >= INLINE_PAGE_CAP) return;",
+            "if (!content || content.length > INLINE_CAP || inlineBudget + content.length > INLINE_PAGE_CAP) continue;",
+            "type: 'inlineData'",
+        ).forEach { marker -> assertTrue(marker, js.contains(marker)) }
+        // Script-idiom candidates must also look like they can carry an address, and typed scripts
+        // outside json/ld+json/javascript are never harvested.
+        assertTrue(js.contains("if (lower.indexOf('http') === -1) continue;"))
+        // Nothing writes back to the page: only textContent reads and the report bridge.
+        assertFalse(js.contains("localStorage"))
+        assertFalse(js.contains("document.cookie"))
+        assertFalse(js.contains("indexedDB"))
+    }
 }
