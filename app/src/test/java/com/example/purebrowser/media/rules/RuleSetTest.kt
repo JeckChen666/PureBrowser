@@ -139,7 +139,9 @@ class RuleSetTest {
 
     @Test fun captureEndpointSourcesAreDedupedAcrossRulesAndCapped() {
         fun ruleJson(id: String, hosts: String, vararg endpoints: String): String {
-            val eps = endpoints.joinToString(",") { "\"" + it + "\"" }
+            // JSON-escape the pattern's backslashes so the parsed value keeps them (asset convention:
+            // "pattern": "\\/config$" in the file means the compiled regex source \/config$).
+            val eps = endpoints.joinToString(",") { "\"" + it.replace("\\", "\\\\") + "\"" }
             return """{"id":"$id","version":1,"match":{"hosts":"$hosts"},"actions":[{"type":"manifestHint","kind":"unknown"}],"captureEndpoints":[$eps]}"""
         }
         val set = RuleSet.parse(json(

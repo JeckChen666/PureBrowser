@@ -6,6 +6,7 @@ import com.example.purebrowser.media.ResourceSniffer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -80,7 +81,12 @@ class SiteRulesCoordinatorTest {
         assertEquals(0, loads)
     }
 
-    /** Virtual-time fake clock: the debounce delay runs on the test scheduler, no real sleeps. */
+    /**
+     * Virtual-time fake clock: the debounce delay runs on the test scheduler, no real sleeps. The
+     * coordinator runs on a StandardTestDispatcher scope rather than runTest's backgroundScope:
+     * coroutines-test 1.10 deliberately leaves background-scope tasks out of advanceUntilIdle, so a
+     * background-scoped coordinator would never even run its settle pass under virtual time.
+     */
     @Test fun lateSignalsReRunEvaluationDebouncedWithinBudget() = runTest {
         val sniffer = ResourceSniffer()
         val set = RuleSet.parse("""{"version":1,"rules":[
@@ -90,7 +96,7 @@ class SiteRulesCoordinatorTest {
         var evaluations = 0
         val coordinator = SiteRulesCoordinator(
             sniffer = sniffer,
-            scope = backgroundScope,
+            scope = CoroutineScope(StandardTestDispatcher(testScheduler)),
             ruleSet = { evaluations++; set },
             recentRequests = { requests },
             domSnapshot = null,
@@ -135,7 +141,7 @@ class SiteRulesCoordinatorTest {
         var evaluations = 0
         val coordinator = SiteRulesCoordinator(
             sniffer = sniffer,
-            scope = backgroundScope,
+            scope = CoroutineScope(StandardTestDispatcher(testScheduler)),
             ruleSet = { evaluations++; set },
             recentRequests = { listOf("https://api.tube.example/method/video.get?v=1") },
             domSnapshot = null,
