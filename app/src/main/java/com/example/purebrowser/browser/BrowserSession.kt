@@ -53,7 +53,7 @@ class BrowserSession(
     /** Page-session mirror for bounded auto-verification; read from the WebView, never persisted. */
     private fun sessionContext(): SessionContext = SessionContext(
         pageUrl = engine.page.value.url,
-        userAgent = webView?.settings?.userAgentString,
+        userAgent = engine.observedUserAgent,
         cookieFor = { url -> runCatching { CookieManager.getInstance().getCookie(url) }.getOrNull() },
     )
 

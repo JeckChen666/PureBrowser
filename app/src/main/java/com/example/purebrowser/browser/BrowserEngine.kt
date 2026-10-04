@@ -35,6 +35,9 @@ class BrowserEngine(
     val page = mutablePage.asStateFlow()
     val generation: Long get() = pageEpoch.get()
     @Volatile private var view: WebView? = null
+    /** User-Agent snapshot taken at attach; safe to read from any sniffer thread. */
+    @Volatile var observedUserAgent: String? = null
+        private set
     // One resolved, in-memory intent only. Do not publish/persist an unmounted destination.
     private var pendingNavigation: String? = null
     private var domScanRunning = false
@@ -72,6 +75,8 @@ class BrowserEngine(
             javaScriptCanOpenWindowsAutomatically = false
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
+        // Cached on the main thread: sniffing callbacks may run on WebView IO threads.
+        observedUserAgent = webView.settings.userAgentString
         webView.addJavascriptInterface(signalBridge, "PbSniffBridge")
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(v: WebView, newProgress: Int) {
