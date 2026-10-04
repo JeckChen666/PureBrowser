@@ -151,7 +151,9 @@ class HlsUiTest {
         click("hls-parse-playlist")
         awaitVariantList()
         compose.onNodeWithTag("hls-variant-3").performScrollTo().assertIsEnabled().assertIsNotSelected().performClick()
-        compose.onNodeWithText("本版只支持 H.264 与 AAC 编码").assertExists()
+        // Warning copy as of f43dd8e ("gate downgrades stay selectable"); scroll like a user so
+        // the row is composed even on small-viewport AVDs (API28 matrix).
+        compose.onNodeWithText("此档位编码不是 H.264/AAC，保存时可能失败").performScrollTo().assertExists()
         compose.onNodeWithTag("hls-variant-3").assertIsSelected()
         compose.onNodeWithTag("hls-variant-1").assertIsNotSelected()
         assertEquals(listOf(ENTRY), fake.urls())
