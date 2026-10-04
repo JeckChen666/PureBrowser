@@ -24,6 +24,12 @@ gradle/libs.versions.toml.
 The browser projects listed in docs/SOURCE-RESEARCH.md were used for design
 research, not copied or bundled. Their licenses are not replaced by this license.
 
+v0.1.8's rule-layer capability design (extractor action model and field
+semantics, extraction pipeline layering, format selector logic) was informed by
+the open-source yt-dlp project (The Unlicense / public domain). Behavior
+specifications and field semantics were transcribed; source text, comments,
+and identifier naming were not copied, and no upstream code is bundled.
+
 This notice records attribution and does not imply endorsement by upstream
 projects, Google, Android, or Gradle.
 
