@@ -61,6 +61,7 @@ class SessionOptIn(
         fun decode(raw: String?): SessionOptInState? = when (raw?.trim()?.lowercase(Locale.ROOT)) {
             "in" -> SessionOptInState.OPT_IN
             "out" -> SessionOptInState.OPT_OUT
+            "unknown" -> SessionOptInState.UNKNOWN
             else -> null
         }
     }

@@ -181,7 +181,7 @@ class ManagedFileStore(private val app: Context) {
         val mime = inspection.mimeType ?: error("容器未确认")
         val uri: Uri
         val location: AssetLocation
-        if (PublishRoutePolicy.forSdk(Build.VERSION.SDK_INT) == PublishRoute.MEDIASTORE) {
+        if (Build.VERSION.SDK_INT >= 29 && PublishRoutePolicy.forSdk(Build.VERSION.SDK_INT) == PublishRoute.MEDIASTORE) {
             val values=ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME,record.name);put(MediaStore.MediaColumns.MIME_TYPE,mime)
                 put(MediaStore.MediaColumns.RELATIVE_PATH,"Download/PureBrowser/");put(MediaStore.MediaColumns.IS_PENDING,1)
