@@ -28,12 +28,23 @@ class ResourceSniffer {
         frameUrl: String? = null,
         playing: Boolean = false,
         reliableSource: Boolean = false,
+        requestHasRange: Boolean = false,
     ) {
         if (pageEpoch != epoch) return
-        val kind = MediaClassifier.classify(url, mimeType, videoElement) ?: return
+        val classified = MediaClassifier.classify(url, mimeType, videoElement)
+        val kind = (if(source==Evidence.METADATA && classified==MediaKind.FILE)MediaKind.UNKNOWN else classified)
+            ?: if(source in setOf(Evidence.REQUEST,Evidence.TIMING) && (MediaClassifier.possibleEndpoint(url) || (requestHasRange && !MediaClassifier.isFragmentUrl(url) && runCatching{com.example.purebrowser.download.RequestPolicy.origin(url)!=null && java.net.URI(url).rawUserInfo==null}.getOrDefault(false)))) MediaKind.UNKNOWN else return
         val key = url.substringBefore('#')
         val old = entries[key]
-        if (old == null && entries.size >= 200) return
+        if (old == null) {
+            // Weak endpoint hints may not starve known files/manifests/DOM evidence.
+            if(kind==MediaKind.UNKNOWN && (!videoElement || source==Evidence.METADATA) && entries.values.count { it.kind==MediaKind.UNKNOWN && Evidence.DOM !in it.sources }>=32)return
+            if(entries.size>=200) {
+                val weak=entries.entries.firstOrNull { it.value.kind==MediaKind.UNKNOWN && Evidence.DOM !in it.value.sources }
+                if(kind==MediaKind.UNKNOWN || weak==null)return
+                entries.remove(weak.key)
+            }
+        }
         val candidate = MediaCandidate(
             key,
             if (kind == MediaKind.UNKNOWN && old != null) old.kind else kind,

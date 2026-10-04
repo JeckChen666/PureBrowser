@@ -48,6 +48,7 @@ internal fun ResourceDetailContent(
     ResourceMetadata(candidate)
     Text(
         when {
+            candidate.kind == MediaKind.UNKNOWN -> "这是待分析的 HTTP 媒体线索；可以主动进行匿名、有界的容器分析，不代表已经得到完整视频。"
             candidate.kind == MediaKind.HLS -> candidate.unsupportedExplanation()
             candidate.canTryDownload() -> "这是可尝试的文件直链，不代表已验证为完整视频。确认时可选择适用的同源网站会话和最小来源条件，也可关闭后尝试公开下载；会话不跨源转发，不保证跨来源下载成功。"
             else -> candidate.unsupportedExplanation()
@@ -75,8 +76,8 @@ internal fun ResourceDetailContent(
     }
     if (candidate.canTryDownload()) {
         Button(onClick = onSelect, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            BrowserGlyph(Glyph.DOWNLOAD, "尝试下载", Modifier.clearAndSetSemantics {})
-            Text("尝试下载", modifier = Modifier.padding(start = 8.dp))
+            BrowserGlyph(Glyph.DOWNLOAD, if(candidate.kind==MediaKind.UNKNOWN)"分析媒体" else "尝试下载", Modifier.clearAndSetSemantics {})
+            Text(if(candidate.kind==MediaKind.UNKNOWN)"分析媒体" else "尝试下载", modifier = Modifier.padding(start = 8.dp))
         }
     }
 }

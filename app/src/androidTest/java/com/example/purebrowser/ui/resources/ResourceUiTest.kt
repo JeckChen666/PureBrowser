@@ -23,6 +23,7 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -340,11 +341,12 @@ class ResourceUiTest {
 
     private data class Submission(val draft: DownloadDraft, val fileName: String, val wifiOnly: Boolean)
 
-    @Test fun extensionlessDomCandidateCanBeSelectedForControlledValidation() {
+    @Test fun extensionlessDomCandidateCanBeSelectedForExplicitAnalysis() {
         val unknown=MediaCandidate("https://media.example/mystery?token=exact",MediaKind.UNKNOWN,setOf(Evidence.DOM))
         val selected=mutableListOf<MediaCandidate>()
         compose.setContent { PureBrowserTheme { ResourceSheet(listOf(unknown),{}, {selected.add(it)}, {}) } }
-        clickSheetText("尝试下载")
+        clickSheetText("其他媒体资源（1） · 展开")
+        compose.onNodeWithContentDescription("分析媒体").performClick()
         compose.runOnIdle { assertEquals(listOf(unknown),selected) }
     }
 }

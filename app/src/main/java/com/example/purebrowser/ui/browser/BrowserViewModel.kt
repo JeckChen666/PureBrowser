@@ -51,6 +51,21 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val repository = runtime.repository
     // Same request/access policy as queue execution; constructing this never fetches a playlist.
     val hlsResolver by lazy { HlsResolver(repository.guardedTransport(UrlConnectionTransport()), WebsiteAccessContext(), repository.allowLocalHttp) }
+    val mediaProbe by lazy { com.example.purebrowser.media.resolver.MediaProbe(repository.guardedTransport(UrlConnectionTransport()),repository.allowLocalHttp) }
+    val youTubeResolver by lazy { com.example.purebrowser.media.site.YouTubeResolver(getApplication(),repository::guardedTransport) }
+    val siteResolver by lazy { com.example.purebrowser.media.resolver.SiteResolverRegistry(listOf(
+        com.example.purebrowser.media.resolver.YouTubeMediaAdapter(youTubeResolver),
+        com.example.purebrowser.media.resolver.PeerTubeMediaAdapter(repository.guardedTransport(UrlConnectionTransport()),repository.allowLocalHttp))) }
+    /** Analysis may add a redirected/resolved candidate, but never borrow a new page's source. */
+    fun acceptAnalyzed(draft:DownloadDraft,candidate:MediaCandidate,privacyGeneration:Long):DownloadDraft? {
+        if(runCatching { repository.requestGeneration()!=privacyGeneration }.getOrDefault(true))return null
+        if(privacyBusy || draft.sourceTabId!=tabs.active.value?.recordId || draft.sourceGeneration!=engine?.generation || draft.sourceUrl!=engine?.page?.value?.url)return null
+        val epoch=draft.sourceGeneration ?: return null
+        sniffer?.observe(epoch,candidate.url,if(com.example.purebrowser.media.Evidence.SITE in candidate.sources)com.example.purebrowser.media.Evidence.SITE else com.example.purebrowser.media.Evidence.PROBE,
+            candidate.mimeType,candidate.sizeBytes,title=candidate.title,frameUrl=draft.frameUrl,reliableSource=draft.reliableSource)
+        if(sniffer?.candidates?.value?.none { it.url==candidate.url }!=false)return null
+        return draft.copy(candidate=candidate)
+    }
     private val mutableDownloads = MutableStateFlow<List<DownloadItem>>(emptyList())
     val downloads = mutableDownloads.asStateFlow()
     private val library = VideoLibraryRepository(repository)

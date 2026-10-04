@@ -31,8 +31,12 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
     val context = LocalContext.current
     val defaultWifiOnly by model.defaultWifiOnly.collectAsState()
     var confirmDownload by remember { mutableStateOf<DownloadDraft?>(null) }
+    var sitePrivacyGeneration by remember { mutableStateOf(-1L) }
+    var mediaPrivacyGeneration by remember { mutableStateOf(-1L) }
+    var analyzeSite by remember { mutableStateOf<DownloadDraft?>(null) }
+    var analyzeMedia by remember { mutableStateOf<DownloadDraft?>(null) }
     var pendingPermission by remember { mutableStateOf<PendingSubmission?>(null) }
-    SideEffect { onBusyChanged(confirmDownload != null || pendingPermission != null) }
+    SideEffect { onBusyChanged(confirmDownload != null || analyzeMedia != null || analyzeSite != null || pendingPermission != null) }
     DisposableEffect(Unit) { onDispose { onBusyChanged(false) } }
     val userAgent = remember { WebSettings.getDefaultUserAgent(context) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
@@ -47,14 +51,25 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
         if(!granted) model.notify("通知权限未开启；系统可能隐藏下载通知，请在下载中心查看状态")
         if(pending!=null) model.download(pending.draft,pending.wifiOnly,pending.name,pending.plan)
     }
+    val sourcePage=model.engine?.page?.collectAsState()?.value?.url
+    val siteAvailable=sourcePage?.let(model.siteResolver::supports)==true
     if(showResources) ResourceSheet(candidates, onDismissResources, { item ->
         if (pendingPermission != null) {
             model.notify("请先完成当前下载的权限确认")
         } else if(model.sniffer?.candidates?.value?.any { it.url == item.url } == true) {
-            confirmDownload = model.downloadDraft(item, userAgent)
+            val draft=model.downloadDraft(item, userAgent)
+            if(item.kind==MediaKind.UNKNOWN){
+                mediaPrivacyGeneration=runCatching{model.repository.requestGeneration()}.getOrDefault(-1L)
+                analyzeMedia=draft
+            } else confirmDownload=draft
         } else model.notify("页面资源已更新，请重新打开资源面板")
         onDismissResources()
-    }, { onDismissResources() })
+    }, { onDismissResources() }, onAnalyzePage=if(siteAvailable) ({
+        val source=sourcePage ?: ""
+        sitePrivacyGeneration=runCatching{model.repository.requestGeneration()}.getOrDefault(-1L)
+        analyzeSite=model.downloadDraft(MediaCandidate(source,MediaKind.UNKNOWN,setOf(com.example.purebrowser.media.Evidence.SITE)),userAgent).copy(useAccessContext=false,reliableSource=false)
+        onDismissResources()
+    }) else null)
     fun submit(draft: DownloadDraft, name: String, wifiOnly: Boolean, plan: HlsDownloadPlan? = null) {
         // A second confirmation cannot overwrite a permission request already in flight.
         if (pendingPermission != null) return
@@ -70,6 +85,22 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
             pendingPermission = pending
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else model.download(pending.draft, pending.wifiOnly, pending.name, pending.plan)
+    }
+    analyzeSite?.let { draft ->
+        com.example.purebrowser.ui.resources.SiteAnalysisDialog(draft,model.siteResolver,{analyzeSite=null}) { option ->
+            val candidate=option.candidate
+            val plan=option.dualTrackPlan
+            val ready=model.acceptAnalyzed(draft,candidate,sitePrivacyGeneration)
+            analyzeSite=null
+            if(ready==null)model.notify("页面已变化，请返回来源重新分析") else confirmDownload=ready.copy(dualTrackPlan=plan,useAccessContext=false,reliableSource=false)
+        }
+    }
+    analyzeMedia?.let { draft ->
+        com.example.purebrowser.ui.resources.MediaAnalysisDialog(draft,model.mediaProbe,{analyzeMedia=null}) { candidate ->
+            val ready=model.acceptAnalyzed(draft,candidate,mediaPrivacyGeneration)
+            analyzeMedia=null
+            if(ready==null)model.notify("页面已变化，请返回来源重新分析") else confirmDownload=ready
+        }
     }
     confirmDownload?.let { draft ->
         if (draft.candidate.kind == MediaKind.HLS) {

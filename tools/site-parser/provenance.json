@@ -1,0 +1,23 @@
+{
+  "youtubei.js": {
+    "version": "18.1.0",
+    "license": "MIT"
+  },
+  "@bufbuild/protobuf": {
+    "version": "2.16.0",
+    "license": "(Apache-2.0 AND BSD-3-Clause)"
+  },
+  "fflate": {
+    "version": "0.8.3",
+    "license": "MIT"
+  },
+  "meriyah": {
+    "version": "7.3.3",
+    "license": "ISC"
+  },
+  "bundle": {
+    "sha256": "032136934379b1048f1eac0960da8fa62daaa7b26181cd3469d6222a4a3cb8df",
+    "bytes": 712719,
+    "build": "npm ci --ignore-scripts && npm run build"
+  }
+}

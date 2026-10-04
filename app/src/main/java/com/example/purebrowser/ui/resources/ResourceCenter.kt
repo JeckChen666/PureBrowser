@@ -52,12 +52,13 @@ fun ResourceSheet(
     onDismiss: () -> Unit,
     onSelect: (MediaCandidate) -> Unit,
     onSource: () -> Unit,
+    onAnalyzePage: (() -> Unit)? = null,
 ) {
     // Equal URLs can carry different evidence. Do not deduplicate or key by URL alone.
-    val downloadable = candidates.filter { it.canTryDownload() }
+    val downloadable = candidates.filter { it.canTryDownload() && it.kind!=MediaKind.UNKNOWN }
         .sortedWith(compareByDescending<MediaCandidate> { it.playing && Evidence.DOM in it.sources }
             .thenByDescending { Evidence.DOM in it.sources }.thenBy { it.kind == MediaKind.HLS })
-    val unsupported = candidates.filterNot { it.canTryDownload() }
+    val unsupported = candidates.filterNot { it.canTryDownload() && it.kind!=MediaKind.UNKNOWN }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var detail by remember { mutableStateOf<MediaCandidate?>(null) }
     val listState = rememberLazyListState()
@@ -101,6 +102,7 @@ fun ResourceSheet(
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         ResourceHeader("页面资源", "关闭资源面板", onDismiss, onSource)
+                        if(onAnalyzePage!=null) androidx.compose.material3.FilledTonalButton(onClick=onAnalyzePage,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("analyze-current-video")) { Text("分析当前视频") }
                         Text(
                             if (downloadable.none { it.kind == MediaKind.HLS }) {
                                 "${downloadable.size} 个可尝试的直链 · ${unsupported.size} 个其他媒体资源"
@@ -157,7 +159,7 @@ fun ResourceSheet(
                                 ResourceLine(
                                     candidate, downloadable = false,
                                     onDetails = { detail = candidate.copy(sources = candidate.sources.toSet()) },
-                                    onSelect = {},
+                                    onSelect = { onSelect(candidate) },
                                 )
                             }
                         }
@@ -186,6 +188,7 @@ private fun ResourceLine(candidate: MediaCandidate, downloadable: Boolean, onDet
             }
             Column {
                 ToolButton(Glyph.LIST, "查看详情", action = onDetails)
+                if(candidate.kind==MediaKind.UNKNOWN && candidate.canTryDownload()) ToolButton(Glyph.SEARCH, "分析媒体", tag=resourceAnalyzeTag(candidate.url), action=onSelect)
                 if (downloadable) ToolButton(Glyph.DOWNLOAD, "尝试下载", tag = resourceSaveTag(candidate.url), action = onSelect)
             }
         }

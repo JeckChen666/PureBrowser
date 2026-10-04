@@ -102,7 +102,9 @@ class BrowserEngine(
                 // must not let an old view's request borrow the next page's generation.
                 val epoch = pageEpoch.get()
                 if (v === view && request.method == "GET") {
-                    sniffer.observe(epoch, request.url.toString(), Evidence.REQUEST)
+                    val range=request.requestHeaders.entries.firstOrNull{it.key.equals("Range",true)}?.value
+                    val hasRange=range!=null && range.length<=80 && Regex("bytes=(?:[0-9]+-[0-9]*|-[0-9]+)").matches(range)
+                    sniffer.observe(epoch, request.url.toString(), Evidence.REQUEST, requestHasRange=hasRange)
                 }
                 return null
             }
@@ -201,8 +203,8 @@ class BrowserEngine(
                     val item = data.getJSONObject(i)
                     if(item.has("documentTimeOrigin"))continue
                     if(item.optBoolean("video") && item.optBoolean("playing"))playingUrls+=item.optString("url").substringBefore('#')
-                    sniffer.observe(epoch, item.optString("url"), if (item.optBoolean("video")) Evidence.DOM else Evidence.TIMING,
-                        item.optString("mime").takeIf { it.isNotBlank() }, videoElement = item.optBoolean("video"),
+                    sniffer.observe(epoch, item.optString("url"), if(item.optBoolean("metadata")) Evidence.METADATA else if (item.optBoolean("video")) Evidence.DOM else Evidence.TIMING,
+                        item.optString("mime").takeIf { it.isNotBlank() }, videoElement = item.optBoolean("video") || item.optBoolean("metadata"),
                         title = item.optString("title").takeIf { it.isNotBlank() },
                         frameUrl = item.optString("frame").takeIf(BrowserAddress::isWebUrl),
                         playing = item.optBoolean("playing"), reliableSource = item.optBoolean("video") &&
@@ -251,9 +253,31 @@ class BrowserEngine(
                         playing:!video.paused && !video.ended && u===video.currentSrc});
                     }
                   });
+                  var metaBudget=0, metaCount=0, nodes=0;
+                  function metadata(v,depth) {
+                    if(!v || depth>4 || ++nodes>40)return;
+                    if(Array.isArray(v)){v.slice(0,20).forEach(function(x){metadata(x,depth+1);});return;}
+                    if(typeof v!=='object')return;
+                    var type=v['@type'];
+                    if(type==='VideoObject' || (Array.isArray(type) && type.indexOf('VideoObject')>=0)) {
+                      if(typeof v.contentUrl==='string' && v.contentUrl.length<=8192) {
+                        try { var u=new URL(v.contentUrl,w.location.href).href;
+                          add({url:u,metadata:true,mime:typeof v.encodingFormat==='string'?v.encodingFormat.slice(0,120):'',
+                            title:typeof v.name==='string'?v.name.slice(0,180):doc.title.slice(0,180),frame:w.location.href});
+                        } catch(e) {}
+                      }
+                    }
+                    if(v['@graph'])metadata(v['@graph'],depth+1);
+                    if(v.mainEntity)metadata(v.mainEntity,depth+1);
+                  }
+                  doc.querySelectorAll('script[type="application/ld+json"]').forEach(function(s) {
+                    var text=s.textContent||'';
+                    if(++metaCount>4 || metaBudget+text.length>65536)return;
+                    metaBudget+=text.length;try{metadata(JSON.parse(text),0);}catch(e){}
+                  });
                   w.performance.getEntriesByType('resource').slice(-200).forEach(function(r) {
                     if (timing < 200 && r.name && r.name.length <= 8192 && r.startTime + w.performance.timeOrigin >= __NAV_TIME__) {
-                      timing++; add({url:r.name,video:false});
+                      timing++; add({url:r.name,video:false,mime:(r.contentType || '').slice(0,120)});
                     }
                   });
                   if (depth < 2) doc.querySelectorAll('iframe').forEach(function(f) {

@@ -17,6 +17,7 @@ import java.security.MessageDigest
 /** All public outputs are minted here; never accepts webpage file paths. */
 class ManagedFileStore(private val app: Context) {
     val directCheckpoints=DirectCheckpointStore(app.filesDir)
+    val dualTrackWorkspace=DualTrackWorkspace(app.filesDir)
     val hlsWorkspace=com.example.purebrowser.download.hls.HlsWorkspace(File(app.filesDir,"hls"))
     private val stages=File(app.filesDir,"transfers").apply { mkdirs() }
     fun stage(id:TaskId):File {
@@ -27,8 +28,8 @@ class ManagedFileStore(private val app: Context) {
         return f
     }
     fun removeStage(id:TaskId) { val f=stage(id); if(f.exists()) check(f.delete()) { "临时文件暂时无法清理" } }
-    fun cacheBytes(id:TaskId):Long = runCatching { stage(id).length()+hlsWorkspace.cacheBytes(id) }.getOrDefault(0L)
-    fun clearPrivate(id:TaskId) { removeStage(id);directCheckpoints.delete(id);hlsWorkspace.delete(id) }
+    fun cacheBytes(id:TaskId):Long = runCatching { stage(id).length()+hlsWorkspace.cacheBytes(id)+dualTrackWorkspace.cacheBytes(id) }.getOrDefault(0L)
+    fun clearPrivate(id:TaskId) { removeStage(id);directCheckpoints.delete(id);hlsWorkspace.delete(id);dualTrackWorkspace.delete(id) }
     fun inspect(file:File):MediaInspection {
         val header=file.inputStream().use { input -> ByteArray(4096).let { bytes -> val n=input.read(bytes); bytes.copyOf(n.coerceAtLeast(0)) } }
         val mime=MediaContainer.mime(header) ?: return MediaInspection(FormatCheck.INVALID)
@@ -72,6 +73,61 @@ class ManagedFileStore(private val app: Context) {
             MediaInspection(FormatCheck.PASSED,"video/mp4",duration/1000)
         } catch(_:Exception) { MediaInspection(FormatCheck.UNCONFIRMED) } finally { extractor.release() }
     }
+    /**
+     * Independent dual-track check: match the muxer's 4 MiB sample bound without changing HLS.
+     * Each track is probed on its OWN timeline (a shorter track must not seek past its tail).
+     * This is structural/readability verification, not proof of decoded playback or work identity.
+     */
+    fun inspectDualTrack(file:File,expectedDurationUs:Long,cancel:TransferCancellation?=null):MediaInspection {
+        cancel?.check()
+        val clearStructure=try {
+            DirectCheckpointStore.checkLeaf(file)
+            DirectCheckpointStore.noFollowInput(file).use { DualTrackMp4Protection.clear(it.channel,cancel) }
+        } catch(e:java.util.concurrent.CancellationException) { throw e }
+        catch(_:Exception) { return MediaInspection(FormatCheck.UNCONFIRMED) }
+        if(!clearStructure)return MediaInspection(FormatCheck.INVALID)
+        val base=inspect(file)
+        if(base.format!=FormatCheck.PASSED || base.mimeType!="video/mp4")return MediaInspection(FormatCheck.INVALID)
+        val extractor=MediaExtractor()
+        return try {
+            extractor.setDataSource(file.path)
+            if(!extractor.psshInfo.isNullOrEmpty() || (Build.VERSION.SDK_INT>=24 && extractor.drmInitData!=null))
+                return MediaInspection(FormatCheck.INVALID)
+            if(extractor.trackCount!=2)return MediaInspection(FormatCheck.INVALID)
+            val tracks=(0 until extractor.trackCount).map { it to extractor.getTrackFormat(it) }
+            if(tracks.count { it.second.getString(MediaFormat.KEY_MIME)=="video/avc" }!=1 ||
+                tracks.count { it.second.getString(MediaFormat.KEY_MIME)=="audio/mp4a-latm" }!=1)
+                return MediaInspection(FormatCheck.INVALID)
+            val tolerance=maxOf(2_000_000L,minOf(5_000_000L,expectedDurationUs/1000))
+            val buffer=java.nio.ByteBuffer.allocate(4*1024*1024)
+            var duration=0L
+            tracks.forEach { (index,format)->
+                cancel?.check()
+                if(Build.VERSION.SDK_INT>=26 && extractor.getCasInfo(index)!=null)return MediaInspection(FormatCheck.INVALID)
+                val ownDuration=if(format.containsKey(MediaFormat.KEY_DURATION))format.getLong(MediaFormat.KEY_DURATION) else -1L
+                if(ownDuration<=0 || ownDuration>com.example.purebrowser.download.site.DualTrackMetadata.MAX_DURATION_US+tolerance ||
+                    kotlin.math.abs(ownDuration-expectedDurationUs)>tolerance)return MediaInspection(FormatCheck.INVALID)
+                duration=maxOf(duration,ownDuration)
+                extractor.selectTrack(index)
+                for(point in listOf(0L,ownDuration/2,(ownDuration-1_000_000L).coerceAtLeast(0))) {
+                    cancel?.check()
+                    extractor.seekTo(point,MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+                    if(extractor.sampleFlags and (MediaExtractor.SAMPLE_FLAG_ENCRYPTED or MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME)!=0)
+                        return MediaInspection(FormatCheck.INVALID)
+                    if(extractor.sampleTime<0 || extractor.sampleTime>ownDuration+tolerance ||
+                        (Build.VERSION.SDK_INT>=28 && extractor.sampleSize !in 1..buffer.capacity().toLong()))
+                        return MediaInspection(FormatCheck.INVALID)
+                    buffer.clear()
+                    if(extractor.readSampleData(buffer,0) !in 1..buffer.capacity())return MediaInspection(FormatCheck.INVALID)
+                }
+                extractor.unselectTrack(index)
+            }
+            cancel?.check()
+            MediaInspection(FormatCheck.PASSED,"video/mp4",duration/1000)
+        } catch(e:java.util.concurrent.CancellationException) { throw e }
+        catch(_:Exception) { MediaInspection(FormatCheck.UNCONFIRMED) } finally { extractor.release() }
+    }
+
     private fun legacyFile(name:String):File {
         require(name==DownloadRules.safeFileName(name) || (name.length<=200 && Regex("[\\p{L}\\p{N}._-]+").matches(name)))
         // Android's legacy emulated-storage root itself is a legitimate platform alias.

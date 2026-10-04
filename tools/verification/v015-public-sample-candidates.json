@@ -1,0 +1,733 @@
+{
+  "schemaVersion": "v015-public-sample-candidates/1",
+  "purpose": "Bounded sidecar recommendations only; NOT main corpus template, resolver input schema, T51 completion or release acceptance",
+  "registrationDate": "2026-10-04",
+  "serviceCount": 4,
+  "distinctWorkCount": 8,
+  "youtubeCount": 2,
+  "nonYoutubeCount": 6,
+  "services": [
+    {
+      "id": "youtube",
+      "label": "YouTube",
+      "kind": "video platform"
+    },
+    {
+      "id": "blender-peertube",
+      "label": "Blender PeerTube (video.blender.org)",
+      "kind": "local PeerTube hosting; NOT Studio YouTube embed"
+    },
+    {
+      "id": "wikimedia-commons",
+      "label": "Wikimedia Commons",
+      "kind": "Commons file-page player and repository"
+    },
+    {
+      "id": "internet-archive",
+      "label": "Internet Archive",
+      "kind": "Archive item-player and repository"
+    }
+  ],
+  "scope": {
+    "credentialsUsed": false,
+    "protectedMediaBypass": false,
+    "videoBytesDownloaded": false,
+    "mediaEndpointsRequested": false,
+    "avdLaunched": false,
+    "privateFilesInspected": false,
+    "implementationChanged": false,
+    "successfulOldControlEvidenceAvailable": false
+  },
+  "researchLimits": {
+    "boundedHttpMetadataAttempts": 19,
+    "webPrimaryPageOpenAttempts": 5,
+    "note": "24 page/metadata attempts in total including repeat reads, two unavailable YouTube web opens, and one 404; discovery searches returned pointers only. Research stopped here; no retries to media endpoints.",
+    "authorCorroborationFollowup": {
+      "registrationBatchDate": "2026-10-04",
+      "boundedHttpMetadataAttempts": 16,
+      "webPrimaryPageOpenAttempts": 1,
+      "totalPageMetadataAttempts": 17,
+      "discoverySearchQueryCount": 10,
+      "note": "Follow-up stopped after 17 page/metadata attempts. Text/JSON only, 15-second request timeout and 400 KB body cap. One generic Caminandes asset metadata read exposed a public signed-media URL; the URL was not requested and no signed parameters/raw body were retained in these artifacts.",
+      "attemptedMetadataPages": [
+        "https://orange.blender.org/about/",
+        "https://gooseberry.blender.org/sharing/",
+        "https://www.caminandes.com/",
+        "https://studio.blender.org/projects/spring/",
+        "https://studio.blender.org/projects/spring/pages/about/",
+        "https://orange.blender.org/",
+        "https://gooseberry.blender.org/about/",
+        "https://caminandes.com/",
+        "https://studio.blender.org/projects/caminandes-2/",
+        "http://orange.blender.org/background/",
+        "http://orange.blender.org/press/",
+        "https://studio.blender.org/projects/cosmos-laundromat/",
+        "https://orange.blender.org/blog/creative-commons-license-2/",
+        "https://studio.blender.org/projects/caminandes-2/pages/credits/",
+        "https://studio.blender.org/projects/api/assets/2363/?site_context=featured_artwork",
+        "https://studio.blender.org/projects/api/assets/1537/?site_context=featured_artwork"
+      ]
+    }
+  },
+  "qualification": {
+    "identitiesWithPrimaryMetadata": 8,
+    "explicitLicenseDeclarations": 8,
+    "licenseVersionsFixed": 8,
+    "allRightsChainsIndependentlyRechecked": false,
+    "strictCorpusReady": false,
+    "notes": [
+      "Four previously pending primary-author movie grants and metadata work identities are corroborated. All eight selected authorization-basis versions are fixed; this does not resolve every service-side label.",
+      "Spring uses author CC BY 4.0 despite a version-unspecified PeerTube ShareAlike label; Elephants Dream uses official movie CC BY 2.5 while Commons labels its rendition BY-SA 3.0.",
+      "Cosmos current full-film asset BY 4.0 corroborates Archive metadata; legacy Gooseberry pages separately grant BY 3.0. Caminandes uses current official complete-film BY 4.0, while Archive still asserts BY 3.0.",
+      "Author movie grants cover unchanged identified movies, not arbitrary uploader collections or added third-party works; selected rendition content/credits are not byte-verified.",
+      "Anonymous page playback, player paths, old successful direct/HLS controls and all paired app baselines remain pending. No corpus freeze, T51 completion or release claim.",
+      "Four distinct playback platforms; shared Blender creator provenance does NOT mean four independent authors."
+    ],
+    "pendingPrimaryAuthorCorroborations": 0,
+    "followupPrimaryAuthorCorroboratedCount": 4
+  },
+  "samples": [
+    {
+      "sampleId": "PUB-YT-SINTEL",
+      "suggestedCorpusSlot": "YT01",
+      "serviceGroup": "youtube",
+      "workKey": "sintel",
+      "title": "Sintel - Open Movie by Blender Foundation",
+      "author": "Blender Foundation; official YouTube publisher: Blender (@BlenderOfficial)",
+      "playbackPage": "https://www.youtube.com/watch?v=eRsGyueVLvQ",
+      "exactSourcePage": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DeRsGyueVLvQ&format=json",
+      "identity": {
+        "videoId": "eRsGyueVLvQ",
+        "metadataTitleVerified": true,
+        "publisherVerified": true
+      },
+      "license": {
+        "status": "explicit_primary_project_grant",
+        "name": "CC BY 3.0",
+        "version": "3.0",
+        "licensePage": "https://durian.blender.org/sharing/",
+        "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+        "notes": "Project grant applies to published film; preserve complete credits for full-film redistribution. Logos/trademarks and third-party material excluded."
+      },
+      "reasonSelected": "Required known Sintel identity; extensionless watch/player route. Bottom-layer protocol and actual formats pending; blob does not establish HLS/DASH.",
+      "verifiedMetadata": {
+        "oembedHttpStatus": 200,
+        "provider": "YouTube",
+        "authorName": "Blender",
+        "authorUrl": "https://www.youtube.com/@BlenderOfficial",
+        "projectLicenseHttpStatus": 200
+      },
+      "publishedMediaDeclarations": [],
+      "pending": [
+        "Anonymous watch-page access and actual playback",
+        "Observed player/network/media formats",
+        "New paired v0.1.4 and v0.1.5 device evidence"
+      ],
+      "historicalReference": {
+        "source": "docs/COMPATIBILITY-CORPUS-V0.1.5.md (existing public documentation only)",
+        "statement": "Prior Sintel report describes 0 direct links / 1 local blob clue; no task or output.",
+        "status": "inherited_not_reverified",
+        "privateReportRead": false
+      },
+      "knownNormalDirectLinks": [],
+      "appBaseline": {
+        "v014": "NOT_TESTED_BY_SIDECAR",
+        "v015": "NOT_TESTED_BY_SIDECAR",
+        "deviceEvidence": null
+      },
+      "metadataOnly": true,
+      "corpusFrozen": false
+    },
+    {
+      "sampleId": "PUB-YT-BBB",
+      "suggestedCorpusSlot": "YT02",
+      "serviceGroup": "youtube",
+      "workKey": "big-buck-bunny",
+      "title": "Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film",
+      "author": "Blender Foundation; official YouTube publisher: Blender (@BlenderOfficial)",
+      "playbackPage": "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+      "exactSourcePage": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Daqz-KE-bpKQ&format=json",
+      "identity": {
+        "videoId": "aqz-KE-bpKQ",
+        "metadataTitleVerified": true,
+        "publisherVerified": true
+      },
+      "license": {
+        "status": "explicit_primary_project_grant",
+        "name": "CC BY 3.0",
+        "version": "3.0",
+        "licensePage": "https://peach.blender.org/about/",
+        "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+        "notes": "Peach project grant; preserve complete credits for full-film screening/redistribution. This specific uploaded rendition is identified by official channel metadata; no stream/track verification."
+      },
+      "reasonSelected": "Second distinct YouTube work; official title names 60fps/4K but actual returned formats/resolutions are TBD, never inferred from the title.",
+      "verifiedMetadata": {
+        "oembedHttpStatus": 200,
+        "provider": "YouTube",
+        "authorName": "Blender",
+        "authorUrl": "https://www.youtube.com/@BlenderOfficial",
+        "projectLicenseHttpStatus": 200
+      },
+      "publishedMediaDeclarations": [],
+      "pending": [
+        "Anonymous watch-page access and actual playback",
+        "Actual available tracks, codecs, resolutions and frame rate",
+        "Paired device baseline"
+      ],
+      "knownNormalDirectLinks": [],
+      "appBaseline": {
+        "v014": "NOT_TESTED_BY_SIDECAR",
+        "v015": "NOT_TESTED_BY_SIDECAR",
+        "deviceEvidence": null
+      },
+      "metadataOnly": true,
+      "corpusFrozen": false
+    },
+    {
+      "sampleId": "PUB-PT-COFFEE",
+      "suggestedCorpusSlot": "G01",
+      "serviceGroup": "blender-peertube",
+      "workKey": "coffee-run",
+      "title": "Coffee Run - Blender Open Movie",
+      "author": "Blender Studio / Blender Foundation; director Hjalti Hjalmarsson",
+      "playbackPage": "https://video.blender.org/videos/watch/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1",
+      "exactSourcePage": "https://video.blender.org/api/v1/videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1",
+      "authorProjectPage": "https://studio.blender.org/projects/coffee-run/",
+      "identity": {
+        "uuid": "ff8fe61b-026f-4f07-b66b-2a790d6f6ab1",
+        "account": "blender",
+        "channel": "blender_open_movies",
+        "isLocal": true
+      },
+      "license": {
+        "status": "explicit_primary_project_grant",
+        "name": "CC BY 4.0",
+        "version": "4.0",
+        "licensePage": "https://studio.blender.org/projects/coffee-run/pages/licensing/",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "notes": "PeerTube licence field is Unknown; permission instead comes from the explicit author project grant. Preserve attribution; logos/trademarks and unrelated material excluded."
+      },
+      "reasonSelected": "Genuine local PeerTube video rather than Studio YouTube embed; extensionless watch entry, server-declared MP4 object-storage URLs, candidate direct-control route only.",
+      "verifiedMetadata": {
+        "apiHttpStatus": 200,
+        "durationSeconds": 184,
+        "privacy": "Public",
+        "downloadEnabled": true,
+        "peerTubeLicenseLabel": "Unknown",
+        "streamingPlaylistCount": 0,
+        "projectLicenseHttpStatus": 200
+      },
+      "pending": [
+        "Anonymous player rendering/playback",
+        "Media URL HTTP status/MIME/Range/bytes",
+        "Whether ordinary player loads MP4 dynamically",
+        "Paired device direct-control baseline"
+      ],
+      "knownNormalDirectLinks": [],
+      "appBaseline": {
+        "v014": "NOT_TESTED_BY_SIDECAR",
+        "v015": "NOT_TESTED_BY_SIDECAR",
+        "deviceEvidence": null
+      },
+      "metadataOnly": true,
+      "corpusFrozen": false,
+      "publishedMediaDeclarations": [
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-804.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-804.mp4",
+          "resolutionLabel": "1080p",
+          "resolutionId": 804,
+          "sizeBytes": 42603365,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        },
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-720.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-720.mp4",
+          "resolutionLabel": "720p",
+          "resolutionId": 720,
+          "sizeBytes": 38989727,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        },
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-480.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-480.mp4",
+          "resolutionLabel": "480p",
+          "resolutionId": 480,
+          "sizeBytes": 22518840,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        },
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-360.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-360.mp4",
+          "resolutionLabel": "360p",
+          "resolutionId": 360,
+          "sizeBytes": 16098946,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        },
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-240.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/ff8fe61b-026f-4f07-b66b-2a790d6f6ab1-240.mp4",
+          "resolutionLabel": "240p",
+          "resolutionId": 240,
+          "sizeBytes": 10422402,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        }
+      ]
+    },
+    {
+      "sampleId": "PUB-PT-SPRING",
+      "suggestedCorpusSlot": "G02",
+      "serviceGroup": "blender-peertube",
+      "workKey": "spring",
+      "title": "Spring - Blender Open Movie",
+      "author": "Blender Animation Studio / Blender Foundation; director Andy Goralczyk",
+      "playbackPage": "https://video.blender.org/videos/watch/3d95fb3d-c866-42c8-9db1-fe82f48ccb95",
+      "exactSourcePage": "https://video.blender.org/api/v1/videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95",
+      "authorProjectPage": "https://studio.blender.org/projects/spring/",
+      "identity": {
+        "uuid": "3d95fb3d-c866-42c8-9db1-fe82f48ccb95",
+        "account": "blender",
+        "channel": "blender_open_movies",
+        "isLocal": true
+      },
+      "license": {
+        "status": "explicit_primary_author_full_movie_grant_corroborated",
+        "name": "CC BY 4.0",
+        "version": "4.0",
+        "licensePage": "https://studio.blender.org/projects/spring/pages/about/",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "notes": "Official About page explicitly licenses the Spring Open Movie under CC BY 4.0. Excludes unrelated material, logos and trademarks; no account required for grant metadata. The PeerTube Attribution - Share Alike label is preserved separately; its version is still unspecified. The authorization basis is the independent explicit author full-film CC BY 4.0 grant, not a guessed version of the PeerTube label.",
+        "attribution": "© Blender Foundation | cloud.blender.org/spring; retain original film credits and note source/license and any changes.",
+        "scope": "Unchanged underlying full movie identified by primary metadata; added third-party content and materially altered/unmatched renditions are not authorized by this work grant."
+      },
+      "reasonSelected": "Different PeerTube work with longer duration and multiple declared MP4 renditions; dynamic/late discovery is a test target, not an observed device fact.",
+      "verifiedMetadata": {
+        "apiHttpStatus": 200,
+        "durationSeconds": 464,
+        "privacy": "Public",
+        "downloadEnabled": true,
+        "peerTubeLicenseId": 2,
+        "peerTubeLicenseLabel": "Attribution - Share Alike",
+        "streamingPlaylistCount": 0,
+        "authorGrantHttpStatus": 200,
+        "authorGrantVersion": "4.0",
+        "authorGrantPage": "https://studio.blender.org/projects/spring/pages/about/"
+      },
+      "pending": [
+        "Confirm selected service rendition is the unchanged identified movie and preserves credits; no added unmatched third-party material. Metadata identity is corroborated, but bytes/content have not been compared.",
+        "Anonymous player rendering/playback",
+        "Media URL HTTP status/MIME/Range/bytes",
+        "Actual dynamic player behavior",
+        "Paired device baseline"
+      ],
+      "knownNormalDirectLinks": [],
+      "appBaseline": {
+        "v014": "NOT_TESTED_BY_SIDECAR",
+        "v015": "NOT_TESTED_BY_SIDECAR",
+        "deviceEvidence": null
+      },
+      "metadataOnly": true,
+      "corpusFrozen": false,
+      "publishedMediaDeclarations": [
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-804.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-804.mp4",
+          "resolutionLabel": "1080p",
+          "resolutionId": 804,
+          "sizeBytes": 110388897,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        },
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-720.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-720.mp4",
+          "resolutionLabel": "720p",
+          "resolutionId": 720,
+          "sizeBytes": 97446257,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        },
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-480.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-480.mp4",
+          "resolutionLabel": "480p",
+          "resolutionId": 480,
+          "sizeBytes": 54198090,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        },
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-360.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-360.mp4",
+          "resolutionLabel": "360p",
+          "resolutionId": 360,
+          "sizeBytes": 38025811,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        },
+        {
+          "url": "https://video.blender.org/object-storage/web_videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-240.mp4",
+          "downloadUrl": "https://video.blender.org/download/web-videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-240.mp4",
+          "resolutionLabel": "240p",
+          "resolutionId": 240,
+          "sizeBytes": 22813737,
+          "verification": "exact_URL_from_HTTP_200_public_JSON_only; media_endpoint_NOT_requested"
+        }
+      ],
+      "sourceServiceLicenseDeclaration": {
+        "status": "explicit_cc_family_version_pending",
+        "name": "Creative Commons Attribution–ShareAlike (version TBD)",
+        "version": null,
+        "licensePage": "https://video.blender.org/api/v1/videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95",
+        "licenseUrl": null,
+        "notes": "Primary PeerTube metadata licence.id=2, label Attribution - Share Alike. Do not manufacture a 3.0/4.0 deed URL. Guessed Studio /projects/spring/pages/licensing/ returned HTTP 404 and is not evidence.",
+        "verification": "Preserved from initial service metadata; not rewritten as the new author grant."
+      },
+      "authorCorroboration": {
+        "registrationBatchDate": "2026-10-04",
+        "status": "primary_author_grant_and_work_identity_matched",
+        "grantPage": "https://studio.blender.org/projects/spring/pages/about/",
+        "grantHttpStatus": 200,
+        "officialWorkTitle": "Spring",
+        "identitySources": [
+          "https://video.blender.org/api/v1/videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95",
+          "https://studio.blender.org/projects/spring/"
+        ],
+        "identityMatchFields": [
+          "Official About page names Spring, director Andy Goralczyk and Blender Animation Studio; these match the existing local PeerTube description.",
+          "Official 7:44 duration equals PeerTube 464 seconds."
+        ],
+        "serviceLabelDifference": "The PeerTube Attribution - Share Alike label is preserved separately; its version is still unspecified. The authorization basis is the independent explicit author full-film CC BY 4.0 grant, not a guessed version of the PeerTube label.",
+        "unchangedMovieConditionRequired": true,
+        "renditionBytesCompared": false,
+        "playbackOrAppTestPerformed": false
+      }
+    },
+    {
+      "sampleId": "PUB-WC-TEARS",
+      "suggestedCorpusSlot": "G03",
+      "serviceGroup": "wikimedia-commons",
+      "workKey": "tears-of-steel",
+      "title": "Tears of Steel (selected Commons 1080p WebM rendition)",
+      "author": "Blender Foundation",
+      "playbackPage": "https://commons.wikimedia.org/wiki/File:Tears_of_Steel_1080p.webm",
+      "exactSourcePage": "https://commons.wikimedia.org/wiki/File:Tears_of_Steel_1080p.webm",
+      "identity": {
+        "fileTitle": "Tears of Steel 1080p.webm",
+        "sourceLabel": "https://mango.blender.org/",
+        "authorField": "Blender Foundation"
+      },
+      "license": {
+        "status": "explicit_primary_repository_file_grant",
+        "name": "CC BY 3.0",
+        "version": "3.0",
+        "licensePage": "https://commons.wikimedia.org/wiki/File:Tears_of_Steel_1080p.webm#Licensing",
+        "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+        "notes": "The selected file page explicitly labels this rendition CC BY 3.0. Retain attribution and license/change notice."
+      },
+      "reasonSelected": "Independent Commons playback/file service; primary file page declares video player, WebM/VP8 with Vorbis audio. Wikimedia storage delivery is a potential non-watch/direct contrast, not proven CDN/Range behavior.",
+      "verifiedMetadata": {
+        "filePageRead": true,
+        "declaredContainer": "WebM",
+        "declaredVideoCodec": "VP8",
+        "declaredAudioCodec": "Vorbis",
+        "declaredWidth": 1920,
+        "declaredHeight": 1080,
+        "declaredDuration": "12 min 14 s",
+        "declaredFileSize": "682.85 MB"
+      },
+      "publishedMediaDeclarations": [],
+      "pending": [
+        "Actual anonymous player loading and delivery URLs",
+        "HTTP MIME/Range and current codec/container bytes",
+        "App codec/container support; do not assume MP4 output or supported old control",
+        "Paired device baseline"
+      ],
+      "knownNormalDirectLinks": [],
+      "appBaseline": {
+        "v014": "NOT_TESTED_BY_SIDECAR",
+        "v015": "NOT_TESTED_BY_SIDECAR",
+        "deviceEvidence": null
+      },
+      "metadataOnly": true,
+      "corpusFrozen": false
+    },
+    {
+      "sampleId": "PUB-WC-ELEPHANTS",
+      "suggestedCorpusSlot": "G04",
+      "serviceGroup": "wikimedia-commons",
+      "workKey": "elephants-dream",
+      "title": "Elephants Dream (selected Commons Ogg rendition)",
+      "author": "Blender Foundation / Netherlands Media Art Institute (official film producers); Avsa is the selected Commons uploader, not the authorization basis",
+      "playbackPage": "https://commons.wikimedia.org/wiki/File:Elephants_Dream.ogg",
+      "exactSourcePage": "https://commons.wikimedia.org/wiki/File:Elephants_Dream.ogg",
+      "identity": {
+        "fileTitle": "Elephants Dream.ogg",
+        "sourceField": "Own work",
+        "uploader": "Avsa",
+        "underlyingAuthorVerification": "Official Orange background/press/copyright pages corroborate Blender Foundation / Netherlands Media Art Institute; selected rendition bytes remain unverified."
+      },
+      "license": {
+        "status": "explicit_primary_author_full_movie_grant_corroborated",
+        "name": "CC BY 2.5 (official full-film grant)",
+        "version": "2.5",
+        "licensePage": "https://orange.blender.org/blog/creative-commons-license-2/",
+        "licenseUrl": "http://creativecommons.org/licenses/by/2.5/",
+        "notes": "Official copyright-and-sharing post explicitly includes the Elephants Dream movie and links CC BY 2.5. Preserve full credits. Separately distributed additional soundtrack files are CC BY-NC-ND 2.5 and are not part of this grant/selection; textures may have their own attribution; logos/trademarks and DVD cover/disc artwork are excluded. Selected Commons rendition remains labeled CC BY-SA 3.0 and Own work by Avsa; preserve that assertion separately. The independent author grant is CC BY 2.5 for the unchanged movie. Do not authorize added third-party material from the film grant.",
+        "attribution": "For the whole film preserve the complete ending credits. For excerpts/reuse: copyright 2006, Blender Foundation / Netherlands Media Art Institute / www.elephantsdream.org.",
+        "scope": "Unchanged underlying full movie identified by primary metadata; added third-party content and materially altered/unmatched renditions are not authorized by this work grant."
+      },
+      "reasonSelected": "Second distinct Commons work; Ogg wrapper with stated Theora video and Vorbis audio deliberately contrasts with the selected WebM work. Format support remains pending.",
+      "verifiedMetadata": {
+        "filePageRead": true,
+        "declaredContainer": "Ogg",
+        "declaredVideoCodec": "Theora",
+        "declaredAudioCodec": "Vorbis",
+        "declaredWidth": 426,
+        "declaredHeight": 240,
+        "declaredDuration": "10 min 53 s",
+        "declaredFileSize": "45.86 MB",
+        "selectedUploadTimestamp": "2007-07-24T01:33:00",
+        "authorGrantHttpStatus": 200,
+        "authorGrantVersion": "2.5",
+        "authorGrantPage": "https://orange.blender.org/blog/creative-commons-license-2/"
+      },
+      "publishedMediaDeclarations": [],
+      "pending": [
+        "Confirm selected service rendition is the unchanged identified movie and preserves credits; no added unmatched third-party material. Metadata identity is corroborated, but bytes/content have not been compared.",
+        "Actual anonymous player loading and delivery URLs",
+        "Current bytes and app codec/container support",
+        "Paired device baseline"
+      ],
+      "knownNormalDirectLinks": [],
+      "appBaseline": {
+        "v014": "NOT_TESTED_BY_SIDECAR",
+        "v015": "NOT_TESTED_BY_SIDECAR",
+        "deviceEvidence": null
+      },
+      "metadataOnly": true,
+      "corpusFrozen": false,
+      "sourceServiceLicenseDeclaration": {
+        "status": "explicit_repository_rendition_grant_provenance_review_pending",
+        "name": "CC BY-SA 3.0 (selected Commons file-page declaration)",
+        "version": "3.0",
+        "licensePage": "https://commons.wikimedia.org/wiki/File:Elephants_Dream.ogg#Licensing",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "notes": "File page has a self-published/Own work grant by uploader Avsa. This is a rendition-level repository assertion, not an independently rechecked author rights chain. Do not replace it with a remembered project license. Review provenance/attribution before freeze.",
+        "verification": "Preserved from initial service metadata; not rewritten as the new author grant."
+      },
+      "authorProjectPage": "https://orange.blender.org/background/",
+      "authorCorroboration": {
+        "registrationBatchDate": "2026-10-04",
+        "status": "primary_author_grant_and_work_identity_matched",
+        "grantPage": "https://orange.blender.org/blog/creative-commons-license-2/",
+        "grantHttpStatus": 200,
+        "officialWorkTitle": "Elephants Dream",
+        "identitySources": [
+          "https://commons.wikimedia.org/wiki/File:Elephants_Dream.ogg",
+          "https://orange.blender.org/background/",
+          "https://orange.blender.org/press/"
+        ],
+        "identityMatchFields": [
+          "Official Orange background/press pages identify the Elephants Dream movie and producers; selected Commons file title and description identify the same named movie.",
+          "Grant explicitly covers the movie itself, not just website images or a generic uploader collection."
+        ],
+        "serviceLabelDifference": "Selected Commons rendition remains labeled CC BY-SA 3.0 and Own work by Avsa; preserve that assertion separately. The independent author grant is CC BY 2.5 for the unchanged movie. Do not authorize added third-party material from the film grant.",
+        "unchangedMovieConditionRequired": true,
+        "renditionBytesCompared": false,
+        "playbackOrAppTestPerformed": false
+      }
+    },
+    {
+      "sampleId": "PUB-IA-COSMOS",
+      "suggestedCorpusSlot": "G05",
+      "serviceGroup": "internet-archive",
+      "workKey": "cosmos-laundromat-first-cycle",
+      "title": "Cosmos Laundromat: First Cycle",
+      "author": "Blender Foundation / Blender Institute (author project); complete-film asset published by Francesco Siddi",
+      "playbackPage": "https://archive.org/details/CosmosLaundromatFirstCycle",
+      "exactSourcePage": "https://archive.org/metadata/CosmosLaundromatFirstCycle",
+      "identity": {
+        "identifier": "CosmosLaundromatFirstCycle",
+        "creatorField": "Blender Foundation",
+        "mediatype": "movies"
+      },
+      "license": {
+        "status": "explicit_primary_author_full_movie_grant_corroborated",
+        "name": "CC BY 4.0 (official complete-film asset grant)",
+        "version": "4.0",
+        "licensePage": "https://studio.blender.org/projects/api/assets/1537/?site_context=featured_artwork",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "notes": "This is an explicit CC BY 4.0 label/deed attached to the complete movie asset, reached via the author project page (asset ID copied from that page). Generic Archive uploader identity is not the authorization basis. Legacy Gooseberry grant applies to ongoing/final project work with listed logo/trademark/unrelated-content exclusions. Archive CC BY 4.0 is corroborated by the current author-linked complete-film asset. Legacy Gooseberry final-work pages independently state CC BY 3.0; preserve this older separate grant, do not rewrite either page or pretend its wording is BY 4.0.",
+        "attribution": "Attribute Blender Studio as specified on the complete-film asset; retain original credits and source/license/change notices. Legacy Gooseberry grant attribution: (CC) Blender Foundation | gooseberry.blender.org.",
+        "scope": "Unchanged underlying full movie identified by primary metadata; added third-party content and materially altered/unmatched renditions are not authorized by this work grant."
+      },
+      "reasonSelected": "Independent Archive item/player and file inventory; source explicitly names original MP4 and derived Ogg. Candidate ordinary direct-control route; do not assume HLS, Range or embedding.",
+      "verifiedMetadata": {
+        "apiHttpStatus": 200,
+        "archiveDateField": "2015-07-10",
+        "videoFiles": [
+          {
+            "name": "Cosmos Laundromat - First Cycle (1080p).mp4",
+            "format": "MPEG4",
+            "source": "original",
+            "sizeBytes": 220087570,
+            "lengthSeconds": 730.62
+          },
+          {
+            "name": "Cosmos Laundromat - First Cycle (1080p).ogv",
+            "format": "Ogg Video",
+            "source": "derivative",
+            "sizeBytes": 56832560,
+            "lengthSeconds": 730.62
+          }
+        ],
+        "authorGrantHttpStatus": 200,
+        "authorGrantVersion": "4.0",
+        "authorGrantPage": "https://studio.blender.org/projects/api/assets/1537/?site_context=featured_artwork"
+      },
+      "publishedMediaDeclarations": [],
+      "pending": [
+        "Confirm selected service rendition is the unchanged identified movie and preserves credits; no added unmatched third-party material. Metadata identity is corroborated, but bytes/content have not been compared.",
+        "Anonymous /details player access and actual delivery path",
+        "Copy exact direct media URL from primary page/API before recording; do not construct from filename",
+        "HTTP MIME/Range/bytes",
+        "Paired device baseline"
+      ],
+      "knownNormalDirectLinks": [],
+      "appBaseline": {
+        "v014": "NOT_TESTED_BY_SIDECAR",
+        "v015": "NOT_TESTED_BY_SIDECAR",
+        "deviceEvidence": null
+      },
+      "metadataOnly": true,
+      "corpusFrozen": false,
+      "sourceServiceLicenseDeclaration": {
+        "status": "explicit_primary_archive_metadata_assertion",
+        "name": "CC BY 4.0",
+        "version": "4.0",
+        "licensePage": "https://archive.org/metadata/CosmosLaundromatFirstCycle",
+        "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+        "notes": "Exact archive licenseurl field verified; uploader authority and author project cross-check have not been independently checked.",
+        "verification": "Preserved from initial service metadata; not rewritten as the new author grant."
+      },
+      "authorProjectPage": "https://studio.blender.org/projects/cosmos-laundromat/",
+      "authorCorroboration": {
+        "registrationBatchDate": "2026-10-04",
+        "status": "primary_author_grant_and_work_identity_matched",
+        "grantPage": "https://studio.blender.org/projects/api/assets/1537/?site_context=featured_artwork",
+        "grantHttpStatus": 200,
+        "officialWorkTitle": "Cosmos Laundromat - First Cycle - 2K",
+        "identitySources": [
+          "https://archive.org/metadata/CosmosLaundromatFirstCycle",
+          "https://studio.blender.org/projects/cosmos-laundromat/",
+          "https://gooseberry.blender.org/sharing/",
+          "https://gooseberry.blender.org/about/"
+        ],
+        "identityMatchFields": [
+          "Official project page names Cosmos Laundromat: First Cycle, identifies Project Gooseberry and Blender Foundation, and links this exact complete-film asset.",
+          "Asset description calls it the full first episode and gives the same Franck/sheep/island synopsis as the Archive item.",
+          "Author asset duration 12:10 (730 seconds) matches Archive 730.62 seconds at whole-second display precision; resolution differs without constituting a new work."
+        ],
+        "serviceLabelDifference": "Archive CC BY 4.0 is corroborated by the current author-linked complete-film asset. Legacy Gooseberry final-work pages independently state CC BY 3.0; preserve this older separate grant, do not rewrite either page or pretend its wording is BY 4.0.",
+        "unchangedMovieConditionRequired": true,
+        "renditionBytesCompared": false,
+        "playbackOrAppTestPerformed": false
+      }
+    },
+    {
+      "sampleId": "PUB-IA-CAMINANDES",
+      "suggestedCorpusSlot": "G06",
+      "serviceGroup": "internet-archive",
+      "workKey": "caminandes-2-gran-dillama",
+      "title": "Caminandes 2: Gran Dillama",
+      "author": "Blender Studio; director Pablo Vazquez; producer Francesco Siddi (official credits)",
+      "playbackPage": "https://archive.org/details/Caminandes2GranDillama",
+      "exactSourcePage": "https://archive.org/metadata/Caminandes2GranDillama",
+      "identity": {
+        "identifier": "Caminandes2GranDillama",
+        "creatorField": "Pablo Vazquez",
+        "mediatype": "movies"
+      },
+      "license": {
+        "status": "explicit_primary_author_full_movie_grant_corroborated",
+        "name": "CC BY 4.0 (official complete-film asset grant)",
+        "version": "4.0",
+        "licensePage": "https://studio.blender.org/projects/api/assets/2363/?site_context=featured_artwork",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "notes": "HTTP-200 public author-linked complete-film asset has a CC-BY license element pointing to CC BY 4.0 with Blender Studio attribution. Asset ID was copied from the official project page; no fabricated IDs, media request, or account. Official landing/credits pages alone did not supply this grant. The Archive item still declares CC BY 3.0. That assertion is preserved, not upgraded or verified as a historical grant. The independent current author full-film grant is CC BY 4.0 and covers the unchanged work after the metadata identity match.",
+        "attribution": "Attribute Blender Studio as specified on the complete-film asset; retain original credits including director Pablo Vazquez and source/license/change notices.",
+        "scope": "Unchanged underlying full movie identified by primary metadata; added third-party content and materially altered/unmatched renditions are not authorized by this work grant."
+      },
+      "reasonSelected": "Second distinct Archive work; short original MP4 and derived Ogg metadata give a lower-size direct-control candidate without claiming prior app success.",
+      "verifiedMetadata": {
+        "apiHttpStatus": 200,
+        "archiveDateField": "2013",
+        "videoFiles": [
+          {
+            "name": "02_gran_dillama_1080p.mp4",
+            "format": "MPEG4",
+            "source": "original",
+            "sizeBytes": 125974946,
+            "lengthSeconds": 146.05
+          },
+          {
+            "name": "02_gran_dillama_1080p.ogv",
+            "format": "Ogg Video",
+            "source": "derivative",
+            "sizeBytes": 11701627,
+            "lengthSeconds": 146.05
+          }
+        ],
+        "authorGrantHttpStatus": 200,
+        "authorGrantVersion": "4.0",
+        "authorGrantPage": "https://studio.blender.org/projects/api/assets/2363/?site_context=featured_artwork"
+      },
+      "publishedMediaDeclarations": [],
+      "pending": [
+        "Confirm selected service rendition is the unchanged identified movie and preserves credits; no added unmatched third-party material. Metadata identity is corroborated, but bytes/content have not been compared.",
+        "Anonymous /details player access and actual delivery path",
+        "Copy exact direct media URL from primary page/API before recording; do not construct from filename",
+        "HTTP MIME/Range/bytes",
+        "Paired device baseline"
+      ],
+      "knownNormalDirectLinks": [],
+      "appBaseline": {
+        "v014": "NOT_TESTED_BY_SIDECAR",
+        "v015": "NOT_TESTED_BY_SIDECAR",
+        "deviceEvidence": null
+      },
+      "metadataOnly": true,
+      "corpusFrozen": false,
+      "sourceServiceLicenseDeclaration": {
+        "status": "explicit_primary_archive_metadata_assertion",
+        "name": "CC BY 3.0",
+        "version": "3.0",
+        "licensePage": "https://archive.org/metadata/Caminandes2GranDillama",
+        "licenseUrl": "http://creativecommons.org/licenses/by/3.0/",
+        "notes": "Exact archive licenseurl field verified; uploader authority and author project cross-check have not been independently checked.",
+        "verification": "Preserved from initial service metadata; not rewritten as the new author grant."
+      },
+      "authorProjectPage": "https://studio.blender.org/projects/caminandes-2/",
+      "authorCorroboration": {
+        "registrationBatchDate": "2026-10-04",
+        "status": "primary_author_grant_and_work_identity_matched",
+        "grantPage": "https://studio.blender.org/projects/api/assets/2363/?site_context=featured_artwork",
+        "grantHttpStatus": 200,
+        "officialWorkTitle": "Caminandes 2: Gran Dillama",
+        "identitySources": [
+          "https://archive.org/metadata/Caminandes2GranDillama",
+          "https://studio.blender.org/projects/caminandes-2/",
+          "https://studio.blender.org/projects/caminandes-2/pages/credits/",
+          "https://caminandes.com/"
+        ],
+        "identityMatchFields": [
+          "Official Caminandes site and Blender project identify Gran Dillama as the second film, rather than Llama Drama or Llamigos.",
+          "Project page links this exact full-movie asset titled Caminandes 2: Gran Dillama; its description identifies the second installment and fence/food story.",
+          "Author asset duration 2:26 (146 seconds) matches Archive 146.05 seconds at whole-second display precision.",
+          "Official credits name director Pablo Vazquez, matching Archive creator metadata."
+        ],
+        "serviceLabelDifference": "The Archive item still declares CC BY 3.0. That assertion is preserved, not upgraded or verified as a historical grant. The independent current author full-film grant is CC BY 4.0 and covers the unchanged work after the metadata identity match.",
+        "unchangedMovieConditionRequired": true,
+        "renditionBytesCompared": false,
+        "playbackOrAppTestPerformed": false
+      }
+    }
+  ]
+}

@@ -2,11 +2,13 @@ package com.example.purebrowser.download
 
 import com.example.purebrowser.browser.BrowserAddress
 import com.example.purebrowser.media.MediaCandidate
+import com.example.purebrowser.download.site.DualTrackDownloadPlan
+import com.example.purebrowser.download.site.DualTrackMetadata
 import java.net.URI
 import java.util.UUID
 
 typealias TaskId = String
-enum class DownloadProtocol { DIRECT, HLS }
+enum class DownloadProtocol { DIRECT, HLS, DUAL_TRACK }
 enum class TransferType { SYSTEM, CONTROLLED }
 enum class TaskStatus { QUEUED, WAITING_WIFI, WAITING_NETWORK, PAUSING, PAUSED, RUNNING, MUXING, VERIFYING, PUBLISHING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
 enum class PauseReason { USER, WIFI, NETWORK, SYSTEM, RECOVERY, STORAGE, ACCESS, SOURCE_CHANGED }
@@ -24,6 +26,7 @@ data class DownloadDraft(
     val useAccessContext: Boolean = true,
     val frameUrl: String? = candidate.frameUrl,
     val reliableSource: Boolean = candidate.reliableSource,
+    val dualTrackPlan: DualTrackDownloadPlan? = null,
 ) {
     override fun toString() = "DownloadDraft(kind=${candidate.kind}, sourceGeneration=$sourceGeneration)"
 }
@@ -64,6 +67,7 @@ data class DownloadRecord(
     val safeFailure: String? = null,
     val pauseReason: PauseReason? = null,
     val resumeAvailable: Boolean = false,
+    val dualTrackMetadata: DualTrackMetadata? = null,
 ) {
     override fun toString() = "DownloadRecord(recordId=$recordId, systemId=$systemId)"
 }
@@ -175,7 +179,16 @@ object DownloadRules {
         data.records.forEach { r ->
             require(r.recordId.isNotBlank() && r.recordId.length <= 100 && (r.systemId == null || r.systemId > 0))
             require((r.transfer == TransferType.SYSTEM) == (r.systemId != null))
-            require(r.protocol != DownloadProtocol.HLS || r.transfer == TransferType.CONTROLLED)
+            require(r.protocol == DownloadProtocol.DIRECT || r.transfer == TransferType.CONTROLLED)
+            require((r.protocol == DownloadProtocol.DUAL_TRACK) == (r.dualTrackMetadata != null))
+            r.dualTrackMetadata?.let { metadata ->
+                metadata.validate()
+                require(!r.resumeAvailable && r.mediaUrl == null && r.frameUrl == null)
+                require(r.hlsPlaylistUrl == null && r.segmentCount == null && r.completedSegments == 0)
+                require(r.expected == metadata.expectedBytes && r.plannedDurationUs == metadata.durationUs)
+                // Only an explicitly approved public page is persisted by dual-track enqueue.
+                DualTrackDownloadPlan.validateSafeSourceUrl(r.sourceUrl)
+            }
             require(r.hlsPlaylistUrl == null || (r.hlsPlaylistUrl.length<=8192 && BrowserAddress.isWebUrl(r.hlsPlaylistUrl)))
             require(r.segmentCount == null || r.segmentCount in 1..10000)
             require(r.completedSegments >= 0 && r.completedSegments <= (r.segmentCount ?: 0))
@@ -203,6 +216,11 @@ object DownloadRules {
         data.assets.forEach { a ->
             val record = data.records.firstOrNull { it.recordId == a.recordId }
             require(record != null && record.systemId == a.systemId)
+            if(record.protocol == DownloadProtocol.DUAL_TRACK) {
+                require(record.taskStatus == TaskStatus.SUCCEEDED && a.format == FormatCheck.PASSED &&
+                    a.mimeType == "video/mp4" && a.name.endsWith(".mp4") &&
+                    a.sizeBytes != null && a.sizeBytes > 0 && a.durationMillis != null && a.durationMillis > 0)
+            }
             require((record.transfer==TransferType.SYSTEM)==(a.location==AssetLocation.SYSTEM_DOWNLOAD))
             require((if (a.location == AssetLocation.SYSTEM_DOWNLOAD) a.systemId != null && isOwnedDownloadUri(a.uri, a.systemId) else URI(a.uri).scheme == "content"))
             require(a.name == record.name && a.displayName == record.displayName)

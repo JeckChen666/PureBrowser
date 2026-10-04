@@ -4,6 +4,8 @@
 
 不提供自有云存储、云解析、云同步、账号、遥测或后端；仍可联网访问用户选择的网站。
 
+**v0.1.5 开发候选尚未发行／完整验收**：已实现通用观测／页面媒体声明／显式分析、站点解析及共享双轨核心。真实非YouTube样本已有成品，但YouTube完整保存与跨站配对增益仍未达标，不能宣称任意网站可下载。见 [候选记录](docs/V0.1.5-CANDIDATE.md)、[T51–T60](docs/EXECUTION-PLAN-V0.1.5.md)与[验收门槛](docs/RELEASE-ACCEPTANCE-V0.1.5.md)；当前公开发行仍为v0.1.4。
+
 ## 获取与开源
 
 - [GitHub 源码](https://github.com/JeckChen666/PureBrowser) · [v0.1.4 APK / Release](https://github.com/JeckChen666/PureBrowser/releases/tag/v0.1.4)。

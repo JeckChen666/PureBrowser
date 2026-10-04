@@ -15,6 +15,7 @@ class DownloadRuntime private constructor(private val app:Context) {
     private val running=ConcurrentHashMap<TaskId,Pair<TransferCancellation,Job>>()
     private val transfer=ControlledTransfer(repository,UrlConnectionTransport(),WebsiteAccessContext())
     private val hlsTransfer=com.example.purebrowser.download.hls.HlsTransfer(repository,UrlConnectionTransport(),WebsiteAccessContext())
+    private val dualTrackTransfer=DualTrackTransfer(repository,UrlConnectionTransport(),WebsiteAccessContext())
     private val deferredWake=mutableSetOf<TaskId>()
     private var recovered=false
     init {
@@ -33,9 +34,16 @@ class DownloadRuntime private constructor(private val app:Context) {
                 runCatching { files.cleanupPending(r);files.clearPrivate(r.recordId) }
                 return@forEach
             }
+            // An explicitly submitted in-process plan is not a cold disk task. kick() may be
+            // the owner's first recovery call in an integration harness.
+            if(r.protocol==DownloadProtocol.DUAL_TRACK && r.taskStatus==TaskStatus.QUEUED && r.received==0L &&
+                repository.hasFreshDualTrackRequest(r.recordId))return@forEach
             try {
                 files.cleanupPending(r)
-                val valid=if(r.protocol==DownloadProtocol.HLS) {
+                val valid=if(r.protocol==DownloadProtocol.DUAL_TRACK) {
+                    files.clearPrivate(r.recordId)
+                    false // No durable URL lease or cross-track validators after process death.
+                } else if(r.protocol==DownloadProtocol.HLS) {
                     files.hlsWorkspace.discardIncomplete(r.recordId)
                     files.removeStage(r.recordId) // interrupted mux/public copy is not a resumable MP4
                     files.hlsWorkspace.hasResumeData(r.recordId)
@@ -46,7 +54,8 @@ class DownloadRuntime private constructor(private val app:Context) {
                     old.copy(pendingUri=null,resumeAvailable=valid,
                         taskStatus=if(cold)TaskStatus.INTERRUPTED else old.taskStatus,
                         pauseReason=if(cold)PauseReason.RECOVERY else old.pauseReason,
-                        failure=if(cold)FailureKind.INTERRUPTED else old.failure)
+                        failure=if(cold)FailureKind.INTERRUPTED else old.failure,
+                        safeFailure=if(cold && old.protocol==DownloadProtocol.DUAL_TRACK)DualTrackTransfer.REPARSE_MESSAGE else old.safeFailure)
                 }
             } catch(_:Exception) {
                 repository.change(r.recordId) { it.copy(taskStatus=TaskStatus.INTERRUPTED,resumeAvailable=false,
@@ -97,8 +106,9 @@ class DownloadRuntime private constructor(private val app:Context) {
             else if(r.taskStatus==TaskStatus.RUNNING && ((!networkAvailable()) || (r.wifiOnly==true && !wifiAvailable()))) {
                 val wifi=networkAvailable() && r.wifiOnly==true
                 repository.change(id) { old ->if(old.taskStatus==TaskStatus.RUNNING)old.copy(
-                    taskStatus=if(wifi)TaskStatus.WAITING_WIFI else TaskStatus.WAITING_NETWORK,
-                    pauseReason=if(wifi)PauseReason.WIFI else PauseReason.NETWORK) else old }
+                    taskStatus=if(old.protocol==DownloadProtocol.DUAL_TRACK)TaskStatus.INTERRUPTED else if(wifi)TaskStatus.WAITING_WIFI else TaskStatus.WAITING_NETWORK,
+                    pauseReason=if(old.protocol==DownloadProtocol.DUAL_TRACK)PauseReason.SOURCE_CHANGED else if(wifi)PauseReason.WIFI else PauseReason.NETWORK,
+                    safeFailure=if(old.protocol==DownloadProtocol.DUAL_TRACK)DualTrackTransfer.REPARSE_MESSAGE else old.safeFailure) else old }
                 value.first.cancel();value.second.cancel()
             }
         }
@@ -120,7 +130,11 @@ class DownloadRuntime private constructor(private val app:Context) {
             } else old }
             if(!claimed)continue
             val job=scope.launch(start=CoroutineStart.LAZY) {
-                if(r.protocol==DownloadProtocol.HLS)hlsTransfer.run(r.recordId,token) else transfer.run(r.recordId,token)
+                when(r.protocol) {
+                    DownloadProtocol.HLS->hlsTransfer.run(r.recordId,token)
+                    DownloadProtocol.DUAL_TRACK->dualTrackTransfer.run(r.recordId,token)
+                    DownloadProtocol.DIRECT->transfer.run(r.recordId,token)
+                }
             }
             running[r.recordId]=token to job
             job.invokeOnCompletion { scope.launch { settleStopped() } }
@@ -141,7 +155,10 @@ class DownloadRuntime private constructor(private val app:Context) {
                 deferredWake.remove(id);continue
             }
             if(running.containsKey(id))continue
-            try { repository.queueResume(id) } catch(_:Exception) {
+            try {
+                if(r.protocol==DownloadProtocol.DUAL_TRACK)check(repository.wakeFreshDualTrack(id))
+                    else repository.queueResume(id)
+            } catch(_:Exception) {
                 repository.change(id) { old -> if(old.taskStatus in TaskControlRules.waiting)old.copy(taskStatus=TaskStatus.INTERRUPTED,
                     resumeAvailable=false,safeFailure="没有可靠续传缓存，请重新下载",failure=FailureKind.INTERRUPTED) else old }
             }

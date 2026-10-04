@@ -18,7 +18,7 @@ class SchemaV5Test {
             val record=store.load().records.single()
             assertFalse(record.resumeAvailable)
             assertEquals(500L,record.received)
-            assertEquals(5,JSONObject(store.file.readText()).getInt("schemaVersion"))
+            assertEquals(DownloadStore.SCHEMA_VERSION,JSONObject(store.file.readText()).getInt("schemaVersion"))
             assertEquals(raw,root.listFiles()!!.single { it.name.startsWith("download-v4-") }.readText())
         } finally { root.deleteRecursively() }
     }

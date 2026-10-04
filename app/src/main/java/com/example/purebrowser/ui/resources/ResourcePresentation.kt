@@ -52,6 +52,7 @@ internal fun sourceHost(url: String?): String? = url?.let {
 }
 
 internal fun suggestedFileName(candidate: MediaCandidate): String {
+    if(com.example.purebrowser.media.Evidence.SITE in candidate.sources && !candidate.title.isNullOrBlank())return DownloadRules.safeFileName(candidate.title.take(100)+".mp4")
     val guessed = runCatching { URLUtil.guessFileName(candidate.url, null, candidate.mimeType) }
         .getOrNull()?.takeIf(String::isNotBlank) ?: candidate.displayName
     return DownloadRules.safeFileName(guessed)
@@ -64,3 +65,5 @@ internal fun readableResourceName(value: String): String = value
 /** Stable action identity, independent of duplicate page titles, without putting signed URLs in tags. */
 internal fun resourceSaveTag(url:String):String = "resource-save-"+java.security.MessageDigest.getInstance("SHA-256")
     .digest(url.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it.toInt() and 255) }
+
+internal fun resourceAnalyzeTag(url:String)=resourceSaveTag(url).replace("resource-save-","resource-analyze-")

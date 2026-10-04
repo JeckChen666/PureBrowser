@@ -293,6 +293,9 @@ private fun SettingsNote(text: String) {
 @Composable
 fun AboutScreen() {
     val context = LocalContext.current
+    val scope=rememberCoroutineScope()
+    var licenseText by remember { mutableStateOf<String?>(null) }
+    var licenseLoading by remember { mutableStateOf(false) }
     // Query the installed package, including its build suffix; never label a candidate as released.
     val version = remember(context) {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
@@ -311,7 +314,8 @@ fun AboutScreen() {
             SettingsGroup("下载能力与边界") {
                 SettingsNote("支持 MP4/WebM 直链、无后缀视频与限定同源网站会话。HLS 需显式解析清单、选择档位并准备；仅支持未加密的固定点播 MPEG-TS（H.264 / AAC），封装校验后保存为独立 MP4。")
                 SettingsNote("符合条件的直链任务支持暂停与续传：必须有可验证的强 ETag，服务器还需正确支持 Range，并确认资源未改变；不满足条件时需重新下载。限定的静态 HLS 可复用已经完整保存且校验一致的分片，不复用半片；封装、校验或发布阶段不承诺可暂停。重新下载另建任务，HLS 保留所选档位，档位不可用时不会自动改选其他画质。")
-                SettingsNote("不支持 HLS 直播、加密分片、独立音轨、fMP4、DASH、blob、跨站敏感鉴权或 DRM。版本号以本机安装包为准；候选版本标记不代表正式发布。")
+                SettingsNote("开发候选增加页面媒体声明、无后缀／Range 请求线索的显式分析与公开站点格式选择。受支持的 H.264＋AAC 完整双轨可尝试封装 MP4；中断或过期需重新分析，不支持双轨续传。YouTube 完整保存仍在验证，解析出地址不等于下载成功。")
+                SettingsNote("不支持 HLS 直播、加密分片、HLS 独立音轨／fMP4、通用 DASH、MSE 全覆盖、跨站敏感鉴权或 DRM。blob 本身不是文件地址。版本号以本机安装包为准；开发候选不代表正式发布。")
             }
             SettingsGroup("文件与存储") {
                 SettingsNote("已保存的视频位于本机公共 Download/PureBrowser 目录。续传缓存与临时分片留在应用私有存储，会额外占用空间；确认清理已停止任务的缓存后，受影响任务必须重新下载。仅移除记录不会删除设备文件。")
@@ -324,8 +328,24 @@ fun AboutScreen() {
                 SettingsNote("基于 Android WebView、Jetpack Compose 和受控下载服务。应用无自有后端，不上传浏览数据。")
             }
             SettingsGroup("开源组件") {
-                SettingsNote("AndroidX / Jetpack Compose（Apache 2.0）；Kotlin（Apache 2.0）。Android WebView 和 DownloadManager 由设备系统提供。资源规则参考记录见项目 docs/SOURCE-RESEARCH.md；未复制第三方下载引擎。")
+                SettingsNote("AndroidX / Jetpack Compose（Apache 2.0）；Kotlin（Apache 2.0）。Android WebView 和 DownloadManager 由设备系统提供。媒体传输由应用受控核心执行，不使用外部命令下载器。站点解析使用固定版本 YouTube.js 18.1.0（MIT）及其 Apache/BSD/MIT/ISC 依赖，原始许可证随安装包提供。")
+                TextButton(onClick={if(!licenseLoading){licenseLoading=true;scope.launch {
+                    try { licenseText=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        listOf("youtubei.js-LICENSE.txt","bufbuild-LICENSE.txt","bufbuild-Google-BSD.txt","fflate-LICENSE.txt","meriyah-LICENSE.txt").joinToString("\n\n") { file ->
+                            file+"\n"+context.assets.open("site-parser/licenses/$file").bufferedReader().use{it.readText()}
+                        }
+                    }} finally{licenseLoading=false}
+                }}},enabled=!licenseLoading,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("site-parser-licenses")){Text("查看站点解析组件许可证")}
+
             }
         }
     }
+    licenseText?.let { text ->
+        com.example.purebrowser.ui.resources.ResourceDialog({licenseText=null}) {
+            Text("站点解析组件许可证",style=MaterialTheme.typography.titleLarge)
+            SelectionContainer { Text(text,style=MaterialTheme.typography.bodySmall) }
+            TextButton(onClick={licenseText=null},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)){Text("关闭")}
+        }
+    }
+
 }

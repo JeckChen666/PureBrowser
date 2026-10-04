@@ -2,6 +2,9 @@ package com.example.purebrowser.download
 
 import android.content.Context
 import android.util.AtomicFile
+import android.system.Os
+import android.system.OsConstants
+import com.example.purebrowser.download.site.DualTrackMetadata
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -66,14 +69,24 @@ class DownloadStore(
                 parsedRaw=raw;parsedData=immutable;parsedGeneration=transactionGeneration
                 return@synchronized immutable
             }
-            if (version in setOf(2, 3, 4)) {
+            if (version in setOf(2, 3, 4, 5, 6)) {
                 val bytes = raw.toByteArray(Charsets.UTF_8)
                 val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).take(8).joinToString("") { "%02x".format(it) }
                 val oldVersion = JSONObject(raw).getInt("schemaVersion")
                 val backup = File(file.parentFile, "download-v$oldVersion-$hash.json")
                 val protected = runCatching {
-                    if (!backup.exists()) backup.writeBytes(bytes)
-                    check(backup.readBytes().contentEquals(bytes))
+                    check(DirectCheckpointStore.safeDirectory(file.parentFile!!))
+                    DirectCheckpointStore.checkLeaf(backup)
+                    if (!backup.exists()) {
+                        val fd = Os.open(backup.path, OsConstants.O_WRONLY or OsConstants.O_CREAT or
+                            OsConstants.O_EXCL or OsConstants.O_NOFOLLOW, 0x180) // 0600
+                        try { java.io.FileOutputStream(fd).use { it.write(bytes); it.fd.sync() } }
+                        finally { if (fd.valid()) Os.close(fd) }
+                    }
+                    check(backup.length() == bytes.size.toLong())
+                    check(DirectCheckpointStore.noFollowInput(backup).use { it.readBytes() }.contentEquals(bytes))
+                    val parentFd = Os.open(file.parentFile!!.path, OsConstants.O_RDONLY or OsConstants.O_NOFOLLOW, 0)
+                    try { Os.fsync(parentFd) } finally { Os.close(parentFd) }
                 }.isSuccess
                 if (protected) {
                     runCatching { save(data) }.onFailure { writable = false; notice = "迁移写入失败，旧记录与备份已保留" }
@@ -130,7 +143,7 @@ class DownloadStore(
         // Covers read-modify-save across repository instances, not only atomic file writes.
         internal val transactionLock = Any()
         private var transactionGeneration=0L
-        const val SCHEMA_VERSION = 5
+        const val SCHEMA_VERSION = 7
 
         private fun JSONObject.nullableString(key: String): String? = if (isNull(key)) null else getString(key)
         private fun JSONObject.exactLong(key:String):Long {
@@ -141,6 +154,22 @@ class DownloadStore(
         private fun JSONObject.nullableLong(key: String): Long? = if (isNull(key)) null else exactLong(key)
         private fun JSONObject.nullableBoolean(key: String): Boolean? = if (isNull(key)) null else getBoolean(key)
         private fun JSONObject.field(key: String, value: Any?): JSONObject = put(key, value ?: JSONObject.NULL)
+
+        private fun encodeDualTrack(m: DualTrackMetadata): JSONObject = JSONObject()
+            .put("version", m.version).put("identityHash", m.identityHash)
+            .put("videoFormatHash", m.videoFormatHash).put("audioFormatHash", m.audioFormatHash)
+            .put("videoCodec", m.videoCodec).put("audioCodec", m.audioCodec)
+            .field("videoLength", m.videoLength).field("audioLength", m.audioLength).put("durationUs", m.durationUs)
+
+        private fun decodeDualTrack(m: JSONObject): DualTrackMetadata {
+            // Fail closed: new credential/URL-bearing fields are not silently accepted.
+            require(m.keys().asSequence().toSet() == setOf("version", "identityHash", "videoFormatHash", "audioFormatHash", "videoCodec", "audioCodec",
+                "videoLength", "audioLength", "durationUs"))
+            return DualTrackMetadata(m.getString("identityHash"), m.getString("videoFormatHash"), m.getString("audioFormatHash"),
+                m.getString("videoCodec"), m.getString("audioCodec"),
+                m.nullableLong("videoLength"), m.nullableLong("audioLength"), m.exactLong("durationUs"), m.exactInt("version"))
+                .also { it.validate() }
+        }
 
         fun encode(data: DownloadData): String {
             DownloadRules.validate(data)
@@ -156,7 +185,8 @@ class DownloadStore(
                     .put("protocol",r.protocol.name).field("hlsPlaylistUrl",r.hlsPlaylistUrl)
                     .field("hlsWidth",r.hlsWidth).field("hlsHeight",r.hlsHeight).field("hlsBandwidth",r.hlsBandwidth)
                     .field("plannedDurationUs",r.plannedDurationUs).field("segmentCount",r.segmentCount)
-                    .put("completedSegments",r.completedSegments).field("safeFailure",r.safeFailure).field("pauseReason",r.pauseReason?.name).put("resumeAvailable",r.resumeAvailable))
+                    .put("completedSegments",r.completedSegments).field("safeFailure",r.safeFailure).field("pauseReason",r.pauseReason?.name).put("resumeAvailable",r.resumeAvailable)
+                    .field("dualTrackMetadata",r.dualTrackMetadata?.let(::encodeDualTrack)))
             } }
             val assets = JSONArray().apply { data.assets.forEach { a ->
                 put(JSONObject().put("recordId", a.recordId).field("systemId", a.systemId).put("uri", a.uri)
@@ -173,7 +203,7 @@ class DownloadStore(
             require(raw.toByteArray(Charsets.UTF_8).size <= DownloadRules.MAX_FILE_BYTES)
             val obj = JSONObject(raw)
             val version=runCatching { obj.exactLong("schemaVersion") }.getOrElse { throw FutureSchemaException() }
-            if(version !in setOf(2L,3L,4L,SCHEMA_VERSION.toLong()))throw FutureSchemaException()
+            if(version !in setOf(2L,3L,4L,5L,6L,SCHEMA_VERSION.toLong()))throw FutureSchemaException()
             require(obj.getBoolean("legacyMigrationDone"))
             val records = obj.getJSONArray("records").let { a ->
                 require(a.length() <= DownloadRules.MAX_RECORDS)
@@ -202,7 +232,14 @@ class DownloadStore(
                         completedSegments=if(r.has("completedSegments"))r.exactInt("completedSegments") else 0,
                         safeFailure=if(r.has("safeFailure"))r.nullableString("safeFailure") else null,
                         pauseReason=if(r.has("pauseReason"))r.nullableString("pauseReason")?.let(PauseReason::valueOf) else null,
-                        resumeAvailable=version>=5 && r.optBoolean("resumeAvailable",false))
+                        resumeAvailable=version>=5 && r.optBoolean("resumeAvailable",false),
+                        dualTrackMetadata=if(version>=6 && r.has("dualTrackMetadata") && !r.isNull("dualTrackMetadata"))
+                            decodeDualTrack(r.getJSONObject("dualTrackMetadata")) else null).let { record ->
+                        // v6 origins were derived from the draft, not adapter-approved public pages.
+                        // Never promote them into the new durable navigation contract.
+                        if(version == 6L && record.protocol == DownloadProtocol.DUAL_TRACK) record.copy(sourceUrl=null)
+                            else record
+                    }
                 } }
             }
             val assets = obj.getJSONArray("assets").let { a ->
