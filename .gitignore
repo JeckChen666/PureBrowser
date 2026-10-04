@@ -51,3 +51,4 @@ docs/research/
 
 # Hook-required local design spec for component writes
 out/
+.v2c/
