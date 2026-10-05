@@ -8,11 +8,13 @@ import java.security.MessageDigest
  * JVM-only data work — the file picker, storage and consent UI live in the settings layer, and the
  * network side stays inside the coordinator's controlled channel.
  *
- * D9 "签名校验" honesty note: v0.1.8 ships NO signing infrastructure (no key distribution, no
- * update channel, nothing in-app to verify an asymmetric signature against). Instead of a
- * theater check we surface a deterministic SHA-256 of the CANONICALIZED document for manual
- * verification next to an explicit consent dialog. Asymmetric signing stays deferred until there
- * is key infrastructure worth trusting; the ledger records this deferral.
+ * D9 "签名校验" honesty note: v0.1.8 shipped NO signing infrastructure (no key distribution, no
+ * update channel, nothing in-app to verify an asymmetric signature against) and surfaced only a
+ * deterministic SHA-256 of the CANONICALIZED document for manual verification next to an explicit
+ * consent dialog. v0.1.9 (T101) adds real Ed25519 verification — one maintainer public key is
+ * embedded as an app asset, and an import document carrying a `signature` envelope is verified
+ * against it in-app ("已签名(<keyid>)"); UNSIGNED documents keep the exact v0.1.8 SHA-256 consent
+ * flow, and a FAILED verification is labeled as tamper-suspect rather than silently trusted.
  *
  * D5 IMPORTED tier: imported rules run under tighter budgets than built-ins — maxBytes halved,
  * wall clock halved, cross-origin redirects always denied. The decisions are pure functions here
@@ -46,8 +48,15 @@ object ImportIntegrity {
     /** Canonical compact form, or null when the text is not parsable bounded JSON. */
     fun canonicalJson(text: String): String? {
         val root = RuleSet.parseBoundedJson(text, maxDepth = 16, maxStringChars = 65_536) ?: return null
-        return buildString { print(root) }
+        return canonicalValue(root)
     }
+
+    /**
+     * Canonical compact form of an ALREADY parsed bounded-JSON value (T101 signing): the signature
+     * covers the canonical document WITHOUT its envelope key, so verification needs the same
+     * printer over a map copy rather than over re-serialized text.
+     */
+    fun canonicalValue(root: Any?): String = buildString { print(root) }
 
     /** SHA-256 hex (lowercase) of [text]'s UTF-8 bytes. */
     fun sha256Hex(text: String): String =

@@ -4,6 +4,10 @@ tmp/
 __pycache__/
 *.pyc
 .pytest_cache/
+# T101 signing: the maintainer PRIVATE key never enters the repo; the .public half is
+# committed and mirrored into app/src/main/assets/rules/rules-pubkey.txt.
+keys/*.private
+.sign-build/
 # External corpora live outside the repo on this machine; listed so a stray
 # copy can never be added from here either:
 /tmp/ytdlp-src

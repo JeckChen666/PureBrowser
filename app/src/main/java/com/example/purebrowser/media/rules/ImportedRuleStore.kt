@@ -10,11 +10,9 @@ import java.io.File
  * the size ceiling so a racing larger payload can never land. [RuleSet.invalidateMerged] must be
  * called after [save] or [clear] so the merged view rebuilds.
  *
- * Signing deferral (D9, honest note): there is no key infrastructure in this app — no embedded
- * public key, no update channel — so an asymmetric signature over the document could not be
- * verified against anything trustworthy. The consent surface therefore shows a deterministic
- * SHA-256 of the canonicalized document for the user to compare manually. Asymmetric signing is
- * deferred and recorded in the release ledger, not silently replaced with a decorative check.
+ * Signing (T101): documents may carry an Ed25519 `signature` envelope verified against the
+ * maintainer public key embedded at assets/rules/rules-pubkey.txt (see [RuleImportSigning]).
+ * Unsigned documents keep the deterministic SHA-256 manual-verification consent from v0.1.8.
  */
 object ImportedRuleStore {
     private const val FILE_NAME = "imported-site-rules.json"

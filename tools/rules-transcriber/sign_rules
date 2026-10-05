@@ -1,0 +1,39 @@
+#!/bin/sh
+# T101 rule-import signer (Ed25519, JDK builtin — no third-party crypto).
+#
+#   ./sign_rules keygen
+#   ./sign_rules sign-file <rules.json>          # embeds the envelope + writes <rules.json>.sig
+#   ./sign_rules verify <rules.json>
+#
+# Keys live in keys/: ed25519-maintainer.private (gitignored, never leaves this machine) and
+# ed25519-maintainer.public (committed; mirrored into app/src/main/assets/rules/rules-pubkey.txt
+# as "ed25519 <keyid> <base64>"). The app verifies the canonical document WITHOUT the envelope
+# key, so re-running sign-file after a semantic edit is required and always safe.
+set -e
+here=$(cd "$(dirname "$0")" && pwd)
+build="$here/.sign-build"
+JAVA="${JAVA_HOME:+$JAVA_HOME/bin/}java"
+JAVAC="${JAVA_HOME:+$JAVA_HOME/bin/}javac"
+
+if [ ! -f "$build/SignRules.class" ] || [ "$here/SignRules.java" -nt "$build/SignRules.class" ]; then
+    mkdir -p "$build"
+    "$JAVAC" -d "$build" "$here/SignRules.java"
+fi
+
+case "${1:-}" in
+    keygen)
+        exec "$JAVA" -cp "$build" SignRules keygen "$here/keys"
+        ;;
+    sign-file)
+        [ -f "$here/keys/ed25519-maintainer.private" ] || { echo "no maintainer key in keys/ (run ./sign_rules keygen)" >&2; exit 1; }
+        exec "$JAVA" -cp "$build" SignRules sign-file "$2" \
+            "$here/keys/ed25519-maintainer.private" "$here/keys/ed25519-maintainer.public"
+        ;;
+    verify)
+        exec "$JAVA" -cp "$build" SignRules verify "$2" "$here/keys/ed25519-maintainer.public"
+        ;;
+    *)
+        echo "usage: $0 {keygen|sign-file <rules.json>|verify <rules.json>}" >&2
+        exit 2
+        ;;
+esac

@@ -1,41 +1,33 @@
 {
-  "version": 3,
   "rules": [
     {
-      "id": "ytdlp-medaltv",
-      "version": 1,
-      "match": {
-        "hosts": "(^|\\.)medal\\.tv$",
-        "path": "/games/[^/?#&]+/clips/(?<id>[^/?#&]+)"
-      },
       "actions": [
         {
-          "type": "jsonExtract",
           "pointers": [
             "contentUrlHls",
             "contentUrl"
-          ]
+          ],
+          "type": "jsonExtract"
         }
       ],
       "fetch": [
         {
           "id": "api",
-          "url": "https://medal.tv/api/content/{{match.id}}",
-          "maxBytes": 131072
+          "maxBytes": 131072,
+          "url": "https://medal.tv/api/content/{{match.id}}"
         }
       ],
-      "note": "medal.tv clip page: controlled fetch of the content API, jsonExtract surfaces contentUrlHls/contentUrl (HLS master + direct MP4); live-verified T100 (rule-surfaced VERIFIED 1080p HLS, save SUCCEEDED 16.2MB)."
+      "id": "ytdlp-medaltv",
+      "match": {
+        "hosts": "(^|\\.)medal\\.tv$",
+        "path": "/games/[^/?#&]+/clips/(?<id>[^/?#&]+)"
+      },
+      "note": "medal.tv clip page: controlled fetch of the content API, jsonExtract surfaces contentUrlHls/contentUrl (HLS master + direct MP4); live-verified T100 (rule-surfaced VERIFIED 1080p HLS, save SUCCEEDED 16.2MB).",
+      "version": 1
     },
     {
-      "id": "ytdlp-streamable",
-      "version": 1,
-      "match": {
-        "hosts": "(^|\\.)streamable\\.com$",
-        "path": "/(?:[es]/)?(?<id>\\w+)"
-      },
       "actions": [
         {
-          "type": "jsonExtract",
           "pointers": [
             "status",
             "reddit_title",
@@ -45,28 +37,28 @@
             "thumbnail_url",
             "date_added",
             "duration"
-          ]
+          ],
+          "type": "jsonExtract"
         }
       ],
       "fetch": [
         {
           "id": "api",
-          "url": "https://ajax.streamable.com/videos/{{match.id}}",
-          "maxBytes": 131072
+          "maxBytes": 131072,
+          "url": "https://ajax.streamable.com/videos/{{match.id}}"
         }
       ],
-      "note": "streamable.com clip page: controlled fetch of the ajax videos API (jsonExtract pointer set kept from transcription); live-verified T100 at site level (save SUCCEEDED 19.3MB via page candidates; rule pointers resolved to non-string containers)."
+      "id": "ytdlp-streamable",
+      "match": {
+        "hosts": "(^|\\.)streamable\\.com$",
+        "path": "/(?:[es]/)?(?<id>\\w+)"
+      },
+      "note": "streamable.com clip page: controlled fetch of the ajax videos API (jsonExtract pointer set kept from transcription); live-verified T100 at site level (save SUCCEEDED 19.3MB via page candidates; rule pointers resolved to non-string containers).",
+      "version": 1
     },
     {
-      "id": "ytdlp-hitrecord",
-      "version": 1,
-      "match": {
-        "hosts": "(^|\\.)hitrecord\\.org$",
-        "path": "/records/(?<id>\\d+)"
-      },
       "actions": [
         {
-          "type": "jsonExtract",
           "pointers": [
             "title",
             "source_url",
@@ -76,17 +68,30 @@
             "total_views_count",
             "hearts_count",
             "comments_count"
-          ]
+          ],
+          "type": "jsonExtract"
         }
       ],
       "fetch": [
         {
           "id": "api",
-          "url": "https://hitrecord.org/api/web/records/{{match.id}}",
-          "maxBytes": 131072
+          "maxBytes": 131072,
+          "url": "https://hitrecord.org/api/web/records/{{match.id}}"
         }
       ],
-      "note": "hitrecord.org record page: controlled fetch of the records API (jsonExtract pointer set kept from transcription); live-verified T100 at site level (save SUCCEEDED 71.9MB via page candidates; rule pointers resolved to non-string containers)."
+      "id": "ytdlp-hitrecord",
+      "match": {
+        "hosts": "(^|\\.)hitrecord\\.org$",
+        "path": "/records/(?<id>\\d+)"
+      },
+      "note": "hitrecord.org record page: controlled fetch of the records API (jsonExtract pointer set kept from transcription); live-verified T100 at site level (save SUCCEEDED 71.9MB via page candidates; rule pointers resolved to non-string containers).",
+      "version": 1
     }
-  ]
+  ],
+  "signature": {
+    "algorithm": "Ed25519",
+    "keyid": "pb-k-c7dff25a",
+    "value": "uWX5U/7lS3VxnRBXoi7lpJTsE6iBLXYSYGE796mkLqCTn85XwDWqCxEV1JzU9WBHynwaAHY1gAgjLaPiTPaJBg=="
+  },
+  "version": 3
 }

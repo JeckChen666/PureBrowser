@@ -57,15 +57,31 @@ internal object Fmp4FixtureAuthoring {
             override fun endTracks() {}
             override fun seekMap(seekMap: SeekMap) {}
         })
-        val stream = ByteArrayInputStream(source.readBytes())
-        val reader = DataReader { buffer, off, len -> stream.read(buffer, off, len) }
-        val input = DefaultExtractorInput(reader, 0, source.length())
+        val bytes = source.readBytes()
+        var stream = ByteArrayInputStream(bytes)
+        var reader = DataReader { buffer, off, len -> stream.read(buffer, off, len) }
+        var input = DefaultExtractorInput(reader, 0, bytes.size.toLong())
         try {
             check(extractor.sniff(input)) { "fixture is not MP4" }
             input.resetPeekPosition()
             val position = PositionHolder()
-            while (extractor.read(input, position) != Extractor.RESULT_END_OF_INPUT) {
+            var result = extractor.read(input, position)
+            while (result != Extractor.RESULT_END_OF_INPUT) {
                 if (Thread.interrupted()) throw java.io.IOException("interrupted")
+                // RESULT_SEEK must be honored (T101 API28 matrix finding): the extractor re-reads
+                // box offsets for moov-after-mdat fixtures and spins forever when the harness
+                // ignores the reposition. The byte array is fully in memory, so a "seek" is just
+                // a fresh stream skipped to the target with a matching input position.
+                if (result == Extractor.RESULT_SEEK) {
+                    val target = position.position
+                    check(target in 0..bytes.size.toLong()) { "seek target out of fixture" }
+                    stream = ByteArrayInputStream(bytes)
+                    var skipped = 0L
+                    while (skipped < target) skipped += stream.skip(target - skipped)
+                    reader = DataReader { buffer, off, len -> stream.read(buffer, off, len) }
+                    input = DefaultExtractorInput(reader, target, bytes.size.toLong() - target)
+                }
+                result = extractor.read(input, position)
             }
         } finally {
             extractor.release()
@@ -123,10 +139,22 @@ internal object Fmp4FixtureAuthoring {
                 .build()
                 .use { muxer ->
                     val id = muxer.addTrack(track.format)
-                    track.samples.forEach { sample ->
+                    // Presentation order (T101 API28-matrix finding): the fixture video carries
+                    // B-frame decode-order zigzag timestamps, and Media3's FragmentedMp4Muxer
+                    // derives per-fragment tfdt from the WRITE order — zigzag input stretches the
+                    // timeline across fragments and the assembler's duration gate explodes. These
+                    // fixtures exercise init+moof assembly, not B-frame reordering, so authoring
+                    // sorts by presentation time; the assembler re-derives offsets from real times.
+                    track.samples.sortedBy { it.timeUs }.forEach { sample ->
+                        // Synthetic GOP (T101 API28-matrix finding): the source fixture video carries
+                        // a single sync sample, and Media3's FragmentedMp4Muxer only cuts a fragment
+                        // at a keyframe boundary — one keyframe means one giant moof and the setUp
+                        // "multiple segments" precondition can never hold. Authoring marks every
+                        // sample as a sync sample so fragmentDurationMs actually fragments; the
+                        // assembler under test only needs init+moof shape, not a real GOP layout.
                         muxer.writeSampleData(
                             id, ByteBuffer.wrap(sample.payload),
-                            BufferInfo(sample.timeUs - offset, sample.payload.size, sample.flags),
+                            BufferInfo(sample.timeUs - offset, sample.payload.size, sample.flags or C.BUFFER_FLAG_KEY_FRAME),
                         )
                     }
                 }

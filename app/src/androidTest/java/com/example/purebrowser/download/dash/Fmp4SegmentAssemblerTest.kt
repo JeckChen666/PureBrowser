@@ -115,7 +115,8 @@ class Fmp4SegmentAssemblerTest {
 
     @Test fun truncatedSegmentFailsHonestlyWithoutOutput() {
         val truncated = ArrayList(videoSegments)
-        val last = truncated.removeLast()
+        // removeAt (not JDK 21 List.removeLast): the latter is absent on API 28 runtimes.
+        val last = truncated.removeAt(truncated.size - 1)
         truncated += File(directory, "cut.m4s").apply {
             writeBytes(last.readBytes().copyOf((last.length() - 5L).coerceAtLeast(1L).toInt()))
         }
@@ -125,7 +126,11 @@ class Fmp4SegmentAssemblerTest {
             fail("expected honest failure")
         } catch (expected: TransferFailure) {
             assertEquals(FailureKind.UNSUPPORTED, expected.kind)
-            assertTrue(expected.safeMessage.contains("不完整"))
+            // Any of the box-walk integrity messages is an honest truncation refusal: the exact
+            // branch depends on where the cut lands (per-segment size gate vs box-walk failure).
+            assertTrue(
+                expected.safeMessage.contains("不完整") || expected.safeMessage.contains("不是完整"),
+            )
         }
         assertFalse(output.exists())
     }

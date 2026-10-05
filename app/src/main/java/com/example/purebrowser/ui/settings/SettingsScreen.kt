@@ -92,6 +92,7 @@ fun SettingsScreen(
             var valid: ImportValidation.Valid? = null
             var denied: ImportValidation.Denied? = null
             var validText: String? = null
+            var signatureLabel: String? = null
             try {
                 withContext(Dispatchers.IO) {
                     val text = context.contentResolver.openInputStream(uri)?.use { input ->
@@ -108,7 +109,11 @@ fun SettingsScreen(
                     when {
                         text == null -> denied = ImportValidation.Denied(ImportValidation.Denied.Reason.OVERSIZE)
                         else -> when (val verdict = ImportValidator.validate(text, builtInCount = com.example.purebrowser.media.rules.RuleSet.load(context).rules.size)) {
-                            is ImportValidation.Valid -> { valid = verdict; validText = text }
+                            is ImportValidation.Valid -> {
+                                valid = verdict; validText = text
+                                signatureLabel = com.example.purebrowser.media.rules.RuleImportSigning
+                                    .signatureLabel(context, text)
+                            }
                             is ImportValidation.Denied -> denied = verdict
                         }
                     }
@@ -117,7 +122,7 @@ fun SettingsScreen(
                 val t = validText
                 val d = denied
                 when {
-                    v != null && t != null -> pendingImport = PendingImport(t, v.digest, v.rules.size)
+                    v != null && t != null -> pendingImport = PendingImport(t, v.digest, v.rules.size, signatureLabel ?: "")
                     d != null -> status = importDenialText(d.reason)
                     else -> status = "无法读取所选文件，请重试。"
                 }
@@ -278,10 +283,12 @@ fun SettingsScreen(
                 Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("外部规则将获得受控抓取能力（仅 GET、HTTPS、限额减半、不跨源跳转）。文件来源无法由应用验证，请先自行核对发布方的完整性摘要再确认。", style = MaterialTheme.typography.bodyLarge)
+                    Text("签名状态：${pending.signatureLabel}", style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.testTag("rule-import-signature"))
                     Text("规则条数：${pending.count}", style = MaterialTheme.typography.bodyMedium)
                     Text("完整性摘要（SHA-256，规范化后）：", style = MaterialTheme.typography.bodyMedium)
                     SelectionContainer { Text(pending.digest, style = MaterialTheme.typography.bodySmall) }
-                    SettingsNote("本应用未内置签名密钥体系，摘要仅供人工核对；确认后规则保存在本机，可随时在设置中清除。")
+                    SettingsNote("已签名文件经应用内置维护者公钥（Ed25519）校验；未签名或校验失败的文件仅能靠上方摘要人工核对。确认后规则保存在本机，可随时在设置中清除。")
                 }
             },
             confirmButton = {
@@ -387,7 +394,13 @@ fun SettingsScreen(
 }
 
 /** Validated import awaiting explicit consent; [text] is composition state only, never persisted here. */
-private data class PendingImport(val text: String, val digest: String, val count: Int)
+private data class PendingImport(
+    val text: String,
+    val digest: String,
+    val count: Int,
+    /** T101 Ed25519 verdict label for the consent dialog ("已签名(<keyid>)" or the honest fallback). */
+    val signatureLabel: String,
+)
 
 private fun importDenialText(reason: ImportValidation.Denied.Reason): String = when (reason) {
     ImportValidation.Denied.Reason.OVERSIZE -> "导入失败：文件超过 512KB 限制。"
