@@ -30,6 +30,13 @@ the open-source yt-dlp project (The Unlicense / public domain). Behavior
 specifications and field semantics were transcribed; source text, comments,
 and identifier naming were not copied, and no upstream code is bundled.
 
+v0.1.9 additionally batch-transcribes yt-dlp extractor URL-match faces and
+simple GET/JSON extraction behavior into the app's declarative site-rule
+format. Every transcription is machine-generated as a CANDIDATE and admitted
+only after per-rule fixtures and live-site verification; upstream source text
+is never bundled. Extractors relying on POST APIs, JS challenges, or signature
+computation are explicitly not transcribed.
+
 This notice records attribution and does not imply endorsement by upstream
 projects, Google, Android, or Gradle.
 
