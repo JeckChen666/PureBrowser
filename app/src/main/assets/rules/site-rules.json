@@ -4,69 +4,135 @@
     {
       "id": "kvs-family",
       "version": 1,
-      "match": { "path": "\\/video[0-9]{3,}\\/" },
+      "match": {
+        "path": "\\/video[0-9]{3,}\\/"
+      },
       "actions": [
-        { "type": "playerConfig", "family": "kvs" },
-        { "type": "domExtract", "selector": "#kt_player video[src], .video-js video[src], video[src^='http']", "attribute": "src" }
+        {
+          "type": "playerConfig",
+          "family": "kvs"
+        },
+        {
+          "type": "domExtract",
+          "selector": "#kt_player video[src], .video-js video[src], video[src^='http']",
+          "attribute": "src"
+        }
       ],
       "note": "KVS 播放器系站点视频页：按已知家族复用播放器配置提取，并直取播放器容器内 video 地址"
     },
     {
       "id": "tube-flashvars-watch",
       "version": 1,
-      "match": { "hosts": "(^|\\.)pornhub\\.com$", "path": "viewkey=[A-Za-z0-9]+" },
+      "match": {
+        "hosts": "(^|\\.)pornhub\\.com$",
+        "path": "viewkey=[A-Za-z0-9]+"
+      },
       "actions": [
-        { "type": "playerConfig", "family": "flashvars" },
-        { "type": "domExtract", "selector": ".video-wrapper video[src^='http'], video[src^='http']", "attribute": "src", "titleSelector": "h1" }
+        {
+          "type": "playerConfig",
+          "family": "flashvars"
+        },
+        {
+          "type": "domExtract",
+          "selector": ".video-wrapper video[src^='http'], video[src^='http']",
+          "attribute": "src",
+          "titleSelector": "h1"
+        }
       ],
       "note": "flashvars 系大型 tube 站观看页：flashvars 全局配置提取加播放器内 video 直链"
     },
     {
       "id": "tube-html5-watch",
       "version": 1,
-      "match": { "hosts": "(^|\\.)xvideos\\.com$", "path": "\\/video[0-9]+\\/" },
+      "match": {
+        "hosts": "(^|\\.)xvideos\\.com$",
+        "path": "\\/video[0-9]+\\/"
+      },
       "actions": [
-        { "type": "playerConfig", "family": "html5player" },
-        { "type": "domExtract", "selector": "#html5video video[src^='http'], video source[src^='http']", "attribute": "src" }
+        {
+          "type": "playerConfig",
+          "family": "html5player"
+        },
+        {
+          "type": "domExtract",
+          "selector": "#html5video video[src^='http'], video source[src^='http']",
+          "attribute": "src"
+        }
       ],
       "note": "html5player 系大型 tube 站观看页：setter 脚本配置提取加 video/source 直链"
     },
     {
       "id": "tube-html5-alt-watch",
       "version": 1,
-      "match": { "hosts": "(^|\\.)xnxx\\.(com|net)$", "path": "\\/video-[a-z0-9]+\\/" },
+      "match": {
+        "hosts": "(^|\\.)xnxx\\.(com|net)$",
+        "path": "\\/video-[a-z0-9]+\\/"
+      },
       "actions": [
-        { "type": "playerConfig", "family": "html5player" },
-        { "type": "domExtract", "selector": "#html5video video[src^='http'], video source[src^='http']", "attribute": "src" }
+        {
+          "type": "playerConfig",
+          "family": "html5player"
+        },
+        {
+          "type": "domExtract",
+          "selector": "#html5video video[src^='http'], video source[src^='http']",
+          "attribute": "src"
+        }
       ],
       "note": "html5player 系同源姊妹站观看页：同族配置提取逻辑复用"
     },
     {
       "id": "tube-xplayer-watch",
       "version": 1,
-      "match": { "hosts": "(^|\\.)xhamster[0-9]?\\.(com|net|desi)$", "path": "\\/videos\\/[a-z0-9-]+-[0-9]{6,}" },
+      "match": {
+        "hosts": "(^|\\.)xhamster[0-9]?\\.(com|net|desi)$",
+        "path": "\\/videos\\/[a-z0-9-]+-[0-9]{6,}"
+      },
       "actions": [
-        { "type": "playerConfig", "family": "xplayer" },
-        { "type": "domExtract", "selector": "video[src^='http'], video source[src^='http']", "attribute": "src" }
+        {
+          "type": "playerConfig",
+          "family": "xplayer"
+        },
+        {
+          "type": "domExtract",
+          "selector": "video[src^='http'], video source[src^='http']",
+          "attribute": "src"
+        }
       ],
       "note": "xplayer 系大型 tube 站观看页：initials.xplayerSettings 配置提取加 video 直链"
     },
     {
       "id": "tube-kvs-alt-watch",
       "version": 1,
-      "match": { "hosts": "(^|\\.)anyporn\\.com$", "path": "\\/videos\\/[0-9]+\\/" },
+      "match": {
+        "hosts": "(^|\\.)anyporn\\.com$",
+        "path": "\\/videos\\/[0-9]+\\/"
+      },
       "actions": [
-        { "type": "playerConfig", "family": "kvs" },
-        { "type": "domExtract", "selector": "#kt_player video[src^='http'], video source[src^='http']", "attribute": "src" }
+        {
+          "type": "playerConfig",
+          "family": "kvs"
+        },
+        {
+          "type": "domExtract",
+          "selector": "#kt_player video[src^='http'], video source[src^='http']",
+          "attribute": "src"
+        }
       ],
       "note": "KVS 播放器系另一站点观看页：同族配置提取逻辑复用"
     },
     {
       "id": "vimeo-player-config",
       "version": 2,
-      "match": { "hosts": "(^|\\.)vimeo\\.com$", "path": "player\\.vimeo\\.com\\/video\\/[0-9]+" },
+      "match": {
+        "hosts": "(^|\\.)vimeo\\.com$",
+        "path": "player\\.vimeo\\.com\\/video\\/[0-9]+"
+      },
       "actions": [
-        { "type": "manifestHint", "kind": "unknown" }
+        {
+          "type": "manifestHint",
+          "kind": "unknown"
+        }
       ],
       "captureEndpoints": [
         "player\\.vimeo\\.com\\/video\\/[0-9]+\\/config"
@@ -76,9 +142,15 @@
     {
       "id": "vk-video-api",
       "version": 2,
-      "match": { "hosts": "(^|\\.)vk\\.com$", "path": "\\/method\\/video\\.get" },
+      "match": {
+        "hosts": "(^|\\.)vk\\.com$",
+        "path": "\\/method\\/video\\.get"
+      },
       "actions": [
-        { "type": "manifestHint", "kind": "unknown" }
+        {
+          "type": "manifestHint",
+          "kind": "unknown"
+        }
       ],
       "captureEndpoints": [
         "\\/method\\/video\\.get"
@@ -88,119 +160,287 @@
     {
       "id": "reddit-post",
       "version": 1,
-      "match": { "hosts": "(^|\\.)reddit\\.com$" },
+      "match": {
+        "hosts": "(^|\\.)reddit\\.com$"
+      },
       "actions": [
-        { "type": "domExtract", "selector": "video[src^='http'], video source[src^='http']", "attribute": "src", "titleSelector": "shreddit-title, h1" }
+        {
+          "type": "domExtract",
+          "selector": "video[src^='http'], video source[src^='http']",
+          "attribute": "src",
+          "titleSelector": "shreddit-title, h1"
+        }
       ],
       "note": "Reddit 帖子页：提取内联 video 元素直链；打包媒体走跨域管线，本版不解析"
     },
     {
       "id": "generic-flashvars-param",
       "version": 1,
-      "match": { "path": "[?&]video_id=[0-9]+" },
+      "match": {
+        "path": "[?&]video_id=[0-9]+"
+      },
       "actions": [
-        { "type": "playerConfig", "family": "flashvars" },
-        { "type": "domExtract", "selector": "video[src^='http'], video source[src^='http']", "attribute": "src" }
+        {
+          "type": "playerConfig",
+          "family": "flashvars"
+        },
+        {
+          "type": "domExtract",
+          "selector": "video[src^='http'], video source[src^='http']",
+          "attribute": "src"
+        }
       ],
       "note": "通用 flashvars 播放器家族：video_id 参数页复用配置提取加 video 直链"
     },
     {
       "id": "generic-xplayer-page",
       "version": 1,
-      "match": { "path": "\\/videos?\\/[a-z0-9][a-z0-9-]*-[0-9]{5,}" },
+      "match": {
+        "path": "\\/videos?\\/[a-z0-9][a-z0-9-]*-[0-9]{5,}"
+      },
       "actions": [
-        { "type": "playerConfig", "family": "xplayer" },
-        { "type": "domExtract", "selector": "video[src^='http'], video source[src^='http']", "attribute": "src" }
+        {
+          "type": "playerConfig",
+          "family": "xplayer"
+        },
+        {
+          "type": "domExtract",
+          "selector": "video[src^='http'], video source[src^='http']",
+          "attribute": "src"
+        }
       ],
       "note": "通用 xplayer 播放器家族：slug 编号视频页复用 initials.xplayerSettings 配置提取"
     },
     {
       "id": "archive-org-embed",
       "version": 1,
-      "match": { "hosts": "(^|\\.)archive\\.org$", "path": "\\/details\\/([A-Za-z0-9_.-]+)" },
+      "match": {
+        "hosts": "(^|\\.)archive\\.org$",
+        "path": "\\/details\\/([A-Za-z0-9_.-]+)"
+      },
       "actions": [
-        { "type": "regexExtract", "pattern": "(https:\\/\\/archive\\.org\\/download\\/[^\"\\s]+\\.mp4)" }
+        {
+          "type": "regexExtract",
+          "pattern": "(https:\\/\\/archive\\.org\\/download\\/[^\"\\s]+\\.mp4)"
+        }
       ],
       "fetch": [
-        { "id": "embed", "url": "https://archive.org/embed/{{m1}}", "maxBytes": 131072 }
+        {
+          "id": "embed",
+          "url": "https://archive.org/embed/{{m1}}",
+          "maxBytes": 131072
+        }
       ],
       "note": "互联网档案馆条目页：受控抓取条目内嵌播放页，正则提取下载直链（只读、限量）"
     },
     {
       "id": "ted-talks-inline",
       "version": 1,
-      "match": { "hosts": "(^|\\.)ted\\.com$", "path": "\\/talks\\/[A-Za-z0-9_-]+" },
+      "match": {
+        "hosts": "(^|\\.)ted\\.com$",
+        "path": "\\/talks\\/[A-Za-z0-9_-]+"
+      },
       "actions": [
-        { "type": "regexExtract", "pattern": "\"hlsUrl\"\\s*:\\s*\"(https:\\/\\/[^\"]+\\.m3u8[^\"]*)\"" }
+        {
+          "type": "regexExtract",
+          "pattern": "\"hlsUrl\"\\s*:\\s*\"(https:\\/\\/[^\"]+\\.m3u8[^\"]*)\""
+        }
       ],
       "note": "TED 演讲页：读取页面内联结构数据中的 HLS 主清单地址（只读，不执行，不发起额外请求）"
     },
     {
       "id": "commons-file-videoinfo",
       "version": 1,
-      "match": { "hosts": "(^|\\.)wikimedia\\.org$", "path": "\\/wiki\\/(File:[A-Za-z0-9_%.,()+-]+)" },
+      "match": {
+        "hosts": "(^|\\.)wikimedia\\.org$",
+        "path": "\\/wiki\\/(File:[A-Za-z0-9_%.,()+-]+)"
+      },
       "actions": [
-        { "type": "jsonExtract", "pointers": [
-          "query.pages[0].videoinfo[0].url",
-          "query.pages[0].videoinfo[0].derivatives[0].src"
-        ] }
+        {
+          "type": "jsonExtract",
+          "pointers": [
+            "query.pages[0].videoinfo[0].url",
+            "query.pages[0].videoinfo[0].derivatives[0].src"
+          ]
+        }
       ],
       "fetch": [
-        { "id": "videoinfo", "url": "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=videoinfo&viprop=url%7Cderivatives&titles=File:{{m1}}", "maxBytes": 65536 }
+        {
+          "id": "videoinfo",
+          "url": "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&prop=videoinfo&viprop=url%7Cderivatives&titles=File:{{m1}}",
+          "maxBytes": 65536
+        }
       ],
       "note": "维基媒体公共库文件页：受控抓取 videoinfo 接口，提取原始与转码直链（只读、限量）"
     },
     {
       "id": "dailymotion-metadata",
       "version": 1,
-      "match": { "hosts": "(^|\\.)dailymotion\\.com$", "path": "\\/video\\/([a-z0-9]+)" },
+      "match": {
+        "hosts": "(^|\\.)dailymotion\\.com$",
+        "path": "\\/video\\/([a-z0-9]+)"
+      },
       "actions": [
-        { "type": "jsonExtract", "pointers": [
-          "qualities.auto[0].url"
-        ] }
+        {
+          "type": "jsonExtract",
+          "pointers": [
+            "qualities.auto[0].url"
+          ]
+        }
       ],
       "fetch": [
-        { "id": "metadata", "url": "https://www.dailymotion.com/player/metadata/video/{{m1}}", "maxBytes": 65536 }
+        {
+          "id": "metadata",
+          "url": "https://www.dailymotion.com/player/metadata/video/{{m1}}",
+          "maxBytes": 65536
+        }
       ],
       "note": "Dailymotion 视频页：受控抓取播放器元数据接口，按档位提取 HLS 清单（只读、限量）"
     },
     {
       "id": "peertube-blender-files",
       "version": 1,
-      "match": { "hosts": "(^|\\.)video\\.blender\\.org$", "path": "\\/w\\/([0-9A-Za-z_-]{22,36})" },
+      "match": {
+        "hosts": "(^|\\.)video\\.blender\\.org$",
+        "path": "\\/w\\/([0-9A-Za-z_-]{22,36})"
+      },
       "actions": [
-        { "type": "jsonExtract", "pointers": [
-          "files[0].fileDownloadUrl",
-          "files[1].fileDownloadUrl",
-          "files[2].fileDownloadUrl",
-          "files[3].fileDownloadUrl",
-          "files[4].fileDownloadUrl",
-          "files[5].fileDownloadUrl"
-        ] }
+        {
+          "type": "jsonExtract",
+          "pointers": [
+            "files[0].fileDownloadUrl",
+            "files[1].fileDownloadUrl",
+            "files[2].fileDownloadUrl",
+            "files[3].fileDownloadUrl",
+            "files[4].fileDownloadUrl",
+            "files[5].fileDownloadUrl"
+          ]
+        }
       ],
       "fetch": [
-        { "id": "video", "url": "https://video.blender.org/api/v1/videos/{{m1}}", "maxBytes": 65536 }
+        {
+          "id": "video",
+          "url": "https://video.blender.org/api/v1/videos/{{m1}}",
+          "maxBytes": 65536
+        }
       ],
       "note": "PeerTube（Blender 实例）观看页：受控抓取实例视频接口，提取各分辨率直链（只读、限量）"
     },
     {
       "id": "peertube-framatube-files",
       "version": 1,
-      "match": { "hosts": "(^|\\.)framatube\\.org$", "path": "\\/w\\/([0-9A-Za-z_-]{22,36})" },
+      "match": {
+        "hosts": "(^|\\.)framatube\\.org$",
+        "path": "\\/w\\/([0-9A-Za-z_-]{22,36})"
+      },
       "actions": [
-        { "type": "jsonExtract", "pointers": [
-          "files[0].fileDownloadUrl",
-          "files[1].fileDownloadUrl",
-          "files[2].fileDownloadUrl",
-          "files[3].fileDownloadUrl",
-          "files[4].fileDownloadUrl",
-          "files[5].fileDownloadUrl"
-        ] }
+        {
+          "type": "jsonExtract",
+          "pointers": [
+            "files[0].fileDownloadUrl",
+            "files[1].fileDownloadUrl",
+            "files[2].fileDownloadUrl",
+            "files[3].fileDownloadUrl",
+            "files[4].fileDownloadUrl",
+            "files[5].fileDownloadUrl"
+          ]
+        }
       ],
       "fetch": [
-        { "id": "video", "url": "https://framatube.org/api/v1/videos/{{m1}}", "maxBytes": 65536 }
+        {
+          "id": "video",
+          "url": "https://framatube.org/api/v1/videos/{{m1}}",
+          "maxBytes": 65536
+        }
       ],
       "note": "PeerTube（Framasoft 实例）观看页：受控抓取实例视频接口，提取各分辨率直链（只读、限量）"
+    },
+    {
+      "id": "ytdlp-medaltv",
+      "version": 1,
+      "match": {
+        "hosts": "(^|\\.)medal\\.tv$",
+        "path": "/games/[^/?#&]+/clips/(?<id>[^/?#&]+)"
+      },
+      "actions": [
+        {
+          "type": "jsonExtract",
+          "pointers": [
+            "contentUrlHls",
+            "contentUrl"
+          ]
+        }
+      ],
+      "fetch": [
+        {
+          "id": "api",
+          "url": "https://medal.tv/api/content/{{match.id}}",
+          "maxBytes": 131072
+        }
+      ],
+      "note": "medal.tv clip page: controlled fetch of the content API, jsonExtract surfaces contentUrlHls/contentUrl (HLS master + direct MP4); live-verified T100 (rule-surfaced VERIFIED 1080p HLS, save SUCCEEDED 16.2MB)."
+    },
+    {
+      "id": "ytdlp-streamable",
+      "version": 1,
+      "match": {
+        "hosts": "(^|\\.)streamable\\.com$",
+        "path": "/(?:[es]/)?(?<id>\\w+)"
+      },
+      "actions": [
+        {
+          "type": "jsonExtract",
+          "pointers": [
+            "status",
+            "reddit_title",
+            "title",
+            "description",
+            "files",
+            "thumbnail_url",
+            "date_added",
+            "duration"
+          ]
+        }
+      ],
+      "fetch": [
+        {
+          "id": "api",
+          "url": "https://ajax.streamable.com/videos/{{match.id}}",
+          "maxBytes": 131072
+        }
+      ],
+      "note": "streamable.com clip page: controlled fetch of the ajax videos API (jsonExtract pointer set kept from transcription); live-verified T100 at site level (save SUCCEEDED 19.3MB via page candidates; rule pointers resolved to non-string containers)."
+    },
+    {
+      "id": "ytdlp-hitrecord",
+      "version": 1,
+      "match": {
+        "hosts": "(^|\\.)hitrecord\\.org$",
+        "path": "/records/(?<id>\\d+)"
+      },
+      "actions": [
+        {
+          "type": "jsonExtract",
+          "pointers": [
+            "title",
+            "source_url",
+            "body",
+            "duration",
+            "created_at_i",
+            "total_views_count",
+            "hearts_count",
+            "comments_count"
+          ]
+        }
+      ],
+      "fetch": [
+        {
+          "id": "api",
+          "url": "https://hitrecord.org/api/web/records/{{match.id}}",
+          "maxBytes": 131072
+        }
+      ],
+      "note": "hitrecord.org record page: controlled fetch of the records API (jsonExtract pointer set kept from transcription); live-verified T100 at site level (save SUCCEEDED 71.9MB via page candidates; rule pointers resolved to non-string containers)."
     }
   ]
 }

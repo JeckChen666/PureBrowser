@@ -1,0 +1,1622 @@
+{
+ "version": 3,
+ "rules": [
+  {
+   "id": "ytdlp-amara",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)amara\\.org$",
+    "path": "/(?:\\w+/)?videos/(?<id>\\w+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "title",
+      "all_urls",
+      "languages",
+      "description",
+      "thumbnail",
+      "duration",
+      "created"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://amara.org/api/videos/{{match.id}}/",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-asobichannel",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)asobistore\\.jp$",
+    "path": "/watch/(?<id>[\\w-]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://channel.microcms.io/api/v1/media/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-bilibiliwatchlater",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)bilibili\\.com$",
+    "path": "/watchlater/?(?:[?#]|$)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "code"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.bilibili.com/x/v2/history/toview/web?jsonp=jsonp",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-cccplaylist",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)ccc\\.de$",
+    "path": "/c/(?<id>[^/?#&]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "events",
+      "title"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://media.ccc.de/public/conferences/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-cinetecamilano",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)cinetecamilano\\.it$",
+    "path": "/film/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "archive",
+      "success"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.cinetecamilano.it/api/catalogo/{{match.id}}/?",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-cpac",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)cpac\\.ca$",
+    "path": "/(?<fr>l-)?episode\\?id=(?<id>[\\da-f]{8}(?:-[\\da-f]{4}){3}-[\\da-f]{12})"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "page",
+      "details"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.cpac.ca/api/1/services/contentModel.json?url=/site/website/episode/index.xml&crafterSite=cpacca&id={{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-croatianfilm",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)croatian\\.film$",
+    "path": "/[a-z]{2}/[^/?#]+/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "video"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.croatian.film/api/videos/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-crowdbunker",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)crowdbunker\\.com$",
+    "path": "/v/(?<id>[^/?#$&]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "video",
+      "likesCount"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.divulg.org/post/{{match.id}}/details",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-discogsreleaseplaylist",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)discogs\\.com$",
+    "path": "/(?<type>release|master)/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "title"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.discogs.com/{{match.type}}s/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-drtvlive",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)dr\\.dk$",
+    "path": "/(?:tv|TV)/live/(?<id>[\\da-z-]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "Title",
+      "StreamingServers",
+      "PrimaryImageUri"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.dr.dk/mu-online/api/1.0/channel/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-errarhiiv",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)err\\.ee$",
+    "path": "/video/(?:vaata/)?(?<id>[^/?#]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://arhiiv.err.ee/api/v1/content/video/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-flextv",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)(?:ttinglive\\.com|flextv\\.co\\.kr)$",
+    "path": "/channels/(?<id>\\d+)/live"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.ttinglive.com/api/channels/{{match.id}}/stream",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-gab",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)gab\\.com$",
+    "path": "/[^/]+/posts/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "media_attachments",
+      "account",
+      "favourites_count",
+      "replies_count",
+      "reblogs_count",
+      "created_at",
+      "content"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://gab.com/api/v1/statuses/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-godresource",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)godresource\\.com$",
+    "path": "/video/(?<id>\\w+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "streamUrl",
+      "isLive"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.godresource.com/api/Streams/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-goodgame",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)goodgame\\.ru$",
+    "path": "/(?!channel/)(?<id>[\\w.*-]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "streamkey",
+      "status"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://goodgame.ru/api/4/users/{{match.id}}/stream",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-graspop",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)graspop\\.be$",
+    "path": "/[a-z]{2}/(?<id>\\d+)/"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "source"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://tv.proximus.be/MWC/videocenter/festivals/{{match.id}}/stream",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-hitrecord",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)hitrecord\\.org$",
+    "path": "/records/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "title",
+      "source_url",
+      "body",
+      "duration",
+      "created_at_i",
+      "total_views_count",
+      "hearts_count",
+      "comments_count"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://hitrecord.org/api/web/records/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-ichinanalivevod",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)17\\.live$",
+    "path": "/ja/vod/[^/?#]+/(?<id>[^/?#]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://wap-api.17app.co/api/v1/vods/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-israelnationalnews",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)israelnationalnews\\.com$",
+    "path": "/news/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.israelnationalnews.com/Generic/NewAPI/Item?type=0&Item={{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-shugiinitvvod",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)shugiintv\\.go\\.jp$",
+    "path": "/(?:jp|en)/index\\.php\\?ex=VL(?:\\&[^=]+=[^&]*)*\\&deli_id=(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "regexExtract",
+     "pattern": "id=\"vtag_src_base_vod\"\\s*value=\"(http.+?\\.m3u8)\""
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.shugiintv.go.jp/jp/index.php?ex=VL&media_type=&deli_id={{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-kikaplaylist",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)kika\\.de$",
+    "path": "/[\\w-]+/(?<id>[a-z-]+\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "title",
+      "description",
+      "videoSubchannel"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.kika.de/_next-api/proxy/v1/brands/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-kinopoisk",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)kinopoisk\\.ru$",
+    "path": "/film/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "regexExtract",
+     "pattern": "(?s)<script[^>]+\\btype=[\"\\']application/json[^>]+>(.+?)<"
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://ott-widget.kinopoisk.ru/v1/kp/",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-kommunetv",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)kommunetv\\.no$",
+    "path": "/archive/(?<id>\\w+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "stream",
+      "playlist"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://oslo.kommunetv.no/api/streams?streamType=1&id={{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-livestreamfails",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)livestreamfails\\.com$",
+    "path": "/(?:clip|post)/(?<id>[0-9]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "sourceId",
+      "label",
+      "createdAt",
+      "videoId"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.livestreamfails.com/clip/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-lrtradio",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)lrt\\.lt$",
+    "path": "/radioteka/irasas/(?<id>\\d+)/(?<path>[^?#/]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "playlist_item"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.lrt.lt/rest-api/media",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-masters",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)masters\\.com$",
+    "path": "/en_US/watch/(?<date>\\d{4}-\\d{2}-\\d{2})/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "title"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.masters.com/relatedcontent/rest/v2/masters_v1/en/content/masters_v1_{{match.id}}_en",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-medaltv",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)medal\\.tv$",
+    "path": "/games/[^/?#&]+/clips/(?<id>[^/?#&]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "contentUrlHls",
+      "contentUrl"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://medal.tv/api/content/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-microsoftembed",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)microsoft\\.com$",
+    "path": "/(?:[^/]+/)?videoplayer/embed/(?<id>[a-z0-9A-Z]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "streams"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://prod-video-cms-rt-microsoft-com.akamaized.net/vhs/api/videos/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-microsoftmedius",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)microsoft\\.com$",
+    "path": "/Embed/(?:Video\\?id=|video-nc/|VideoDetails/)(?<id>[\\da-f-]+)"
+   },
+   "actions": [
+    {
+     "type": "regexExtract",
+     "pattern": "StreamUrl\\s*=\\s*\"([^\"]+manifest)\""
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://medius.microsoft.com/Embed/video-nc/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-mirrativuser",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)mirrativ\\.com$",
+    "path": "/user/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "name",
+      "description"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.mirrativ.com/api/user/profile?user_id={{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-mixch",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)mixch\\.tv$",
+    "path": "/u/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "liveInfo"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://mixch.tv/api-web/users/{{match.id}}/live",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-mixchmovie",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)mixch\\.tv$",
+    "path": "/m/(?<id>\\w+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "movie"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://mixch.tv/api-web/movies/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-mlbtv",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)mlb\\.com$",
+    "path": "/tv/g(?<id>\\d{6})"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://statsapi.mlb.com/api/v1/schedule",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-nate",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)nate\\.com$",
+    "path": "/clip/(?<id>[0-9]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "clipTitle",
+      "synopsis",
+      "contentImg",
+      "targetAge",
+      "playTime",
+      "programTitle",
+      "programSeq",
+      "hashTag"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://tv.nate.com/api/v1/clip/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-nestclip",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)nest\\.com$",
+    "path": "/(?:embedded/)?clip/(?<id>\\w+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://video.nest.com/api/dropcam/videos.get_by_filename",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-netappvideo",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)netapp\\.com$",
+    "path": "/video-detail/(?<id>[0-9a-f-]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.media.netapp.com/client/detail/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-netappcollection",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)netapp\\.com$",
+    "path": "/collection/(?<id>[0-9a-f-]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "name"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.media.netapp.com/client/collection/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-nintendo",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)nintendo\\.com$",
+    "path": "/(?:(?<locale>\\w{2}(?:-\\w{2})?)/)?nintendo-direct/(?<slug>[^/?#]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://graph.nintendo.com/",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-ondemandkorea",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)ondemandkorea\\.com$",
+    "path": "/(?:en/)?player/vod/[a-z0-9-]+\\?(?:[^#]+&)?contentId=(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "result"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://odkmedia.io/odx/api/v3/playback/{{match.id}}/",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-pelotonlive",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)onepeloton\\.com$",
+    "path": "/player/live/(?<id>[a-f0-9]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "ride_id",
+      "is_encore",
+      "is_live",
+      "status"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.onepeloton.com/api/peloton/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-polskieradioplayer",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)polskieradio\\.pl$",
+    "path": "/anteny/(?<id>[^/]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://apipr.polskieradio.pl/api/stacje",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-parliamentliveuk",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)parliamentlive\\.tv$",
+    "path": "/Event/Index/(?<id>[\\da-f]{8}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{12})"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.parliamentlive.tv/Event/GetShareVideo/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-reverbnation",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)reverbnation\\.com$",
+    "path": "/.*?/song/(?<id>\\d+).*?"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "name",
+      "url",
+      "artist"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.reverbnation.com/song/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-rinsefmartistplaylist",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)rinse\\.fm$",
+    "path": "/shows/(?<id>[^/?#]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://rinse.fm/api/query/v1/shows/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-rutubemovie",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)rutube\\.ru$",
+    "path": "/metainfo/tv/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "name"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://rutube.ru/api/metainfo/tv/{{match.id}}/?format=json",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-s4cseries",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)s4c\\.cymru$",
+    "path": "/clic/series/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.s4c.cymru/df/series_details",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-sbscokrallvodprogram",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)sbs\\.co\\.kr$",
+    "path": "/allvod/vod(?:Free)?ProgramDetail\\.do\\?(?:[^#]+&)?pgmId=(?<id>P?\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://allvod.sbs.co.kr/allvod/vodProgramDetail/vodProgramDetailAjax.do",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-sen",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)sen\\.com$",
+    "path": "/video/(?<id>[0-9a-f-]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.sen.com/content/public/video/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-skyitplayer",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)sky\\.it$",
+    "path": "/player/(?:external|social)\\.html\\?.*?\\bid=(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://apid.sky.it/vdp/v1/getVideoData",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-sportdeutschland",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)sporteurope\\.tv$",
+    "path": "/(?<id>(?:[^/?#]+/)?[^?#/&]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.sporteurope.tv/api/stateless/frontend/assets/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-streamable",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)streamable\\.com$",
+    "path": "/(?:[es]/)?(?<id>\\w+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "status",
+      "reddit_title",
+      "title",
+      "description",
+      "files",
+      "thumbnail_url",
+      "date_added",
+      "duration"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://ajax.streamable.com/videos/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-subsplashplaylist",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)subsplash\\.com$",
+    "path": "/[^/?#]+/(?:our-videos|media)/ms/\\+(?<id>\\w+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://core.subsplash.com/media/v1/media-series",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-tele5",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)tele5\\.de$",
+    "path": "/(?<parentslug>[\\w-]+)/(?<sluga>[\\w-]+)(?:/(?<slugb>[\\w-]+))?"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://public.aurora.enhanced.live/site/page/{{match.sluga}}/",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-telequebecsquat",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)telequebec\\.tv$",
+    "path": "/videos/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "sourceId",
+      "titre",
+      "description",
+      "container",
+      "saison",
+      "datePublication",
+      "noSaison",
+      "episode"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://squat.api.telequebec.tv/v1/videos/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-tenplayseason",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)com\\.au$",
+    "path": "/(?<show>[^/?#]+)/episodes/(?<season>[^/?#]+)/?(?:$|[?#])"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://10.com.au/api/shows/{{match.show}}/episodes/{{match.season}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-thechosen",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)thechosen\\.tv$",
+    "path": "/(?:video|watch)/(?<id>[0-9]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.watch.thechosen.tv/v1/videos/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-toutv",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)tou\\.tv$",
+    "path": "/(?<id>[a-zA-Z0-9_-]+(?:/S[0-9]+[EC][0-9]+)?)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "IdMedia",
+      "Details",
+      "IsDrm",
+      "ProgramTitle",
+      "SeasonTitle",
+      "EpisodeTitle",
+      "AppCode",
+      "SeasonNumber"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://services.radio-canada.ca/toutv/presentation/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-truth",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)truthsocial\\.com$",
+    "path": "/@[^/?#]+(?:/posts)?/(?<id>\\d+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "created_at",
+      "reblogs_count",
+      "favourites_count",
+      "replies_count",
+      "media_attachments",
+      "content"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://truthsocial.com/api/v1/statuses/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-tubetugraz",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)tugraz\\.at$",
+    "path": "/(?:paella/ui/watch\\.html\\?(?:[^#]*&)?id=|portal/watch/)(?<id>[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://tube.tugraz.at/search/episode.json",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-tv2huseries",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)tv2play\\.hu$",
+    "path": "/szalag/(?<id>[^#&?]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "cards"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://tv2play.hu/api/ribbons/{{match.id}}/0?size=100000",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-vimeoalbum",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)vimeo\\.com$",
+    "path": "/(?:album|showcase)/(?<id>[^/?#]+)(?:$|[?#]|(?<isembed>/embed))"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://vimeo.com/showcase/{{match.id}}/auth",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-wimbledon",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)wimbledon\\.com$",
+    "path": "/\\w+/video/media/(?<id>\\d+)\\.html"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "url"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.wimbledon.com/relatedcontent/rest/v2/wim_v1/en/content/wim_v1_{{match.id}}_en",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-younowlive",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)younow\\.com$",
+    "path": "/(?<id>[^/?#&]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "errorCode",
+      "awsUrl",
+      "tags",
+      "userId",
+      "errorMsg",
+      "viewers",
+      "likes",
+      "broadcastId"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://api.younow.com/php/api/broadcast/info/curId=0/user={{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  },
+  {
+   "id": "ytdlp-zhihu",
+   "version": 1,
+   "match": {
+    "hosts": "(^|\\.)zhihu\\.com$",
+    "path": "/zvideo/(?<id>[0-9]+)"
+   },
+   "actions": [
+    {
+     "type": "jsonExtract",
+     "pointers": [
+      "title",
+      "video",
+      "author",
+      "image_url",
+      "published_at",
+      "play_count",
+      "liked_count",
+      "comment_count"
+     ]
+    }
+   ],
+   "fetch": [
+    {
+     "id": "api",
+     "url": "https://www.zhihu.com/api/v4/zvideos/{{match.id}}",
+     "maxBytes": 131072
+    }
+   ],
+   "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review."
+  }
+ ]
+}
