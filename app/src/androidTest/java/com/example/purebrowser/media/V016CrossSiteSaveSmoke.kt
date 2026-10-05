@@ -117,6 +117,9 @@ class V016CrossSiteSaveSmoke {
             // T89: an HLS master that the production resolver refuses (e.g. fMP4-only variants)
             // is exactly what a user would see as an unsupported tier; the honest save path is
             // then the best direct FILE candidate, mirroring picking the downloadable rule format.
+            // T103: the refusal reason itself is the evidence for which seam refused, so print it
+            // (production safe messages only — policy strips URLs/headers at the source).
+            var planRefusal: String? = null
             val hlsPlanUsable = hlsMaster != null && runCatching {
                 val resolver = HlsResolver(UrlConnectionTransport(), WebsiteAccessContext(), false)
                 val probe = DownloadDraft(
@@ -129,7 +132,20 @@ class V016CrossSiteSaveSmoke {
                 val variant = (options.playlist as? HlsPlaylist.Master)
                     ?.let { HlsPlaylistParser.defaultVariant(it.variants) }
                 resolver.resolvePlan(probe, options, variant, TransferCancellation())
-            }.isSuccess
+            }.isSuccess.also { ok -> if (!ok) planRefusal = runCatching {
+                val resolver = HlsResolver(UrlConnectionTransport(), WebsiteAccessContext(), false)
+                val probe = DownloadDraft(
+                    hlsMaster!!.copy(sources = hlsMaster.sources.toSet()),
+                    WebSettings.getDefaultUserAgent(instrument.targetContext),
+                    page.url.takeIf(BrowserAddress::isWebUrl), page.title.take(180),
+                    sourceTabId = session.recordId, sourceGeneration = session.engine.generation,
+                )
+                val options = resolver.resolveEntry(probe, TransferCancellation())
+                val variant = (options.playlist as? HlsPlaylist.Master)
+                    ?.let { HlsPlaylistParser.defaultVariant(it.variants) }
+                resolver.resolvePlan(probe, options, variant, TransferCancellation())
+            }.exceptionOrNull()?.message }
+            if (planRefusal != null) println("SAVE[$label] stage=planRefusal reason=$planRefusal")
             val chosen = if (hlsMaster != null && hlsPlanUsable) hlsMaster else fileBest
             println("SAVE[$label] stage=select kind=${chosen?.kind} hlsMaster=${hlsMaster != null} hlsPlanUsable=$hlsPlanUsable fileFallback=${chosen === fileBest && fileBest != null} " +
                 "variants=${chosen?.variants?.size ?: 0} maxH=${chosen?.variants?.maxOf { it.height ?: 0 } ?: -1} bytes=${chosen?.totalBytes ?: -1}")
@@ -161,7 +177,9 @@ class V016CrossSiteSaveSmoke {
             val id: TaskId
             try {
                 // Same permission path as the app's download confirmation (HlsDownloadConfirmation /
-                // DownloadConfirmation), never a test shortcut around RequestPolicy.
+                // DownloadConfirmation), never a test shortcut around RequestPolicy. T95 made a
+                // prepared variant with a separate audio rendition enqueue as DUAL_TRACK, so the
+                // worker dispatch mirrors DownloadRuntime's protocol → transfer mapping exactly.
                 if (chosen.kind == MediaKind.HLS) {
                     val resolver = HlsResolver(transport, access, repo.allowLocalHttp)
                     val options = resolver.resolveEntry(draft, cancel)
@@ -169,9 +187,16 @@ class V016CrossSiteSaveSmoke {
                         ?.let { HlsPlaylistParser.defaultVariant(it.variants) }
                     val plan = resolver.resolvePlan(draft, options, variant, cancel)
                     println("SAVE[$label] stage=plan playlist=master=${options.playlist is HlsPlaylist.Master} " +
-                        "variantH=${variant?.height ?: -1} segments=${plan.media.segments.size} durationS=${plan.media.durationUs / 1_000_000}")
+                        "variantH=${variant?.height ?: -1} segments=${plan.media.segments.size} durationS=${plan.media.durationUs / 1_000_000} " +
+                        "audioTrack=${plan.audio != null}")
                     id = repo.enqueue(draft, wifiOnly = false, fileName = "T69-$label.mp4", hlsPlan = plan)
-                    worker = Thread { HlsTransfer(repo, transport, access).run(id, cancel) }
+                    worker = Thread {
+                        when (repo.record(id)!!.protocol) {
+                            com.example.purebrowser.download.DownloadProtocol.DUAL_TRACK ->
+                                com.example.purebrowser.download.DualTrackTransfer(repo, transport, access).run(id, cancel)
+                            else -> HlsTransfer(repo, transport, access).run(id, cancel)
+                        }
+                    }
                 } else {
                     id = repo.enqueue(draft, wifiOnly = false, fileName = "T69-$label.mp4")
                     worker = Thread { ControlledTransfer(repo, transport, access).run(id, cancel) }

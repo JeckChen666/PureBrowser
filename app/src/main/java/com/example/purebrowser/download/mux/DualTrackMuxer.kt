@@ -302,11 +302,17 @@ class DualTrackMuxer {
     /** Bounds individual and cumulative native extractor reads, including repeated metadata seeks. */
     private class LocalSource(file: File, private val length: Long, private val cancel: TransferCancellation) : MediaDataSource() {
         private val reader = RandomAccessFile(file, "r")
-        private var remaining = length * 4 + 1024 * 1024
+        // API 34+ extractors re-read per-sample sample-table chunks (moov-at-end layouts drive
+        // ~3 read calls and ~6 KiB of table+data re-reads per AAC sample; measured ~23x the file
+        // size for a 60 s track, T103). The budget stays a bounded amplification factor over the
+        // input size — 32x plus a 16 MiB floor for short tracks — instead of the former 4x+1 MiB
+        // that truncated real-length tracks mid-scan (surfacing as a declared-duration mismatch).
+        private var remaining = length * 32 + 16L * 1024 * 1024
         private var calls = 0
         @Synchronized override fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
             cancel.check()
-            requireInput(++calls <= 100_000, "Extractor read count exceeds budget")
+            // ~3 calls per sample at the 200k-sample cap, with re-open margin (was 100k, T103).
+            requireInput(++calls <= 1_000_000, "Extractor read count exceeds budget")
             requireInput(position >= 0 && offset >= 0 && size >= 0 && offset <= buffer.size - size,
                 "Invalid local read")
             if (size == 0) return 0
