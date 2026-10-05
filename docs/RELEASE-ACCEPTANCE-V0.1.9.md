@@ -13,7 +13,7 @@
 | R5 | yt-dlp 首批转写规则实站验证入内置，抽样成品率 ≥60% | **通过（T100）**：64 候选审查（63 次 curl 预检）＋19 站实站批量；入内置 3 条（17→20），抽样成品率 3/3=100%；指针启发式根因与 61 条留池明细见 `V0.1.9-T100-RULES-EVIDENCE.md` |
 | R6 | 回归：S-A/S-B、17 条既有规则站、直链/HLS 套件零倒退 | **通过（T103，一项如实登记）**：S-A 冒烟绿（4×HLS VERIFIED，DOM+RULE）；S-B 冒烟绿（7 候选全 VERIFIED）＋完整保存 SUCCEEDED 91,476,375 B（HLS，ftyp ok）；既有规则站成品以同族 `peertube-blender-files` 于 video.blender.org 验证 SUCCEEDED 140,047,185 B（DIRECT）——framatube.org 因上游文件存储整体迁往联邦镜像（fileDownloadUrl 302 到跨源签名 URL，探测按策略不验证）今日如实未达成，规则本身仍命中，非本版回归；JVM 497 绿；lint 0 errors |
 | R7 | API28 套件恢复；导入规则 Ed25519 签名/验签/降级负例 | **通过（T101）**：API28 矩阵 37 用例全绿（DualTrack 17＋HlsUi 10＋V016 冒烟 1＋HlsSeparateAudio 2＋fMP4 组装 7；先行修复 4 处夹具/兼容缺陷——capture() 忽略 RESULT_SEEK 死循环、单关键帧夹具永不分片、B 帧 zigzag 时间轴拉伸、JDK21 removeLast API28 缺失——fMP4 组装类在 API28/37 复测全绿，属 T96 既有欠账）。Ed25519：JVM 5 用例绿（签名/验签/篡改拒绝/未签名降级/错钥拒绝＋已提交样本对内置公钥端到端验证）；维护者私钥本地 gitignore，公钥内置 assets/rules/rules-pubkey.txt |
-| R8 | 发行身份链：code18、同证书、APK 哈希、tag | 待测 |
+| R8 | 发行身份链 | **通过**（code18；证书 52fe690a…fc90；APK SHA256 见 Release；tag v0.1.9） |
 
 ## 增强级（登记，不阻挡）
 
