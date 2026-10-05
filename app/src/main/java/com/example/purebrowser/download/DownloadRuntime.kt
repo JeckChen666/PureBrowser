@@ -16,6 +16,7 @@ class DownloadRuntime private constructor(private val app:Context) {
     private val transfer=ControlledTransfer(repository,UrlConnectionTransport(),WebsiteAccessContext())
     private val hlsTransfer=com.example.purebrowser.download.hls.HlsTransfer(repository,UrlConnectionTransport(),WebsiteAccessContext())
     private val dualTrackTransfer=DualTrackTransfer(repository,UrlConnectionTransport(),WebsiteAccessContext())
+    private val dashTransfer=com.example.purebrowser.download.dash.DashTransfer(repository,UrlConnectionTransport(),WebsiteAccessContext())
     private val deferredWake=mutableSetOf<TaskId>()
     private var recovered=false
     init {
@@ -38,9 +39,11 @@ class DownloadRuntime private constructor(private val app:Context) {
             // the owner's first recovery call in an integration harness.
             if(r.protocol==DownloadProtocol.DUAL_TRACK && r.taskStatus==TaskStatus.QUEUED && r.received==0L &&
                 repository.hasFreshDualTrackRequest(r.recordId))return@forEach
+            if(r.protocol==DownloadProtocol.DASH && r.taskStatus==TaskStatus.QUEUED && r.received==0L &&
+                repository.hasFreshDashRequest(r.recordId))return@forEach
             try {
                 files.cleanupPending(r)
-                val valid=if(r.protocol==DownloadProtocol.DUAL_TRACK) {
+                val valid=if(r.protocol==DownloadProtocol.DUAL_TRACK || r.protocol==DownloadProtocol.DASH) {
                     files.clearPrivate(r.recordId)
                     false // No durable URL lease or cross-track validators after process death.
                 } else if(r.protocol==DownloadProtocol.HLS) {
@@ -55,7 +58,7 @@ class DownloadRuntime private constructor(private val app:Context) {
                         taskStatus=if(cold)TaskStatus.INTERRUPTED else old.taskStatus,
                         pauseReason=if(cold)PauseReason.RECOVERY else old.pauseReason,
                         failure=if(cold)FailureKind.INTERRUPTED else old.failure,
-                        safeFailure=if(cold && old.protocol==DownloadProtocol.DUAL_TRACK)DualTrackTransfer.REPARSE_MESSAGE else old.safeFailure)
+                        safeFailure=if(cold && old.protocol==DownloadProtocol.DUAL_TRACK)DualTrackTransfer.REPARSE_MESSAGE else if(cold && old.protocol==DownloadProtocol.DASH)com.example.purebrowser.download.dash.DashTransfer.REPARSE_MESSAGE else old.safeFailure)
                 }
             } catch(_:Exception) {
                 repository.change(r.recordId) { it.copy(taskStatus=TaskStatus.INTERRUPTED,resumeAvailable=false,
@@ -133,6 +136,7 @@ class DownloadRuntime private constructor(private val app:Context) {
                 when(r.protocol) {
                     DownloadProtocol.HLS->hlsTransfer.run(r.recordId,token)
                     DownloadProtocol.DUAL_TRACK->dualTrackTransfer.run(r.recordId,token)
+                    DownloadProtocol.DASH->dashTransfer.run(r.recordId,token)
                     DownloadProtocol.DIRECT->transfer.run(r.recordId,token)
                 }
             }
@@ -157,6 +161,7 @@ class DownloadRuntime private constructor(private val app:Context) {
             if(running.containsKey(id))continue
             try {
                 if(r.protocol==DownloadProtocol.DUAL_TRACK)check(repository.wakeFreshDualTrack(id))
+                    else if(r.protocol==DownloadProtocol.DASH)check(repository.wakeFreshDash(id))
                     else repository.queueResume(id)
             } catch(_:Exception) {
                 repository.change(id) { old -> if(old.taskStatus in TaskControlRules.waiting)old.copy(taskStatus=TaskStatus.INTERRUPTED,

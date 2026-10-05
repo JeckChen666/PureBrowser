@@ -59,9 +59,9 @@ internal fun DownloadItem.stateLabel(): String = when {
         TaskStatus.WAITING_NETWORK -> "等待网络"
         TaskStatus.PAUSING -> "正在暂停 · 等待写入结束"
         TaskStatus.PAUSED -> "已暂停 · 尚未保存成品"
-        TaskStatus.RUNNING -> if (protocol == DownloadProtocol.HLS) "正在下载分片" else "正在传输"
+        TaskStatus.RUNNING -> if (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) "正在下载分片" else "正在传输"
         TaskStatus.MUXING -> "正在封装 MP4 · 尚未保存"
-        TaskStatus.VERIFYING -> if (protocol == DownloadProtocol.HLS) "正在校验 MP4 · 尚未保存" else "正在校验文件 · 尚未保存"
+        TaskStatus.VERIFYING -> if (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) "正在校验 MP4 · 尚未保存" else "正在校验文件 · 尚未保存"
         TaskStatus.PUBLISHING -> "正在保存至公共下载目录"
         TaskStatus.SUCCEEDED -> savedStateLabel()
         TaskStatus.FAILED -> "下载失败"
@@ -189,7 +189,7 @@ internal fun DownloadItem.canDeleteSavedFile(): Boolean = hasConfirmedEndedTask(
 /** HLS fractions describe only completed segments during transfer, never overall/save progress. */
 internal fun DownloadItem.progressFraction(): Float? = when {
     taskStatus != null && taskStatus !in setOf(TaskStatus.RUNNING, TaskStatus.PAUSING, TaskStatus.PAUSED, TaskStatus.WAITING_WIFI, TaskStatus.WAITING_NETWORK) -> null
-    protocol == DownloadProtocol.HLS -> {
+    protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH -> {
         val count = segmentCount
         if (taskStatus in setOf(TaskStatus.RUNNING, TaskStatus.PAUSING, TaskStatus.PAUSED, TaskStatus.WAITING_WIFI, TaskStatus.WAITING_NETWORK) && isActiveTask() && count != null && count > 0 && completedSegments in 0..count)
             completedSegments.toFloat() / count else null
@@ -207,10 +207,10 @@ internal fun DownloadItem.segmentSummary(): String {
 
 internal fun DownloadItem.progressDescription(): String = when {
     taskStatus == TaskStatus.MUXING -> "正在封装 MP4，尚未保存成品，不显示整体百分比"
-    taskStatus in setOf(TaskStatus.PAUSING, TaskStatus.PAUSED, TaskStatus.WAITING_WIFI, TaskStatus.WAITING_NETWORK) -> "${stateLabel()}，${if (protocol == DownloadProtocol.HLS) segmentSummary() else byteSummary()}"
+    taskStatus in setOf(TaskStatus.PAUSING, TaskStatus.PAUSED, TaskStatus.WAITING_WIFI, TaskStatus.WAITING_NETWORK) -> "${stateLabel()}，${if (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) segmentSummary() else byteSummary()}"
     taskStatus in setOf(TaskStatus.VERIFYING, TaskStatus.PUBLISHING) -> "${stateLabel()}，不显示整体百分比"
-    protocol == DownloadProtocol.HLS && taskStatus == TaskStatus.RUNNING -> segmentSummary()
-    protocol == DownloadProtocol.HLS -> "${stateLabel()}，整体进度未知"
+    (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) && taskStatus == TaskStatus.RUNNING -> segmentSummary()
+    protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH -> "${stateLabel()}，整体进度未知"
     else -> progressFraction()?.let { "已传输 ${(it * 100).toInt()}%" } ?: "传输进度未确认，不显示百分比"
 }
 
@@ -218,7 +218,7 @@ internal fun DownloadItem.byteSummary(): String {
     val transferred = if (bytes >= 0) "${localFileSize(bytes)} 已传输" else "已传输大小未知"
     return when {
         // A playlist's Content-Length/declared bitrate must never become the MP4's size or percent.
-        protocol == DownloadProtocol.HLS -> "$transferred · 总大小未知"
+        protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH -> "$transferred · 总大小未知"
         total <= 0 -> "$transferred · 总大小未知"
         progressFraction() == null -> "$transferred · 总大小 ${localFileSize(total)} · 进度待确认"
         else -> "$transferred / ${localFileSize(total)} · ${(progressFraction()!! * 100).toInt()}%"

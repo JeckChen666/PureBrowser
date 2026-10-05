@@ -6,28 +6,45 @@ import java.net.URLDecoder
 import java.security.MessageDigest
 
 /**
+ * Transfer-level contract for one dual-track task, independent of how each track is transported:
+ * closed-range byte chunks (complete MP4 resources) or an ordered TS segment list (separate-audio
+ * HLS). Track URLs (including signatures) live only in memory. Identity is hashed before
+ * persistence. safeSourceUrl is a separate, adapter-approved canonical PUBLIC page reference for
+ * navigation. Declarations constrain transfer/mux verification; they do not authorize resumption.
+ */
+interface DualTrackTaskPlan {
+    val resourceId: String
+    val videoUrl: String
+    val audioUrl: String
+    val durationUs: Long
+    val safeSourceUrl: String?
+    override fun toString(): String
+    fun validate(allowLocalHttp: Boolean = false)
+    fun metadata(): DualTrackMetadata
+}
+
+/**
  * A user-confirmed pair of complete MP4 resources, not a DASH segment list.
  * resourceId is an opaque work/format identity supplied by the resolver, NEVER a credential.
- * Track URLs (including signatures) live only in memory. Identity is hashed before persistence.
- * safeSourceUrl is a separate, adapter-approved canonical PUBLIC page reference for navigation.
- * Its caller MUST construct it from validated public identity, never copy a signed/session URL;
- * structural validation cannot prove public access or detect every secret in arbitrary URL values.
+ * Its caller MUST construct safeSourceUrl from validated public identity, never copy a
+ * signed/session URL; structural validation cannot prove public access or detect every secret
+ * in arbitrary URL values.
  * Declarations constrain transfer/mux verification; they do not authorize partial-byte continuation.
  */
 data class DualTrackDownloadPlan(
-    val resourceId: String,
+    override val resourceId: String,
     val videoFormatId: String,
     val audioFormatId: String,
-    val videoUrl: String,
-    val audioUrl: String,
+    override val videoUrl: String,
+    override val audioUrl: String,
     val videoCodec: String,
     val audioCodec: String,
     val videoLength: Long? = null,
     val audioLength: Long? = null,
-    val durationUs: Long,
+    override val durationUs: Long,
     val version: Int = 1,
-    val safeSourceUrl: String? = null,
-) {
+    override val safeSourceUrl: String? = null,
+) : DualTrackTaskPlan {
     init {
         listOf(resourceId, videoFormatId, audioFormatId).forEach {
             require(Regex("[A-Za-z0-9._:-]{1,256}").matches(it)) { "资源或格式身份无效" }
@@ -48,14 +65,14 @@ data class DualTrackDownloadPlan(
         }) { "公开来源页面不能是轨道地址" }
     }
 
-    fun validate(allowLocalHttp: Boolean = false) {
+    override fun validate(allowLocalHttp: Boolean) {
         metadata().validate()
         validateSafeSourceUrl(safeSourceUrl)
         RequestPolicy.validateUrl(videoUrl, allowLocalHttp)
         RequestPolicy.validateUrl(audioUrl, allowLocalHttp)
     }
 
-    fun metadata() = DualTrackMetadata(
+    override fun metadata() = DualTrackMetadata(
         identityHash = identityHash(resourceId), videoFormatHash = identityHash(videoFormatId),
         audioFormatHash = identityHash(audioFormatId),
         videoCodec = videoCodec, audioCodec = audioCodec, videoLength = videoLength,

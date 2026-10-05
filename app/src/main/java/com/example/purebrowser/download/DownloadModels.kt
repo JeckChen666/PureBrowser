@@ -4,11 +4,12 @@ import com.example.purebrowser.browser.BrowserAddress
 import com.example.purebrowser.media.MediaCandidate
 import com.example.purebrowser.download.site.DualTrackDownloadPlan
 import com.example.purebrowser.download.site.DualTrackMetadata
+import com.example.purebrowser.download.site.DualTrackTaskPlan
 import java.net.URI
 import java.util.UUID
 
 typealias TaskId = String
-enum class DownloadProtocol { DIRECT, HLS, DUAL_TRACK }
+enum class DownloadProtocol { DIRECT, HLS, DUAL_TRACK, DASH }
 enum class TransferType { SYSTEM, CONTROLLED }
 enum class TaskStatus { QUEUED, WAITING_WIFI, WAITING_NETWORK, PAUSING, PAUSED, RUNNING, MUXING, VERIFYING, PUBLISHING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
 enum class PauseReason { USER, WIFI, NETWORK, SYSTEM, RECOVERY, STORAGE, ACCESS, SOURCE_CHANGED }
@@ -26,7 +27,7 @@ data class DownloadDraft(
     val useAccessContext: Boolean = true,
     val frameUrl: String? = candidate.frameUrl,
     val reliableSource: Boolean = candidate.reliableSource,
-    val dualTrackPlan: DualTrackDownloadPlan? = null,
+    val dualTrackPlan: DualTrackTaskPlan? = null,
 ) {
     override fun toString() = "DownloadDraft(kind=${candidate.kind}, sourceGeneration=$sourceGeneration)"
 }

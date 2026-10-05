@@ -11,9 +11,23 @@ data class HlsVariant(
     val codecs: String?,
     val supported: Boolean,
     val unsupportedReason: String?,
+    /** EXT-X-MEDIA AUDIO group this variant references; renditions live on the master playlist. */
+    val audioGroup: String? = null,
 ) {
     // Never print a signed address, codec string, or caller-supplied diagnostic.
     override fun toString() = "HlsVariant(url=<redacted>, bandwidth=$bandwidth, width=$width, height=$height, supported=$supported)"
+}
+
+/** One #EXT-X-MEDIA TYPE=AUDIO declaration; uri==null means audio is muxed into the variant stream. */
+data class HlsAudioRendition(
+    val uri: String?,
+    val groupId: String,
+    val name: String,
+    val language: String?,
+    val channels: String?,
+    val isDefault: Boolean,
+) {
+    override fun toString() = "HlsAudioRendition(groupId=$groupId, name=$name, language=$language, channels=$channels, default=$isDefault, uri=${if (uri == null) "muxed" else "<redacted>"})"
 }
 
 data class HlsSegment(val url: String, val durationUs: Long, val index: Int) {
@@ -22,19 +36,21 @@ data class HlsSegment(val url: String, val durationUs: Long, val index: Int) {
 
 sealed interface HlsPlaylist {
     /** Snapshot the input, including when constructed outside the parser. */
-    class Master(variants: List<HlsVariant>) : HlsPlaylist {
+    class Master(variants: List<HlsVariant>, audioRenditions: List<HlsAudioRendition> = emptyList()) : HlsPlaylist {
         val variants: List<HlsVariant> = Collections.unmodifiableList(ArrayList(variants))
-        override fun equals(other: Any?) = other is Master && variants == other.variants
-        override fun hashCode() = variants.hashCode()
-        override fun toString() = "HlsPlaylist.Master(variantCount=${variants.size})"
+        val audioRenditions: List<HlsAudioRendition> = Collections.unmodifiableList(ArrayList(audioRenditions))
+        override fun equals(other: Any?) = other is Master && variants == other.variants && audioRenditions == other.audioRenditions
+        override fun hashCode() = 31 * variants.hashCode() + audioRenditions.hashCode()
+        override fun toString() = "HlsPlaylist.Master(variantCount=${variants.size}, audioRenditions=${audioRenditions.size})"
     }
 
-    class Media(segments: List<HlsSegment>, val durationUs: Long, val targetDurationUs: Long, val mediaSequence: Long = 0) : HlsPlaylist {
+    class Media(segments: List<HlsSegment>, val durationUs: Long, val targetDurationUs: Long, val mediaSequence: Long = 0,
+        val format: SegmentFormat = SegmentFormat.MPEG_TS) : HlsPlaylist {
         val segments: List<HlsSegment> = Collections.unmodifiableList(ArrayList(segments))
-        override fun equals(other: Any?) = other is Media && segments == other.segments &&
-            durationUs == other.durationUs && targetDurationUs == other.targetDurationUs && mediaSequence == other.mediaSequence
-        override fun hashCode() = 31 * (31 * (31 * segments.hashCode() + durationUs.hashCode()) + targetDurationUs.hashCode()) + mediaSequence.hashCode()
-        override fun toString() = "HlsPlaylist.Media(segmentCount=${segments.size}, durationUs=$durationUs, targetDurationUs=$targetDurationUs, mediaSequence=$mediaSequence)"
+        override fun equals(other: Any?) = other is Media && segments == other.segments && durationUs == other.durationUs &&
+            targetDurationUs == other.targetDurationUs && mediaSequence == other.mediaSequence && format == other.format
+        override fun hashCode() = 31 * (31 * (31 * (31 * segments.hashCode() + durationUs.hashCode()) + targetDurationUs.hashCode()) + mediaSequence.hashCode()) + format.hashCode()
+        override fun toString() = "HlsPlaylist.Media(segmentCount=${segments.size}, durationUs=$durationUs, targetDurationUs=$targetDurationUs, format=$format)"
     }
 }
 

@@ -105,17 +105,19 @@ fun ResourceSheet(
                         ResourceHeader("页面资源", "关闭资源面板", onDismiss, onSource)
                         if(onAnalyzePage!=null) androidx.compose.material3.FilledTonalButton(onClick=onAnalyzePage,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("analyze-current-video")) { Text("分析当前视频") }
                         Text(
-                            if (downloadable.none { it.kind == MediaKind.HLS }) {
+                            if (downloadable.none { it.kind == MediaKind.HLS } && downloadable.none { it.kind == MediaKind.DASH }) {
                                 "${downloadable.size} 个可尝试的直链 · ${unsupported.size} 个其他媒体资源"
                             } else {
-                                "${downloadable.count { it.kind != MediaKind.HLS }} 个可尝试的直链 · ${downloadable.count { it.kind == MediaKind.HLS }} 个 HLS 清单 · ${unsupported.size} 个其他媒体资源"
+                                "${downloadable.count { it.kind != MediaKind.HLS && it.kind != MediaKind.DASH }} 个可尝试的直链 · ${downloadable.count { it.kind == MediaKind.HLS }} 个 HLS 清单 · ${downloadable.count { it.kind == MediaKind.DASH }} 个 DASH 清单 · ${unsupported.size} 个其他媒体资源"
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             if (downloadable.any { it.kind == MediaKind.HLS }) {
-                                "优先展示视频元素关联的直链与 HLS。HLS 只在确认面板显式解析和准备，不自动请求；访问条件、签名过期或不支持的格式可能导致失败。"
+                                "优先展示视频元素关联的直链与 HLS。清单只在确认面板显式解析和准备，不自动请求；访问条件、签名过期或不支持的格式可能导致失败。"
+                            } else if (downloadable.any { it.kind == MediaKind.DASH }) {
+                                "优先展示视频元素关联的直链与 DASH。DASH 清单只在确认面板显式解析，选择档位后下载 fMP4 分片并合并为 MP4；不支持直播、DRM、AV1/HEVC 或 indexRange 单文件。"
                             } else "优先展示视频元素关联的直链。确认时可选择适用的同源网站会话和最小来源条件，也可关闭后尝试公开下载；会话不跨源转发，不保证跨来源下载成功。签名过期或文件格式仍可能导致失败。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -233,9 +235,10 @@ internal fun ResourceMetadata(candidate: MediaCandidate) {
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else if (candidate.kind == MediaKind.DASH) {
-            // Display-only listing: this version has no DASH download path or variant dialog at all.
+            // T97: the listing stays display-only here; resolution and representation choice
+            // happen in the DASH confirmation dialog after an explicit user action.
             candidate.variants?.takeIf { it.isNotEmpty() }?.let {
-                Text("DASH · ${it.size} 档位（仅展示，本版暂不支持 DASH 下载）",
+                Text("DASH · ${it.size} 档位（在确认面板中解析并选择）",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

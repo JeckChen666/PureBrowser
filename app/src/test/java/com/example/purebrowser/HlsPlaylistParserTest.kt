@@ -1,6 +1,7 @@
 package com.example.purebrowser
 
 import com.example.purebrowser.download.hls.HlsParseException
+import com.example.purebrowser.download.hls.SegmentFormat
 import com.example.purebrowser.download.hls.HlsPlaylist
 import com.example.purebrowser.download.hls.HlsPlaylistParser
 import com.example.purebrowser.download.hls.HlsSegment
@@ -73,11 +74,13 @@ class HlsPlaylistParserTest {
         assertEquals("https://media.example/path/index.m3u8?seg=secret%2B3", result.segments[2].url)
     }
 
-    @Test fun extensionlessSegmentsAreTentativeButExplicitOtherContainersAreRejected() {
+    @Test fun extensionlessSegmentsAreTentativeWhileContainersAreClassifiedOrRejected() {
         assertEquals("https://media.example/path/resource?token=secret", (parse(media("#EXTINF:1,\nresource?token=secret")) as HlsPlaylist.Media).segments.single().url)
-        listOf("piece.m4s", "piece.MP4?x=1", "piece.aac", "piece.m4a", "piece.mp3", "piece.vtt", "piece%2Emp4").forEach {
-            rejected(media("#EXTINF:1,\n$it"))
+        // fMP4 containers are declared (SegmentFormat seam), not silently treated as TS.
+        listOf("piece.m4s", "piece.MP4?x=1", "piece.m4a", "piece%2Emp4").forEach {
+            assertEquals(SegmentFormat.FMP4, (parse(media("#EXTINF:1,\n$it")) as HlsPlaylist.Media).format)
         }
+        listOf("piece.aac", "piece.mp3", "piece.vtt").forEach { rejected(media("#EXTINF:1,\n$it")) }
     }
 
     @Test fun headerNonemptySegmentsEndlistAndTargetDurationAreMandatory() {
@@ -123,7 +126,7 @@ class HlsPlaylistParserTest {
     }
 
     @Test fun excludedMediaFeaturesCannotBeIgnored() {
-        listOf("#EXT-X-MAP:URI=\"init.mp4\"", "#EXT-X-BYTERANGE:100@0", "#EXT-X-DISCONTINUITY",
+        listOf("#EXT-X-MAP:URI=\"init.m3u8\",BYTERANGE=100@0", "#EXT-X-BYTERANGE:100@0", "#EXT-X-DISCONTINUITY",
             "#EXT-X-DISCONTINUITY-SEQUENCE:0", "#EXT-X-GAP", "#EXT-X-I-FRAMES-ONLY").forEach {
             rejected(media(extra = it))
         }
@@ -195,28 +198,58 @@ class HlsPlaylistParserTest {
         assertEquals(1, (parse(master("BANDWIDTH=100", "# comment\n\nchild.m3u8")) as HlsPlaylist.Master).variants.size)
     }
 
-    @Test fun externalAudioOnlyDisablesReferencingVariantEvenWhenDeclaredAfterIt() {
+    @Test fun externalAudioRenditionsStaySelectableAndExposeTheirDeclaration() {
         val result = parse("""
             #EXTM3U
             #EXT-X-STREAM-INF:BANDWIDTH=100,AUDIO="foreign"
             separate.m3u8
             #EXT-X-STREAM-INF:BANDWIDTH=200
             muxed.m3u8
-            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="foreign",NAME="main",DEFAULT=YES,URI="audio.m3u8?secret=audio"
+            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="foreign",NAME="main",LANGUAGE="en",CHANNELS="2",DEFAULT=YES,URI="audio.m3u8?secret=audio"
         """) as HlsPlaylist.Master
-        assertFalse(result.variants[0].supported)
+        // v0.1.9: separate audio maps onto the dual-track plan instead of excluding the variant.
+        assertTrue(result.variants[0].supported)
+        assertEquals("foreign", result.variants[0].audioGroup)
+        assertNotNull(result.variants[0].unsupportedReason)
         assertTrue(result.variants[1].supported)
+        assertNull(result.variants[1].audioGroup)
+        // A clean muxed variant still wins default selection over the dual-track notice.
         assertSame(result.variants[1], HlsPlaylistParser.defaultVariant(result.variants))
-        assertFalse(result.variants[0].unsupportedReason!!.contains("secret"))
+        val rendition = result.audioRenditions.single()
+        assertEquals("foreign", rendition.groupId)
+        assertEquals("main", rendition.name)
+        assertEquals("en", rendition.language)
+        assertEquals("2", rendition.channels)
+        assertTrue(rendition.isDefault)
+        assertEquals("https://media.example/path/audio.m3u8?secret=audio", rendition.uri)
+        assertFalse(rendition.toString().contains("secret"))
     }
 
-    @Test fun uriLessAudioGroupIsMuxedButAnyExternalMemberOrMissingGroupIsUnsupported() {
+    @Test fun uriLessAudioGroupIsMuxedWhileAnyExternalMemberBecomesDualTrackAndMissingGroupsStayUnsupported() {
         val group = "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"muxed\",DEFAULT=YES"
         assertTrue((parse(master("AUDIO=\"a\"", extra = group)) as HlsPlaylist.Master).variants.single().supported)
+        assertNull((parse(master("AUDIO=\"a\"", extra = group)) as HlsPlaylist.Master).variants.single().unsupportedReason)
         assertFalse((parse(master("AUDIO=\"missing\"", extra = group)) as HlsPlaylist.Master).variants.single().supported)
         val mixed = "$group\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"external\",URI=\"audio.m3u8\""
-        assertFalse((parse(master("AUDIO=\"a\"", extra = mixed)) as HlsPlaylist.Master).variants.single().supported)
+        val dual = (parse(master("AUDIO=\"a\"", extra = mixed)) as HlsPlaylist.Master).variants.single()
+        assertTrue(dual.supported)
+        assertEquals("a", dual.audioGroup)
+        assertNotNull(dual.unsupportedReason)
         rejected(master("AUDIO=\"a\"", extra = "$group\n$group"))
+    }
+
+    @Test fun audioOnlyMediaPlaylistParsesAsMpegTsForTheAudioRenditionTrack() {
+        val body = media("#EXTINF:2.005333,\naudio-000.ts\n#EXTINF:2.005333,\naudio-001.ts", target = 3)
+        val result = parse(body) as HlsPlaylist.Media
+        assertEquals(SegmentFormat.MPEG_TS, result.format)
+        assertEquals(listOf(0, 1), result.segments.map { it.index })
+        assertEquals(4_010_666L, result.durationUs)
+    }
+
+    @Test fun extMapDeclaresFmp4WithoutByterangeAndOnlyOnce() {
+        assertEquals(SegmentFormat.FMP4, (parse(media(extra = "#EXT-X-MAP:URI=\"init.mp4\"")) as HlsPlaylist.Media).format)
+        listOf("#EXT-X-MAP:URI=\"init.mp4\"\n#EXT-X-MAP:URI=\"init.mp4\"", "#EXT-X-MAP:URI=\"init.m3u8\",BYTERANGE=100@0",
+            "#EXT-X-MAP:BYTERANGE=100@0").forEach { rejected(media(extra = it)) }
     }
 
     @Test fun subtitleSelectionsDowngradeToWarningsWhileSeparateVideoGroupsStayUnsupported() {

@@ -12,6 +12,7 @@ import com.example.purebrowser.media.MediaKind
 import java.util.UUID
 import com.example.purebrowser.download.hls.*
 import com.example.purebrowser.download.site.DualTrackDownloadPlan
+import com.example.purebrowser.download.site.DualTrackTaskPlan
 
 /** One versioned authority, with legacy reads but no new DownloadManager enqueues. IO callers only. */
 class DownloadRepository(
@@ -27,20 +28,36 @@ class DownloadRepository(
     private class RequestLease(val token:TransferCancellation) {
         val done=java.util.concurrent.CountDownLatch(1)
     }
-    internal class DualTrackRequest(val plan:DualTrackDownloadPlan,val requestRecord:DownloadRecord) {
+    internal class DualTrackRequest(val plan:DualTrackTaskPlan,val requestRecord:DownloadRecord) {
         override fun toString()="DualTrackRequest(redacted)"
+    }
+    internal class DashRequest(val plan:com.example.purebrowser.download.dash.DashDownloadPlan,val requestRecord:DownloadRecord) {
+        override fun toString()="DashRequest(redacted)"
     }
     // Transient access material is never serialized, and a plan can be consumed only once.
     private val dualTrackRequests=mutableMapOf<TaskId,DualTrackRequest>()
+    private val dashRequests=mutableMapOf<TaskId,DashRequest>()
     internal fun takeDualTrackRequest(id:TaskId):DualTrackRequest?=synchronized(DownloadStore.transactionLock) {
         if(transfersAllowed)dualTrackRequests.remove(id) else null
+    }
+    internal fun takeDashRequest(id:TaskId):DashRequest?=synchronized(DownloadStore.transactionLock) {
+        if(transfersAllowed)dashRequests.remove(id) else null
     }
     internal fun hasFreshDualTrackRequest(id:TaskId):Boolean=synchronized(DownloadStore.transactionLock) {
         transfersAllowed && dualTrackRequests.containsKey(id)
     }
+    internal fun hasFreshDashRequest(id:TaskId):Boolean=synchronized(DownloadStore.transactionLock) {
+        transfersAllowed && dashRequests.containsKey(id)
+    }
     internal fun wakeFreshDualTrack(id:TaskId):Boolean=synchronized(DownloadStore.transactionLock) {
         val r=record(id) ?: return@synchronized false
         if(!transfersAllowed || r.protocol!=DownloadProtocol.DUAL_TRACK || !dualTrackRequests.containsKey(id) ||
+            transferInFlight(id) || r.received!=0L || r.taskStatus !in TaskControlRules.waiting)return@synchronized false
+        change(id) { it.copy(taskStatus=TaskStatus.QUEUED,pauseReason=null,failure=null,safeFailure=null) };true
+    }
+    internal fun wakeFreshDash(id:TaskId):Boolean=synchronized(DownloadStore.transactionLock) {
+        val r=record(id) ?: return@synchronized false
+        if(!transfersAllowed || r.protocol!=DownloadProtocol.DASH || !dashRequests.containsKey(id) ||
             transferInFlight(id) || r.received!=0L || r.taskStatus !in TaskControlRules.waiting)return@synchronized false
         change(id) { it.copy(taskStatus=TaskStatus.QUEUED,pauseReason=null,failure=null,safeFailure=null) };true
     }
@@ -51,7 +68,7 @@ class DownloadRepository(
     }
     fun beginPrivacyExclusion() {
         val leases=synchronized(DownloadStore.transactionLock) {
-            transfersAllowed=false;privacyGeneration++;dualTrackRequests.clear();requestLeases.values.toList()
+            transfersAllowed=false;privacyGeneration++;dualTrackRequests.clear();dashRequests.clear();requestLeases.values.toList()
         }
         leases.forEach { it.token.cancel() }
     }
@@ -81,47 +98,64 @@ class DownloadRepository(
     fun records():List<DownloadRecord> = synchronized(DownloadStore.transactionLock) { store.load().records }
     fun record(id:TaskId):DownloadRecord?=records().firstOrNull { it.recordId==id }
     fun enqueue(candidate:MediaCandidate,userAgent:String,wifiOnly:Boolean):TaskId=enqueue(DownloadDraft(candidate,userAgent),wifiOnly)
-    fun enqueue(draft:DownloadDraft,wifiOnly:Boolean,fileName:String?=null,retryOf:String?=null,hlsPlan:HlsDownloadPlan?=null,expectedPrivacyGeneration:Long?=null):TaskId=synchronized(DownloadStore.transactionLock) {
+    fun enqueue(draft:DownloadDraft,wifiOnly:Boolean,fileName:String?=null,retryOf:String?=null,hlsPlan:HlsDownloadPlan?=null,expectedPrivacyGeneration:Long?=null,dashPlan:com.example.purebrowser.download.dash.DashDownloadPlan?=null):TaskId=synchronized(DownloadStore.transactionLock) {
         check(transfersAllowed && (expectedPrivacyGeneration==null || expectedPrivacyGeneration==privacyGeneration)) { "网站会话已清理，请重新确认下载" }
-        val dualPlan=draft.dualTrackPlan
-        require(dualPlan==null || hlsPlan==null) { "不能混用 HLS 与双轨方案" }
+        // A prepared variant with a separate audio rendition enters the same one-use dual-track
+        // lease as complete-MP4 plans: no resume bytes, honest re-parse after any interruption.
+        val hlsDualPlan=hlsPlan?.audio?.let { HlsDualTrackPlan.from(hlsPlan,safeHlsSourceUrl(draft)) }
+        val dualPlan:DualTrackTaskPlan?=draft.dualTrackPlan ?: hlsDualPlan
+        val singleHlsPlan=if(hlsDualPlan!=null)null else hlsPlan
+        require(listOfNotNull(singleHlsPlan,dashPlan).size<=1) { "一次只能携带一种清单方案" }
+        require(dualPlan==null || (singleHlsPlan==null && dashPlan==null)) { "不能混用 HLS 与双轨方案" }
         if(dualPlan==null) {
-            require(draft.candidate.kind in setOf(MediaKind.FILE,MediaKind.UNKNOWN,MediaKind.HLS))
-            require((draft.candidate.kind==MediaKind.HLS)==(hlsPlan!=null)) { "HLS 需要已确认的清单计划" }
+            require(draft.candidate.kind in setOf(MediaKind.FILE,MediaKind.UNKNOWN,MediaKind.HLS,MediaKind.DASH))
+            require((draft.candidate.kind==MediaKind.HLS)==(singleHlsPlan!=null)) { "HLS 需要已确认的清单计划" }
+            require((draft.candidate.kind==MediaKind.DASH)==(dashPlan!=null)) { "DASH 需要已确认的清单计划" }
         } else {
             dualPlan.validate(allowLocalHttp)
             check(files!=null) { "双轨临时存储未配置" }
         }
-        if(hlsPlan!=null) { require(hlsPlan.entryUrl==draft.candidate.url);RequestPolicy.validateUrl(hlsPlan.playlistUrl,allowLocalHttp)
-            hlsPlan.media.segments.forEach { RequestPolicy.validateUrl(it.url,allowLocalHttp) }
+        if(singleHlsPlan!=null) { require(singleHlsPlan.entryUrl==draft.candidate.url);RequestPolicy.validateUrl(singleHlsPlan.playlistUrl,allowLocalHttp)
+            singleHlsPlan.media.segments.forEach { RequestPolicy.validateUrl(it.url,allowLocalHttp) }
+        }
+        if(dashPlan!=null) { require(dashPlan.entryUrl==draft.candidate.url)
+            dashPlan.validate(allowLocalHttp)
+            check(files!=null) { "DASH 临时存储未配置" }
         }
         if(dualPlan==null)RequestPolicy.validateUrl(draft.candidate.url,allowLocalHttp)
         val data=store.load();check(store.writable)
         check(data.records.size<DownloadRules.MAX_RECORDS) { "下载记录已达 200 条，请移除不再需要的记录" }
-        val guessed=fileName ?: if(dualPlan!=null) "video.mp4" else URLUtil.guessFileName(draft.candidate.url,null,draft.candidate.mimeType)
+        val planned=fileName ?: if(dualPlan!=null || dashPlan!=null) "video.mp4" else URLUtil.guessFileName(draft.candidate.url,null,draft.candidate.mimeType)
         val id=UUID.randomUUID().toString()
-        val display=DownloadRules.safeFileName(if(hlsPlan!=null || dualPlan!=null) guessed.substringBeforeLast('.',guessed)+".mp4" else guessed)
+        val display=DownloadRules.safeFileName(if(singleHlsPlan!=null || dualPlan!=null || dashPlan!=null) planned.substringBeforeLast('.',planned)+".mp4" else planned)
         val context=draft.useAccessContext && RequestPolicy.canUseContext(draft.sourceUrl,draft.frameUrl,draft.reliableSource)
         val record=DownloadRecord(recordId=id,name="${id.take(8)}_$display",displayName=display,mediaUrl=if(dualPlan==null)draft.candidate.url else null,
             sourceUrl=if(dualPlan==null)draft.sourceUrl?.takeIf(BrowserAddress::isWebUrl) else dualPlan.safeSourceUrl,sourceTitle=draft.sourceTitle?.take(180),
             createdAt=System.currentTimeMillis(),userAgent=draft.userAgent.filterNot { it.isISOControl() }.take(1024),
-            wifiOnly=wifiOnly,mimeType=if(dualPlan!=null)"video/mp4" else draft.candidate.mimeType?.take(120),retryOf=retryOf,sourceTabId=draft.sourceTabId,
+            wifiOnly=wifiOnly,mimeType=if(dualPlan!=null || dashPlan!=null)"video/mp4" else draft.candidate.mimeType?.take(120),retryOf=retryOf,sourceTabId=draft.sourceTabId,
             sourceGeneration=draft.sourceGeneration,transfer=TransferType.CONTROLLED,useAccessContext=context,
             frameUrl=if(dualPlan==null)draft.frameUrl else null,reliableSource=draft.reliableSource,
-            protocol=when { dualPlan!=null->DownloadProtocol.DUAL_TRACK;hlsPlan!=null->DownloadProtocol.HLS;else->DownloadProtocol.DIRECT },
-            hlsPlaylistUrl=hlsPlan?.variant?.url ?: hlsPlan?.playlistUrl,hlsWidth=hlsPlan?.variant?.width,hlsHeight=hlsPlan?.variant?.height,
-            hlsBandwidth=hlsPlan?.variant?.bandwidth,plannedDurationUs=dualPlan?.durationUs ?: hlsPlan?.media?.durationUs,segmentCount=hlsPlan?.media?.segments?.size,resumeAvailable=hlsPlan!=null,dualTrackMetadata=dualPlan?.metadata(),expected=dualPlan?.metadata()?.expectedBytes)
-        if(hlsPlan!=null) (files?.hlsWorkspace ?: error("HLS 临时存储未配置")).save(id,hlsPlan)
+            protocol=when { dualPlan!=null->DownloadProtocol.DUAL_TRACK;singleHlsPlan!=null->DownloadProtocol.HLS;dashPlan!=null->DownloadProtocol.DASH;else->DownloadProtocol.DIRECT },
+            hlsPlaylistUrl=singleHlsPlan?.variant?.url ?: singleHlsPlan?.playlistUrl ?: dashPlan?.entryUrl,hlsWidth=singleHlsPlan?.variant?.width ?: dashPlan?.video?.width,hlsHeight=singleHlsPlan?.variant?.height ?: dashPlan?.video?.height,
+            hlsBandwidth=singleHlsPlan?.variant?.bandwidth ?: dashPlan?.video?.bandwidth,plannedDurationUs=dualPlan?.durationUs ?: singleHlsPlan?.media?.durationUs ?: dashPlan?.durationUs,segmentCount=singleHlsPlan?.media?.segments?.size ?: dashPlan?.totalSegments,resumeAvailable=singleHlsPlan!=null,dualTrackMetadata=dualPlan?.metadata(),expected=dualPlan?.metadata()?.expectedBytes)
+        if(singleHlsPlan!=null) (files?.hlsWorkspace ?: error("HLS 临时存储未配置")).save(id,singleHlsPlan)
         try { store.save(data.copy(records=listOf(record)+data.records)) }
-        catch(e:Exception) { if(hlsPlan!=null)runCatching { files?.hlsWorkspace?.delete(id) };throw e }
+        catch(e:Exception) { if(singleHlsPlan!=null)runCatching { files?.hlsWorkspace?.delete(id) };throw e }
         if(dualPlan!=null)dualTrackRequests[id]=DualTrackRequest(dualPlan,record.copy(mediaUrl=dualPlan.videoUrl,
+            sourceUrl=draft.sourceUrl?.takeIf(BrowserAddress::isWebUrl),frameUrl=draft.frameUrl))
+        if(dashPlan!=null)dashRequests[id]=DashRequest(dashPlan,record.copy(mediaUrl=dashPlan.entryUrl,
             sourceUrl=draft.sourceUrl?.takeIf(BrowserAddress::isWebUrl),frameUrl=draft.frameUrl))
         id
     }
+    /** The public page is navigation metadata only; a page failing the structural public-URL
+     *  defence is dropped (null) rather than blocking an otherwise valid dual-track task. */
+    private fun safeHlsSourceUrl(draft:DownloadDraft):String?=draft.sourceUrl?.takeIf { BrowserAddress.isWebUrl(it) }
+        ?.takeIf { runCatching { DualTrackDownloadPlan.validateSafeSourceUrl(it) }.isSuccess }
     fun change(id:TaskId,block:(DownloadRecord)->DownloadRecord):DownloadRecord?=synchronized(DownloadStore.transactionLock) {
         val data=store.load();val old=data.records.firstOrNull { it.recordId==id } ?: return@synchronized null
         val next=block(old);store.save(data.copy(records=data.records.map { if(it.recordId==id)next else it }))
         if(next.protocol==DownloadProtocol.DUAL_TRACK && next.taskStatus !in setOf(TaskStatus.QUEUED,TaskStatus.WAITING_WIFI,TaskStatus.WAITING_NETWORK,TaskStatus.RUNNING))dualTrackRequests.remove(id)
+        if(next.protocol==DownloadProtocol.DASH && next.taskStatus !in setOf(TaskStatus.QUEUED,TaskStatus.WAITING_WIFI,TaskStatus.WAITING_NETWORK,TaskStatus.RUNNING))dashRequests.remove(id)
         next
     }
     fun complete(id:TaskId,asset:VideoAsset):Boolean=synchronized(DownloadStore.transactionLock) {
@@ -153,7 +187,7 @@ class DownloadRepository(
             DownloadItem(r.recordId,r.name,status,r.received,r.expected ?: -1,detail(r,asset),usable,
                 recordId=r.recordId,format=asset?.format ?: FormatCheck.NOT_CHECKED,availability=asset?.availability ?: FileAvailability.UNKNOWN,
                 sourceUrl=r.sourceUrl,displayName=r.displayName,createdAt=r.createdAt,wifiOnly=r.wifiOnly,
-                canRetry=r.protocol!=DownloadProtocol.DUAL_TRACK && !usable && r.taskStatus in setOf(TaskStatus.FAILED,TaskStatus.CANCELLED,TaskStatus.INTERRUPTED,TaskStatus.SUCCEEDED),
+                canRetry=r.protocol!=DownloadProtocol.DUAL_TRACK && r.protocol!=DownloadProtocol.DASH && !usable && r.taskStatus in setOf(TaskStatus.FAILED,TaskStatus.CANCELLED,TaskStatus.INTERRUPTED,TaskStatus.SUCCEEDED),
                 retryOf=r.retryOf,sourceTitle=r.sourceTitle,cancelled=r.taskStatus==TaskStatus.CANCELLED,
                 taskStatus=r.taskStatus,failure=r.failure,useAccessContext=r.useAccessContext,protocol=r.protocol,segmentCount=r.segmentCount,completedSegments=r.completedSegments,pauseReason=r.pauseReason,
                 canPause=TaskControlRules.canPause(r),canResume=TaskControlRules.canResume(r) && !transferInFlight(r.recordId),
@@ -166,7 +200,7 @@ class DownloadRepository(
         TaskStatus.PAUSED->if(r.pauseReason==PauseReason.RECOVERY)"重新打开后已对账，请主动继续" else if(r.resumeAvailable || r.received==0L)"已暂停；可验证缓存后继续" else "已停止，没有可靠续传缓存，请重新下载"
         TaskStatus.WAITING_NETWORK->"等待网络；恢复网络后返回应用继续"
         TaskStatus.QUEUED->"排队等待下载";TaskStatus.WAITING_WIFI->"等待 Wi-Fi；连接后返回应用可继续尝试"
-        TaskStatus.RUNNING->if(r.protocol==DownloadProtocol.DUAL_TRACK)"正在依次下载双轨；尚未保存成品，不支持部分续传" else if(r.protocol==DownloadProtocol.HLS)"正在下载分片 ${r.completedSegments}/${r.segmentCount ?: 0}" else "正在保存视频";
+        TaskStatus.RUNNING->if(r.protocol==DownloadProtocol.DUAL_TRACK)"正在依次下载双轨；尚未保存成品，不支持部分续传" else if(r.protocol==DownloadProtocol.HLS || r.protocol==DownloadProtocol.DASH)"正在下载分片 ${r.completedSegments}/${r.segmentCount ?: 0}" else "正在保存视频";
         TaskStatus.MUXING->"正在封装独立 MP4，尚未保存成品";TaskStatus.VERIFYING->"正在检查视频格式";TaskStatus.PUBLISHING->"正在写入公共下载目录"
         TaskStatus.SUCCEEDED->when(a?.availability) {
             FileAvailability.AVAILABLE->if(a.location==AssetLocation.APP_EXTERNAL_FILE && Build.VERSION.SDK_INT<29) ManagedFileStore.APP_EXTERNAL_HINT else "视频已保存"

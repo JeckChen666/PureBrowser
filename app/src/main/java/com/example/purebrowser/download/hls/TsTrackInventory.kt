@@ -6,16 +6,22 @@ import java.io.InputStream
 
 /** HLS-mode extractors may pick one PID per codec; explicitly reject multi-track TS first. */
 internal object TsTrackInventory {
-    fun validate(files:List<File>,cancel:TransferCancellation):Boolean {
+    fun validate(files:List<File>,cancel:TransferCancellation):Boolean = readAll(files,cancel,null)
+
+    /** Single-role TS (one elementary stream) for separate-audio HLS tracks; AUD presence for video. */
+    fun validateTrack(files:List<File>,cancel:TransferCancellation,video:Boolean):Boolean =
+        readAll(files,cancel,if(video)0x1b else 0x0f)
+
+    private fun readAll(files:List<File>,cancel:TransferCancellation,expected:Int?):Boolean {
         var hasAud=false
-        var expected:Map<Int,Int>?=null
+        var track:Map<Int,Int>?=null
         files.forEach { file -> file.inputStream().use { input ->
-            val result=read(input,cancel);val tracks=result.first;hasAud=hasAud || result.second
-            if(expected!=null && expected!=tracks)fail("分片轨道配置发生变化")
-            expected=tracks
+            val result=read(input,cancel,expected);val tracks=result.first;hasAud=hasAud || result.second
+            if(track!=null && track!=tracks)fail("分片轨道配置发生变化")
+            track=tracks
         } };return hasAud
     }
-    private fun read(input:InputStream,cancel:TransferCancellation):Pair<Map<Int,Int>,Boolean> {
+    private fun read(input:InputStream,cancel:TransferCancellation,expected:Int?):Pair<Map<Int,Int>,Boolean> {
         var aud=false;var zeroes=0;var nalHeader=false
         var pmtPid:Int?=null;var inventory:Map<Int,Int>?=null
         val assemblers=mutableMapOf<Int,Section>()
@@ -53,13 +59,13 @@ internal object TsTrackInventory {
                 if(offset+pointer>188)fail("TS 清单指针越界")
                 // Complete a preceding split section using the pointer prefix, then start a new one.
                 assemblers[pid]?.takeIf { it.started }?.append(packet,offset,pointer)?.let { section ->
-                    if(pid==0)pmtPid=parsePat(section) else inventory=merge(inventory,parsePmt(section))
+                    if(pid==0)pmtPid=parsePat(section) else inventory=merge(inventory,parsePmt(section,expected))
                 }
                 offset+=pointer;assemblers[pid]=Section()
             }
             val accumulator=assemblers[pid] ?: continue
             if(offset<188)accumulator.append(packet,offset,188-offset)?.let { section ->
-                if(pid==0)pmtPid=parsePat(section) else inventory=merge(inventory,parsePmt(section))
+                if(pid==0)pmtPid=parsePat(section) else inventory=merge(inventory,parsePmt(section,expected))
             }
         }
         if(pmtPid==null)return fail("TS 缺少单节目 PAT")
@@ -69,6 +75,7 @@ internal object TsTrackInventory {
         if(old!=null && old!=next)fail("TS 轨道配置发生变化")
         return next
     }
+
     private class Section {
         private val bytes=ByteArray(1024);private var used=0;private var expected=0;var started=true
         fun append(data:ByteArray,offset:Int,length:Int):ByteArray? {
@@ -95,7 +102,7 @@ internal object TsTrackInventory {
         if(programs.size!=1)fail("本版只支持单节目 TS")
         return programs.values.single()
     }
-    private fun parsePmt(s:ByteArray):Map<Int,Int> {
+    private fun parsePmt(s:ByteArray,expected:Int?):Map<Int,Int> {
         if(s.size<16 || s[0].toInt()!=2 || s[1].toInt() and 0x80==0 || s[5].toInt() and 1==0 || s[6].toInt()!=0 || s[7].toInt()!=0)fail("不支持的 TS PMT")
         var i=12+(((s[10].toInt() and 15) shl 8) or (s[11].toInt() and 255))
         if(i>s.size-4)fail("PMT 描述字段越界")
@@ -110,8 +117,15 @@ internal object TsTrackInventory {
             if(type !in setOf(0x1b,0x0f,0x11))fail("TS 包含不支持的编码或附加轨道")
             if(tracks.put(pid,type)!=null)fail("TS 轨道重复")
         }
-        if(tracks.size!=2 || tracks.values.count { it==0x1b }!=1 || tracks.values.count { it==0x0f || it==0x11 }!=1)
-            fail("本版需要一条 H.264 和一条 AAC 轨道，不自动挑选多语言音轨")
+        if(expected==null) {
+            if(tracks.size!=2 || tracks.values.count { it==0x1b }!=1 || tracks.values.count { it==0x0f || it==0x11 }!=1)
+                fail("本版需要一条 H.264 和一条 AAC 轨道，不自动挑选多语言音轨")
+        } else {
+            // Separate-audio HLS: one declared elementary stream of exactly the expected role.
+            val type=tracks.values.singleOrNull()
+            if(tracks.size!=1 || type!=expected && !(expected==0x0f && type==0x11))
+                fail(if(expected==0x1b)"分轨视频 TS 需要恰好一条 H.264 轨道" else "分轨音频 TS 需要恰好一条 AAC 轨道")
+        }
         return tracks
     }
     private fun verifyCrc(s:ByteArray) {

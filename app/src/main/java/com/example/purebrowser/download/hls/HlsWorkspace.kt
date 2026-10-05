@@ -75,6 +75,9 @@ class HlsWorkspace(private val root: File) {
         return plan
     }
     private fun validate(plan: HlsDownloadPlan) {
+        // Dual-track plans live in the one-use lease, never in the resumable single-track workspace.
+        require(plan.audio == null) { "分轨计划不写入单轨工作区" }
+        require(plan.media.format == SegmentFormat.MPEG_TS) { "本版不支持 fMP4 清单计划" }
         require(plan.media.segments.size in 1..10000)
         require(plan.media.mediaSequence >= 0)
         require(plan.media.durationUs in 1..HlsPlaylistParser.MAX_DURATION_US)

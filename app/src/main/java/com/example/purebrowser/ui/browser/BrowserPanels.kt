@@ -13,7 +13,9 @@ import com.example.purebrowser.download.DownloadDraft
 import com.example.purebrowser.media.MediaCandidate
 import com.example.purebrowser.media.MediaKind
 import com.example.purebrowser.download.hls.HlsDownloadPlan
+import com.example.purebrowser.download.dash.DashDownloadPlan
 import com.example.purebrowser.ui.resources.HlsDownloadConfirmation
+import com.example.purebrowser.ui.resources.DashDownloadConfirmation
 import com.example.purebrowser.ui.resources.DownloadConfirmation
 import com.example.purebrowser.ui.resources.ResourceSheet
 
@@ -23,6 +25,7 @@ private data class PendingSubmission(
     val name: String,
     val wifiOnly: Boolean,
     val plan: HlsDownloadPlan? = null,
+    val dashPlan: DashDownloadPlan? = null,
 )
 
 @Composable
@@ -45,13 +48,13 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
         val granted=grants[Manifest.permission.WRITE_EXTERNAL_STORAGE]==true && grants[Manifest.permission.READ_EXTERNAL_STORAGE]==true
         val pending = pendingPermission
         pendingPermission = null
-        if(granted && pending != null) model.download(pending.draft, pending.wifiOnly, pending.name, pending.plan)
+        if(granted && pending != null) model.download(pending.draft, pending.wifiOnly, pending.name, pending.plan, pending.dashPlan)
         else if(!granted) model.notify("未取得旧版 Android 的下载目录写入权限；未创建任务，可重新尝试")
     }
     val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val pending=pendingPermission;pendingPermission=null
         if(!granted) model.notify("通知权限未开启；系统可能隐藏下载通知，请在下载中心查看状态")
-        if(pending!=null) model.download(pending.draft,pending.wifiOnly,pending.name,pending.plan)
+        if(pending!=null) model.download(pending.draft,pending.wifiOnly,pending.name,pending.plan,pending.dashPlan)
     }
     val sourcePage=model.engine?.page?.collectAsState()?.value?.url
     val rulesMatched=model.siteRulesMatched()
@@ -78,12 +81,12 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
         }
         onDismissResources()
     }) else null)
-    fun submit(draft: DownloadDraft, name: String, wifiOnly: Boolean, plan: HlsDownloadPlan? = null) {
+    fun submit(draft: DownloadDraft, name: String, wifiOnly: Boolean, plan: HlsDownloadPlan? = null, dashPlan: DashDownloadPlan? = null) {
         // A second confirmation cannot overwrite a permission request already in flight.
         if (pendingPermission != null) return
         val pending = PendingSubmission(
             draft.copy(candidate = draft.candidate.copy(sources = draft.candidate.sources.toSet())),
-            name, wifiOnly, plan,
+            name, wifiOnly, plan, dashPlan,
         )
         confirmDownload = null
         if(Build.VERSION.SDK_INT <= 28 && (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)) {
@@ -92,7 +95,7 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
         } else if(Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             pendingPermission = pending
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else model.download(pending.draft, pending.wifiOnly, pending.name, pending.plan)
+        } else model.download(pending.draft, pending.wifiOnly, pending.name, pending.plan, pending.dashPlan)
     }
     analyzeSite?.let { draft ->
         com.example.purebrowser.ui.resources.SiteAnalysisDialog(draft,model.siteResolver,{analyzeSite=null}) { option ->
@@ -140,6 +143,13 @@ fun BrowserPanels(model: BrowserViewModel, candidates: List<MediaCandidate>, sho
                     sessionOffer = sessionOffer, onSessionChoice = onSessionChoice,
                 ) { frozen, name, wifiOnly, plan ->
                     submit(frozen, name, wifiOnly, plan)
+                }
+            } else if (draft.candidate.kind == MediaKind.DASH) {
+                DashDownloadConfirmation(
+                    draft, defaultWifiOnly, model.dashResolver,
+                    { formatPickedFor = null; confirmDownload = null },
+                ) { frozen, name, wifiOnly, plan ->
+                    submit(frozen, name, wifiOnly, null, plan)
                 }
             } else {
                 DownloadConfirmation(

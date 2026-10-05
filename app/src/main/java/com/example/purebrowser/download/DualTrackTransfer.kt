@@ -2,9 +2,13 @@ package com.example.purebrowser.download
 
 import android.system.Os
 import android.system.OsConstants
+import com.example.purebrowser.download.hls.HlsDualTrackPlan
+import com.example.purebrowser.download.hls.HlsHttpClient
+import com.example.purebrowser.download.hls.HlsSegmentTrackSource
 import com.example.purebrowser.download.mux.DualTrackMuxer
 import com.example.purebrowser.download.mux.DualTrackMuxException
 import com.example.purebrowser.download.mux.MuxedTracks
+import com.example.purebrowser.download.site.DualTrackDownloadPlan
 import com.example.purebrowser.download.site.DualTrackMetadata
 import java.io.File
 import java.io.FileOutputStream
@@ -62,7 +66,9 @@ class DualTrackTransfer(
             files.clearPrivate(id)
             val inputBudget = (metadata.videoLength ?: DualTrackMetadata.MAX_VIDEO_BYTES) +
                 (metadata.audioLength ?: DualTrackMetadata.MAX_AUDIO_BYTES)
-            reserveStorage(id, output.parentFile!!, 3 * inputBudget +
+            // Segment tracks additionally hold the TS bytes beside their per-track MP4 copies.
+            val reserveFactor = if (lease.plan is HlsDualTrackPlan) 4L else 3L
+            reserveStorage(id, output.parentFile!!, reserveFactor * inputBudget +
                 2 * DualTrackMetadata.OUTPUT_OVERHEAD_BYTES + DualTrackMetadata.STORAGE_RESERVE_BYTES)
             reserved = true
             val (video, audio) = files.dualTrackWorkspace.fresh(id)
@@ -77,11 +83,20 @@ class DualTrackTransfer(
                     lastUpdate = now
                 }
             }
-            downloadTrack(id, request.copy(mediaUrl = lease.plan.videoUrl), lease.plan.videoUrl, video,
-                metadata.videoLength, DualTrackMetadata.MAX_VIDEO_BYTES, cancel, ::check, ::progress)
-            check()
-            downloadTrack(id, request.copy(mediaUrl = lease.plan.audioUrl), lease.plan.audioUrl, audio,
-                metadata.audioLength, DualTrackMetadata.MAX_AUDIO_BYTES, cancel, ::check, ::progress)
+            when (val trackPlan = lease.plan) {
+                is DualTrackDownloadPlan -> {
+                    downloadTrack(id, request.copy(mediaUrl = trackPlan.videoUrl), trackPlan.videoUrl, video,
+                        metadata.videoLength, DualTrackMetadata.MAX_VIDEO_BYTES, cancel, ::check, ::progress)
+                    check()
+                    downloadTrack(id, request.copy(mediaUrl = trackPlan.audioUrl), trackPlan.audioUrl, audio,
+                        metadata.audioLength, DualTrackMetadata.MAX_AUDIO_BYTES, cancel, ::check, ::progress)
+                }
+                is HlsDualTrackPlan -> HlsSegmentTrackSource(
+                    HlsHttpClient(transport, access, repository.allowLocalHttp), files.dualTrackWorkspace,
+                ).fetchTracks(id, request, trackPlan, video, audio,
+                    DualTrackMetadata.MAX_VIDEO_BYTES, DualTrackMetadata.MAX_AUDIO_BYTES, cancel, ::check, ::progress)
+                else -> throw TransferFailure(FailureKind.UNSUPPORTED, "未知双轨方案")
+            }
             check()
             update(id) { it.copy(taskStatus = TaskStatus.MUXING, received = received) } ?: throw CancellationException()
             guardOutput(id, output)

@@ -1,0 +1,27 @@
+PureBrowser controlled HLS test fixtures
+SPDX-License-Identifier: CC0-1.0
+
+The fixture playlists and synthetic audiovisual content in this directory are
+project-owned test material: FFmpeg's testsrc2 pattern plus a generated 440 Hz
+sine wave, encoded as H.264 video with B-frames and AAC audio. They do not contain
+third-party film footage, recordings, user media, credentials, or DRM content.
+
+To the extent permitted by law, the PureBrowser contributors dedicate their
+copyright and related rights in this synthetic fixture content to the public
+domain under CC0 1.0 Universal. The content may be copied, modified, distributed,
+and used without asking permission. It is supplied without warranty.
+
+Canonical dedication and fallback license:
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+Scope: master.m3u8, video.m3u8, and segment-*.ts made from the synthetic recipe.
+This dedication does NOT relicense FFmpeg, libx264, AAC implementations, the
+application, or any external public sample listed in docs/HLS-FIXTURES.md.
+Using an encoder does not transfer the encoder's software license to this media.
+
+Recipe: tools/fixtures/generate_hls_fixture.sh
+Short fixture: 8 seconds, 320x180, 24 fps, H.264 High level 1.2, two B-frames,
+closed 48-frame GOP, 48 kHz AAC-LC mono; four separate two-second MPEG-TS segments
+on a single continuous encode/mux timestamp timeline. Optional generator output
+may instead be 1801 seconds with mono or stereo AAC and a final one-second segment.
+No FFmpeg dependency is needed to serve or consume the already generated media.

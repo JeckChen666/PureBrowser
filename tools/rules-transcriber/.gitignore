@@ -1,0 +1,10 @@
+# T99 local ignores — generated artifacts never enter the repo.
+output/
+tmp/
+__pycache__/
+*.pyc
+.pytest_cache/
+# External corpora live outside the repo on this machine; listed so a stray
+# copy can never be added from here either:
+/tmp/ytdlp-src
+/tmp/t99-venv

@@ -40,6 +40,7 @@ class ManagedFileStore(private val app: Context) {
     val directCheckpoints=DirectCheckpointStore(app.filesDir)
     val dualTrackWorkspace=DualTrackWorkspace(app.filesDir)
     val hlsWorkspace=com.example.purebrowser.download.hls.HlsWorkspace(File(app.filesDir,"hls"))
+    val dashWorkspace=com.example.purebrowser.download.dash.DashWorkspace(app.filesDir)
     private val stages=File(app.filesDir,"transfers").apply { mkdirs() }
     fun stage(id:TaskId):File {
         require(Regex("[a-zA-Z0-9-]{1,100}").matches(id))
@@ -49,8 +50,8 @@ class ManagedFileStore(private val app: Context) {
         return f
     }
     fun removeStage(id:TaskId) { val f=stage(id); if(f.exists()) check(f.delete()) { "临时文件暂时无法清理" } }
-    fun cacheBytes(id:TaskId):Long = runCatching { stage(id).length()+hlsWorkspace.cacheBytes(id)+dualTrackWorkspace.cacheBytes(id) }.getOrDefault(0L)
-    fun clearPrivate(id:TaskId) { removeStage(id);directCheckpoints.delete(id);hlsWorkspace.delete(id);dualTrackWorkspace.delete(id) }
+    fun cacheBytes(id:TaskId):Long = runCatching { stage(id).length()+hlsWorkspace.cacheBytes(id)+dualTrackWorkspace.cacheBytes(id)+dashWorkspace.cacheBytes(id) }.getOrDefault(0L)
+    fun clearPrivate(id:TaskId) { removeStage(id);directCheckpoints.delete(id);hlsWorkspace.delete(id);dualTrackWorkspace.delete(id);dashWorkspace.delete(id) }
     fun inspect(file:File):MediaInspection {
         val header=file.inputStream().use { input -> ByteArray(4096).let { bytes -> val n=input.read(bytes); bytes.copyOf(n.coerceAtLeast(0)) } }
         val mime=MediaContainer.mime(header) ?: return MediaInspection(FormatCheck.INVALID)

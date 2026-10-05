@@ -80,6 +80,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val repository = runtime.repository
     // Same request/access policy as queue execution; constructing this never fetches a playlist.
     val hlsResolver by lazy { HlsResolver(repository.guardedTransport(UrlConnectionTransport()), WebsiteAccessContext(), repository.allowLocalHttp) }
+    /** T97: DASH MPD resolution for the confirmation dialog; constructed lazily, never fetches. */
+    val dashResolver by lazy { com.example.purebrowser.download.dash.DashResolver(repository.guardedTransport(UrlConnectionTransport()), WebsiteAccessContext(), repository.allowLocalHttp) }
     val mediaProbe by lazy { com.example.purebrowser.media.resolver.MediaProbe(repository.guardedTransport(UrlConnectionTransport()),repository.allowLocalHttp) }
     val youTubeResolver by lazy { com.example.purebrowser.media.site.YouTubeResolver(getApplication(),repository::guardedTransport) }
     val siteResolver by lazy { com.example.purebrowser.media.resolver.SiteResolverRegistry(listOf(
@@ -190,7 +192,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             finally { preferenceWrite = false }
         }
     }
-    fun download(draft: DownloadDraft, wifiOnly: Boolean, fileName: String? = null, plan: HlsDownloadPlan? = null) {
+    fun download(draft: DownloadDraft, wifiOnly: Boolean, fileName: String? = null, plan: HlsDownloadPlan? = null, dashPlan: com.example.purebrowser.download.dash.DashDownloadPlan? = null) {
         if(privacyBusy) { notify("本地数据正在清理，请稍后下载");return }
         if(mutableSubmitting.value) return
         if (draft.sourceTabId != tabs.active.value?.recordId || draft.sourceGeneration != engine?.generation ||
@@ -201,7 +203,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         mutableSubmitting.value = true
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { repository.enqueue(draft, wifiOnly, fileName, hlsPlan = plan,expectedPrivacyGeneration=requestGeneration) }
+                withContext(Dispatchers.IO) { repository.enqueue(draft, wifiOnly, fileName, hlsPlan = plan,expectedPrivacyGeneration=requestGeneration,dashPlan=dashPlan) }
                 runtime.kick()
                 notify("任务已加入下载中心")
             } catch (_: Exception) { notify("无法创建任务，请检查存储权限和资源地址") }

@@ -24,7 +24,7 @@ object HlsPlaylistParser {
     // Mirror RequestPolicy's named debug targets; the caller must still apply release/debug policy.
     private val localHttpHosts = setOf("127.0.0.1", "10.0.2.2")
     private val excludedTags = setOf(
-        "#EXT-X-MAP", "#EXT-X-BYTERANGE", "#EXT-X-DISCONTINUITY", "#EXT-X-DISCONTINUITY-SEQUENCE",
+        "#EXT-X-BYTERANGE", "#EXT-X-DISCONTINUITY", "#EXT-X-DISCONTINUITY-SEQUENCE",
         "#EXT-X-GAP", "#EXT-X-I-FRAMES-ONLY", "#EXT-X-PART", "#EXT-X-PART-INF", "#EXT-X-PRELOAD-HINT",
         "#EXT-X-SERVER-CONTROL", "#EXT-X-RENDITION-REPORT", "#EXT-X-SKIP", "#EXT-X-DEFINE",
         "#EXT-X-CONTENT-STEERING",
@@ -61,10 +61,13 @@ object HlsPlaylistParser {
         val unique = hashSetOf<String>()
         fun once(tag: String) { if (!unique.add(tag)) reject("清单包含重复标签") }
         val variants = arrayListOf<VariantDraft>()
-        // A group is unsupported if ANY member requires a separate resource, not just the default.
+        // A group carries a separate audio resource if ANY member has a URI, not just the default.
         val audioGroups = hashMapOf<String, Boolean>()
+        val audioRenditions = arrayListOf<HlsAudioRendition>()
         val renditionNames = hashSetOf<Triple<String, String, String>>()
         val segments = arrayListOf<HlsSegment>()
+        // Container classification only; transport support is gated later at the SegmentFormat seam.
+        var segmentFormat = SegmentFormat.MPEG_TS
         var pendingVariant: Attributes? = null
         var pendingDuration: Long? = null
         var targetDurationUs: Long? = null
@@ -87,7 +90,7 @@ object HlsPlaylistParser {
                     if (ended) reject("结束标记后仍有媒体分片")
                     val duration = pendingDuration ?: reject("媒体分片缺少配对时长")
                     if (segments.size >= MAX_SEGMENTS) reject("清单分片数量超过限制")
-                    checkSegmentUrl(url)
+                    segmentFormat = classifySegment(url, segmentFormat)
                     if (duration > MAX_DURATION_US - totalUs) reject("清单总时长超过限制")
                     segments += HlsSegment(url, duration, segments.size)
                     totalUs += duration
@@ -139,11 +142,25 @@ object HlsPlaylistParser {
                     listOf("DEFAULT", "AUTOSELECT", "FORCED").forEach { key -> a.number(key)?.let { yesNo(it) } }
                     if (a["FORCED"] != null && type != "SUBTITLES") reject("音轨属性组合无效")
                     if (a["DEFAULT"] == "YES" && a["AUTOSELECT"] == "NO") reject("音轨属性组合无效")
-                    val uri = a.string("URI")
-                    if (uri != null) resolve(base, uri)
+                    val uri = a.string("URI")?.let { resolve(base, it) }
                     if (type == "SUBTITLES" && uri == null) reject("字幕声明缺少地址")
                     if (type == "CLOSED-CAPTIONS" && uri != null) reject("内嵌字幕声明格式无效")
-                    if (type == "AUDIO") audioGroups[group] = (audioGroups[group] ?: false) || uri != null
+                    if (type == "AUDIO") {
+                        // Metadata hints only; correctness is proven by the rendition playlist itself.
+                        val language = boundedHint(a["LANGUAGE"], 64, "音轨语言属性无效")
+                        val channels = boundedHint(a["CHANNELS"], 32, "音轨声道属性无效")
+                        audioRenditions += HlsAudioRendition(uri, group, name, language, channels, a["DEFAULT"] == "YES")
+                        audioGroups[group] = (audioGroups[group] ?: false) || uri != null
+                    }
+                }
+                "#EXT-X-MAP" -> {
+                    // The fMP4 init declaration: classified, then honestly gated at the SegmentFormat seam.
+                    mark(Kind.MEDIA)
+                    once(tag)
+                    val a = attributes(value())
+                    if (a.values.keys != setOf("URI")) reject("本版不支持带字节范围的初始化段")
+                    resolve(base, a.string("URI") ?: reject("初始化段声明缺少地址"))
+                    segmentFormat = SegmentFormat.FMP4
                 }
                 "#EXT-X-I-FRAME-STREAM-INF" -> {
                     // A preview-only rendition is not a selectable complete video.
@@ -205,24 +222,30 @@ object HlsPlaylistParser {
         if (kind == Kind.MASTER) {
             if (variants.isEmpty()) reject("主清单没有视频档位")
             return HlsPlaylist.Master(variants.map { draft ->
-                // Only separate A/V renditions still exclude a variant; codec/subtitle gates
-                // downgrade to a selectable warning so parse-on-detection can surface them.
+                // Separate A/V renditions now map onto the dual-track plan (v0.1.9); codec/subtitle
+                // gates and the separate-audio notice downgrade to selectable warnings so
+                // parse-on-detection can surface them. An undefined audio group stays unsupported:
+                // its audio location is unknowable and must not be guessed.
                 val hardReason = when {
                     draft.video != null -> "本版不支持独立视频轨"
-                    draft.audio != null && audioGroups[draft.audio] != false -> "本版不支持独立音轨或未定义音轨分组"
+                    draft.audio != null && audioGroups[draft.audio] == null -> "本版不支持未定义的音轨分组"
                     else -> null
                 }
-                val gateWarning = draft.value.unsupportedReason
-                    ?: if (draft.subtitles != null) "此档位声明了字幕轨，本版保存时不含字幕" else null
-                draft.value.copy(supported = hardReason == null, unsupportedReason = hardReason ?: gateWarning)
-            })
+                val notice = draft.value.unsupportedReason
+                    ?: when {
+                        draft.subtitles != null -> "此档位声明了字幕轨，本版保存时不含字幕"
+                        draft.audio != null && audioGroups[draft.audio] == true -> "此档位带独立音轨，保存时自动分轨合并"
+                        else -> null
+                    }
+                draft.value.copy(supported = hardReason == null, unsupportedReason = hardReason ?: notice)
+            }, audioRenditions)
         }
         if (!ended) reject("本版只支持具有结束标记的固定点播清单")
         if (segments.isEmpty()) reject("媒体清单没有分片")
         val target = targetDurationUs ?: reject("媒体清单缺少目标分片时长")
         if (segments.any { ((it.durationUs + SECOND_US / 2) / SECOND_US) * SECOND_US > target })
             reject("分片时长超过清单目标时长")
-        return HlsPlaylist.Media(segments, totalUs, target, mediaSequence)
+        return HlsPlaylist.Media(segments, totalUs, target, mediaSequence, segmentFormat)
     }
 
     /** Stable order breaks metadata ties. Unknown metadata is never invented. */
@@ -285,7 +308,7 @@ object HlsPlaylistParser {
             if (it == "NONE") a.number("CLOSED-CAPTIONS") else a.string("CLOSED-CAPTIONS")
         }
         return VariantDraft(
-            HlsVariant(url, peak ?: average, dimensions?.first, dimensions?.second, codecs, warning == null, warning),
+            HlsVariant(url, peak ?: average, dimensions?.first, dimensions?.second, codecs, warning == null, warning, a.string("AUDIO")),
             a.string("AUDIO"), a.string("SUBTITLES"), a.string("VIDEO"),
         )
     }
@@ -385,12 +408,19 @@ object HlsPlaylistParser {
         return resolved
     }
 
-    private fun checkSegmentUrl(value: String) {
+    /** Classifies by declared extension only; extensionless TS is verified by the content reader. */
+    private fun classifySegment(value: String, current: SegmentFormat): SegmentFormat {
         val extension = URI(value).path.substringAfterLast('/').substringAfterLast('.', "").lowercase(Locale.ROOT)
-        if (extension in setOf("m4s", "mp4", "m4a", "aac", "mp3", "vtt", "webvtt", "srt"))
+        if (extension in setOf("m4s", "mp4", "m4a")) return SegmentFormat.FMP4
+        if (extension in setOf("aac", "mp3", "vtt", "webvtt", "srt"))
             reject("本版只支持待内容校验的 MPEG-TS 分片")
-        // No extension requirement: authenticated/extensionless TS is checked by the content reader.
         // A nested playlist is not fetched here; manifest recursion belongs to the bounded resolver.
+        return current
+    }
+
+    /** Quoted or bare metadata hint; bounded and control-free, never trusted beyond display. */
+    private fun boundedHint(value: String?, limit: Int, reason: String): String? = value?.also {
+        if (it.isEmpty() || it.length > limit || it.any { c -> c.isISOControl() }) reject(reason)
     }
 
     private fun reject(reason: String): Nothing = throw HlsParseException(reason)

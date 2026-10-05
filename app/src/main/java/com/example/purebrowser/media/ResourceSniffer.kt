@@ -139,7 +139,8 @@ class ResourceSniffer {
         val old = entries[key] ?: return
         val updated = when (result) {
             is ProbeResult.Verified -> {
-                // Verified manifests upgrade unknown endpoints; DASH stays display-only this version.
+                // Verified manifests upgrade unknown endpoints; the DASH listing stays display-only
+                // here, resolution/selection moved to the T97 DASH confirmation dialog.
                 // A content-verified mpegurl body also corrects a master whose URL shape (e.g. a
                 // trailing .mp4) pinned it as FILE at first sight — the probe already knows the
                 // truth, so the kind follows the served media type, not the suffix (v0.1.7 S-E).

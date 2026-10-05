@@ -39,9 +39,11 @@ class RuleActionsTest {
         val findings = e.evaluate(
             "https://tube.example/watch/12345",
             listOf("https://tube.example/watch/12345"),
-            null, fetcher = fetcher,
+            null, budgetMs = 5_000, fetcher = fetcher,
         )
         // The fetch URL is the template bound to the path-face group; only https renders pass.
+        // The budget here is generous on purpose: this test binds templates and extracts JSON;
+        // the bail-out behavior itself is covered deterministically in RuleEngineTest.
         assertEquals("https://api.tube.example/v/12345", seenUrl?.value)
         val finding = findings.single { it.formats.isNotEmpty() }
         assertEquals(3, finding.formats.size)

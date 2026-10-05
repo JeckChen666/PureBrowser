@@ -121,7 +121,7 @@ fun HlsDownloadConfirmation(
         Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium)
         ResourceMetadata(frozen.candidate)
         ResourceSource(frozen)
-        Text("仅在你点击解析或准备时读取清单；选择档位不会自动请求子清单。仅支持未加密的固定点播 MPEG-TS（H.264 / AAC），合并为独立 MP4。不支持直播、DRM、独立音轨、fMP4 或续传。", style = MaterialTheme.typography.bodySmall)
+        Text("仅在你点击解析或准备时读取清单；选择档位不会自动请求子清单。仅支持未加密的固定点播 MPEG-TS（H.264 / AAC）。带独立音轨的档位将分轨下载后自动合并为独立 MP4；不支持直播、DRM、fMP4 分片或分轨续传，多字幕不合并保存。", style = MaterialTheme.typography.bodySmall)
         ResourceOption(
             label = "使用当前网站访问条件",
             description = if (contextAvailable) "只使用适用的同源会话和最小来源；修改后需重新解析清单" else "没有可靠页面关联，不使用网站会话",
@@ -178,7 +178,7 @@ fun HlsDownloadConfirmation(
                                 readableResourceName(variant.unsupportedReason ?: "此档位不在本版支持范围"),
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
                             )
-                            // Gate downgrades (codec/字幕) stay selectable and only warn here.
+                            // Gate downgrades (codec/字幕/独立音轨) stay selectable and only warn here.
                             else variant.unsupportedReason?.let {
                                 Text(readableResourceName(it), style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.tertiary)
@@ -213,6 +213,17 @@ fun HlsDownloadConfirmation(
                 Text("清单已准备 · ${plan.media.segments.size} 个分片")
                 val seconds = plan.media.durationUs / 1_000_000
                 Text("清单时长：${seconds / 60} 分 ${seconds % 60} 秒（清单声明）")
+                plan.audio?.let { audio ->
+                    val label = listOfNotNull(
+                        audio.rendition.language?.takeIf { it.isNotBlank() },
+                        audio.rendition.channels?.takeIf { it.isNotBlank() },
+                    ).joinToString(" ")
+                    Text(
+                        if (label.isBlank()) "音视频分轨保存（自动合并音轨）" else "音视频分轨保存（自动合并音轨 $label）",
+                        modifier = Modifier.testTag("hls-dual-track"),
+                    )
+                    Text("视频与音频分片分别下载后在本机合并；多语言音轨只保留默认一条，不保留字幕。", style = MaterialTheme.typography.bodySmall)
+                }
                 Text("成品大小未知；清单响应大小不是视频大小。下载完成并封装校验后才保存 MP4。", style = MaterialTheme.typography.bodySmall)
             }
         }

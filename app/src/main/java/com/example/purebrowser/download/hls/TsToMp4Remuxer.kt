@@ -25,6 +25,10 @@ import kotlin.math.abs
 @androidx.annotation.OptIn(UnstableApi::class)
 class TsToMp4Remuxer {
     data class Result(val durationUs:Long, val videoSamples:Long, val audioSamples:Long)
+    /** Which elementary stream a single-role segment list must carry (separate-audio HLS). */
+    enum class TrackRole { VIDEO, AUDIO }
+    /** Timeline probe used to pick the shared A/V offset before either track is written. */
+    data class TrackProbe(val firstUs:Long, val endUs:Long, val samples:Long)
     private class TrackStats(val format:Format) {
         var min=Long.MAX_VALUE; var max=Long.MIN_VALUE; var count=0L
         var previous=Long.MIN_VALUE; var smallestStep=Long.MAX_VALUE
@@ -43,14 +47,7 @@ class TsToMp4Remuxer {
     }
     fun remux(segments:List<File>, output:File, expectedDurationUs:Long,
               cancel:TransferCancellation, onProgress:(Long)->Unit={}):Result {
-        require(segments.isNotEmpty())
-        segments.forEach { file ->
-            cancel.check()
-            if(!file.isFile || file.length()<188*5 || file.length()%188!=0L) fail("分片不是完整 MPEG-TS 数据")
-            file.inputStream().use { stream ->
-                val prefix=ByteArray(188*5); if(stream.read(prefix)!=prefix.size || (0..4).any { prefix[it*188]!=0x47.toByte() }) fail("分片响应不是 MPEG-TS")
-            }
-        }
+        validateSegments(segments,cancel)
         val detectAccessUnits=!TsTrackInventory.validate(segments,cancel)
         val stats=linkedMapOf<Int,TrackStats>()
         extract(segments,cancel,stats,null,0L,onProgress,detectAccessUnits)
@@ -66,10 +63,11 @@ class TsToMp4Remuxer {
         try {
             FileOutputStream(output).use { stream ->
                 Mp4Muxer.Builder(SeekableMuxerOutput.of(stream)).setSampleBatchingEnabled(false).build().use { muxer ->
-                    val ids=stats.mapValues { (_,s)->muxer.addTrack(s.format) }
-                    extract(segments,cancel,linkedMapOf(),Pair(muxer,ids),start,onProgress,detectAccessUnits)
+                    val sink=MuxSink(muxer,null)
+                    stats.forEach { (key,s)->sink.ids[key]=muxer.addTrack(s.format) }
+                    extract(segments,cancel,linkedMapOf(),sink,start,onProgress,detectAccessUnits)
                     stats.forEach { (key,s)->
-                        muxer.writeSampleData(ids.getValue(key),ByteBuffer.allocate(0),BufferInfo(s.end()-start,0,C.BUFFER_FLAG_END_OF_STREAM))
+                        muxer.writeSampleData(sink.ids.getValue(key),ByteBuffer.allocate(0),BufferInfo(s.end()-start,0,C.BUFFER_FLAG_END_OF_STREAM))
                     }
                 }
             }
@@ -78,8 +76,76 @@ class TsToMp4Remuxer {
             return Result(duration,video.count,audio.count)
         } catch(e:Exception) { output.delete(); throw e }
     }
+    /** Ordered TS segments of exactly one role (separate-audio HLS): timeline probe before writing. */
+    fun probeTrack(segments:List<File>,role:TrackRole,cancel:TransferCancellation):TrackProbe {
+        validateSegments(segments,cancel)
+        val singleRoleAud=TsTrackInventory.validateTrack(segments,cancel,video=role==TrackRole.VIDEO)
+        val detectAccessUnits=role==TrackRole.VIDEO && !singleRoleAud
+        val stats=linkedMapOf<Int,TrackStats>()
+        extract(segments,cancel,stats,null,0L,{},detectAccessUnits,role)
+        val track=singleStats(stats,role)
+        return TrackProbe(track.min,track.end(),track.count)
+    }
+
+    /** Single-role TS→MP4 remux sharing one timeline offset across both tracks (keeps A/V alignment). */
+    fun remuxTrack(segments:List<File>,output:File,role:TrackRole,offsetUs:Long,expectedDurationUs:Long,
+                   cancel:TransferCancellation,onProgress:(Long)->Unit={}):Result {
+        validateSegments(segments,cancel)
+        if(offsetUs<0) fail("媒体时间轴无效")
+        val singleRoleAud=TsTrackInventory.validateTrack(segments,cancel,video=role==TrackRole.VIDEO)
+        val detectAccessUnits=role==TrackRole.VIDEO && !singleRoleAud
+        val stats=linkedMapOf<Int,TrackStats>()
+        try {
+            FileOutputStream(output).use { stream ->
+                Mp4Muxer.Builder(SeekableMuxerOutput.of(stream)).setSampleBatchingEnabled(false).build().use { muxer ->
+                    val sink=MuxSink(muxer,role)
+                    extract(segments,cancel,stats,sink,offsetUs,onProgress,detectAccessUnits,role)
+                    val track=singleStats(stats,role)
+                    if(track.count<2) fail("分轨媒体采样不完整")
+                    val duration=track.end()-track.min
+                    val tolerance=maxOf(2_000_000L,minOf(5_000_000L,expectedDurationUs/1000))
+                    if(abs(duration-expectedDurationUs)>tolerance) fail("分轨时长与清单不符，未发布成品")
+                    muxer.writeSampleData(sink.ids.getValue(stats.keys.single()),
+                        ByteBuffer.allocate(0),BufferInfo(track.end()-offsetUs,0,C.BUFFER_FLAG_END_OF_STREAM))
+                    return Result(duration,if(role==TrackRole.VIDEO)track.count else 0L,if(role==TrackRole.AUDIO)track.count else 0L)
+                }
+            }
+        } catch(e:Exception) { output.delete();throw e }
+    }
+
+    private fun validateSegments(segments:List<File>,cancel:TransferCancellation) {
+        require(segments.isNotEmpty())
+        segments.forEach { file ->
+            cancel.check()
+            if(!file.isFile || file.length()<188*5 || file.length()%188!=0L) fail("分片不是完整 MPEG-TS 数据")
+            file.inputStream().use { stream ->
+                val prefix=ByteArray(188*5); if(stream.read(prefix)!=prefix.size || (0..4).any { prefix[it*188]!=0x47.toByte() }) fail("分片响应不是 MPEG-TS")
+            }
+        }
+    }
+
+    private fun singleStats(stats:Map<Int,TrackStats>,role:TrackRole):TrackStats {
+        val mime=if(role==TrackRole.VIDEO)MimeTypes.VIDEO_H264 else MimeTypes.AUDIO_AAC
+        val track=stats.values.singleOrNull { it.format.sampleMimeType==mime }
+            ?: fail(if(role==TrackRole.VIDEO)"分轨视频缺少 H.264 轨道" else "分轨音频缺少 AAC 轨道")
+        if(stats.size!=1) fail("分轨包含多条媒体轨道")
+        return track
+    }
+
+    /** Muxer track binding; lazily admits the expected role only (single-role mode). */
+    private class MuxSink(internal val muxer:Mp4Muxer,private val role:TrackRole?) {
+        internal val ids=linkedMapOf<Int,Int>()
+        fun bind(id:Int,format:Format):Int {
+            ids[id]?.let { return it }
+            if(role==null) fail("分片轨道发生变化")
+            val expected=if(role==TrackRole.VIDEO)MimeTypes.VIDEO_H264 else MimeTypes.AUDIO_AAC
+            if(format.sampleMimeType!=expected) fail("分片包含预期外的轨道")
+            return muxer.addTrack(format).also { ids[id]=it }
+        }
+    }
+
     private fun extract(files:List<File>,cancel:TransferCancellation,stats:MutableMap<Int,TrackStats>,
-                        writer:Pair<Mp4Muxer,Map<Int,Int>>?, offsetUs:Long,progress:(Long)->Unit,detectAccessUnits:Boolean) {
+                        writer:MuxSink?, offsetUs:Long,progress:(Long)->Unit,detectAccessUnits:Boolean,role:TrackRole?=null) {
         val endings=mutableListOf<PesReader>()
         val defaults=DefaultTsPayloadReaderFactory(if(detectAccessUnits)DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS else 0)
         val factory=object:TsPayloadReader.Factory {
@@ -99,7 +165,7 @@ class TsToMp4Remuxer {
         extractor.init(object:ExtractorOutput {
             override fun track(id:Int,type:Int):TrackOutput = outputs.getOrPut(id) {
                 if(type !in setOf(C.TRACK_TYPE_VIDEO,C.TRACK_TYPE_AUDIO)) DiscardingTrackOutput()
-                else Samples(id,cancel,stats,writer,offsetUs)
+                else Samples(id,cancel,stats,writer,offsetUs,role)
             }
             override fun endTracks() {}
             override fun seekMap(seekMap:SeekMap) {}
@@ -132,7 +198,7 @@ class TsToMp4Remuxer {
         }
     }
     private class Samples(val id:Int,val cancel:TransferCancellation,val stats:MutableMap<Int,TrackStats>,
-                          val writer:Pair<Mp4Muxer,Map<Int,Int>>?,val offsetUs:Long):TrackOutput {
+                          val writer:MuxSink?,val offsetUs:Long,val role:TrackRole?):TrackOutput {
         var bytes=ByteArray(65536);var used=0
         override fun format(format:Format) {
             if(format.sampleMimeType !in setOf(MimeTypes.VIDEO_H264,MimeTypes.AUDIO_AAC)) fail("本版只支持 H.264 与 AAC")
@@ -141,7 +207,9 @@ class TsToMp4Remuxer {
                 old.sampleRate!=format.sampleRate || old.channelCount!=format.channelCount ||
                 old.initializationData.size!=format.initializationData.size || old.initializationData.indices.any { !old.initializationData[it].contentEquals(format.initializationData[it]) })) fail("分片编码参数发生变化")
             if(old==null) stats[id]=TrackStats(format)
-            if(writer!=null && id !in writer.second) fail("分片轨道发生变化")
+            if(role!=null && format.sampleMimeType!=if(role==TrackRole.VIDEO)MimeTypes.VIDEO_H264 else MimeTypes.AUDIO_AAC)
+                fail("分片包含预期外的轨道")
+            writer?.bind(id,format)
         }
         private fun reserve(n:Int) {
             cancel.check();if(n<0 || n>16*1024*1024-used) fail("单个媒体采样超过处理上限")
@@ -161,9 +229,9 @@ class TsToMp4Remuxer {
             val hasPicture=track.format.sampleMimeType!=MimeTypes.VIDEO_H264 || containsAvcPicture(bytes,from,size)
             if(!hasPicture) { bytes.copyInto(bytes,0,used-offset,used);used=offset;return }
             track.sample(timeUs)
-            writer?.let { (muxer,ids) ->
+            writer?.let { sink ->
                 val pts=timeUs-offsetUs;if(pts<0) fail("媒体时间轴无效")
-                muxer.writeSampleData(ids.getValue(id),ByteBuffer.wrap(bytes,from,size).slice(),BufferInfo(pts,size,flags and C.BUFFER_FLAG_KEY_FRAME))
+                sink.muxer.writeSampleData(sink.ids.getValue(id),ByteBuffer.wrap(bytes,from,size).slice(),BufferInfo(pts,size,flags and C.BUFFER_FLAG_KEY_FRAME))
             }
             bytes.copyInto(bytes,0,used-offset,used);used=offset
         }

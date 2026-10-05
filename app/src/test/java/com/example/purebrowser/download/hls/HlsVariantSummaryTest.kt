@@ -66,7 +66,7 @@ class HlsVariantSummaryTest {
         assertNotNull(summaries.first { it.url.endsWith("subbed360.m3u8") }.warning)
     }
 
-    @Test fun excludedSeparateAudioTrackStaysUnsupportedAndCarriesNoSelectableWarning() {
+    @Test fun separateAudioTrackIsSelectableWithADualTrackNoticeSinceV019() {
         val body = """
             #EXTM3U
             #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="external",DEFAULT=YES,URI="audio.m3u8"
@@ -74,10 +74,12 @@ class HlsVariantSummaryTest {
             split.m3u8
         """.trimIndent()
         val parsed = HlsPlaylistParser.parse(body, base) as HlsPlaylist.Master
-        assertFalse(parsed.variants.single().supported)
-        assertNull(HlsPlaylistParser.defaultVariant(parsed.variants))
-        // An exclusion reason is not offered as a selectable warning.
-        assertNull(HlsPlaylistParser.variantSummaries(body, base).single().warning)
+        assertTrue(parsed.variants.single().supported)
+        assertEquals("a", parsed.variants.single().audioGroup)
+        // The only variant is dual-track-warned but still the default pick (TED shape).
+        assertSame(parsed.variants.single(), HlsPlaylistParser.defaultVariant(parsed.variants))
+        assertEquals("此档位带独立音轨，保存时自动分轨合并",
+            HlsPlaylistParser.variantSummaries(body, base).single().warning)
     }
 
     @Test fun mediaPlaylistsYieldNoVariantSummariesAndHardRejectsStillThrow() {
