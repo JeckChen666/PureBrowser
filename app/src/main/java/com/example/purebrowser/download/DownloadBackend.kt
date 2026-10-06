@@ -109,6 +109,13 @@ class AndroidDownloadBackend(context: Context) : DownloadBackend {
             extractor.selectTrack(index)
             if (extractor.sampleTime < 0) return MediaInspection(FormatCheck.INVALID)
             val track = extractor.getTrackFormat(index)
+            // T110 成品校验含解码可用性: reject a finished AV1 sample on a device with no AV1
+            // decoder — it can never play back, so it must not publish as a passed video.
+            if (com.example.purebrowser.media.codec.Av1Capability.rejectsFinishedProduct(
+                    track.getString(MediaFormat.KEY_MIME),
+                    com.example.purebrowser.media.codec.DeviceAv1CapabilityProvider.support(),
+                )
+            ) return MediaInspection(FormatCheck.INVALID)
             val duration = if (track.containsKey(MediaFormat.KEY_DURATION)) track.getLong(MediaFormat.KEY_DURATION).takeIf { it >= 0 }?.div(1000) else null
             // Header recognition is only a first check, not proof of a specific container subtype.
             MediaInspection(FormatCheck.PASSED, durationMillis = duration)

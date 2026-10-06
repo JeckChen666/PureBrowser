@@ -232,7 +232,8 @@ class DownloadRepository(
             val draft=DownloadDraft(MediaCandidate(r.mediaUrl ?: error("记录没有入口"),MediaKind.HLS,emptySet(),r.mimeType,frameUrl=r.frameUrl,reliableSource=r.reliableSource),
                 r.userAgent ?: fallbackAgent,r.sourceUrl,r.sourceTitle,r.sourceTabId,r.sourceGeneration,
                 useAccessContext=useContext ?: r.useAccessContext,reliableSource=r.reliableSource)
-            val resolver=HlsResolver(guardedTransport(retryTransport),WebsiteAccessContext(),allowLocalHttp)
+            val resolver=HlsResolver(guardedTransport(retryTransport),WebsiteAccessContext(),allowLocalHttp,
+                com.example.purebrowser.media.codec.DeviceAv1CapabilityProvider)
             val options=resolver.resolveEntry(draft,token)
             val variant=when(val p=options.playlist) {
                 is HlsPlaylist.Master->p.variants.firstOrNull { it.supported && it.url==r.hlsPlaylistUrl }

@@ -9,7 +9,12 @@ import java.nio.charset.CodingErrorAction
 class HlsTransientFailure : IOException("临时网络故障")
 /** Each independent request chain has its own credential authority. Media3 never does network IO. */
 class HlsHttpClient(private val transport:HttpTransport,private val access:AccessContextProvider,private val allowLocalHttp:Boolean) {
-    fun <T> get(record:DownloadRecord,initialUrl:String,cancel:TransferCancellation,consume:(HttpResponse,String)->T):T {
+    /**
+     * One bounded GET. [range] requests one exact CLOSED byte interval (EXT-X-MAP BYTERANGE init,
+     * RFC 8216 §4.3.2.5) — never open-ended — and is re-sent across redirect hops; the caller
+     * still validates the served window against its declaration.
+     */
+    fun <T> get(record:DownloadRecord,initialUrl:String,cancel:TransferCancellation,range:LongRange?=null,consume:(HttpResponse,String)->T):T {
         var url=initialUrl;var hops=0;var usedCredential=false
         val chainEligible=RequestPolicy.cookieEligible(record,initialUrl)
         while(true) {
@@ -17,7 +22,9 @@ class HlsHttpClient(private val transport:HttpTransport,private val access:Acces
             val cookie=if(chainEligible && RequestPolicy.sameOrigin(initialUrl,url) && RequestPolicy.cookieEligible(record,url)) {
                 try { access.cookieFor(url) } catch(_:Exception) { throw TransferFailure(FailureKind.ACCESS_CONDITION,"当前网站会话无法读取") }
             } else null
-            val headers=RequestPolicy.headers(record,url,cookie)
+            val headers=RequestPolicy.headers(record,url,cookie).let { base ->
+                if(range==null) base else base+("Range" to "bytes=${range.first}-${range.last}")
+            }
             usedCredential=usedCredential || !headers["Cookie"].isNullOrBlank()
             transport.open(url,headers,cancel).use { response ->
                 if(response.status in setOf(301,302,303,307,308)) {
@@ -28,6 +35,7 @@ class HlsHttpClient(private val transport:HttpTransport,private val access:Acces
                         401,403 -> throw TransferFailure(FailureKind.ACCESS_CONDITION,"当前访问条件不足，请返回来源重新发现")
                         500,502,503,504 -> throw HlsTransientFailure()
                         200 -> {}
+                        206 -> if(range==null)throw TransferFailure(FailureKind.HTTP_REJECTED,"服务器拒绝清单或分片请求")
                         else -> throw TransferFailure(FailureKind.HTTP_REJECTED,"服务器拒绝清单或分片请求")
                     }
                     val encoding=response.header("Content-Encoding")

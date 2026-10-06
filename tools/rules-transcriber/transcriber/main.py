@@ -1,9 +1,11 @@
-"""Pipeline orchestration and output writers (T99).
+"""Pipeline orchestration and output writers (T99; T108 recursive pointers,
+fetch.hosts extension, live enrichment).
 
 Outputs (all inside the locally-gitignored output/ directory):
   candidates.json    validated v3 rule candidates + provenance + review metadata
   classification.csv one row per discovered extractor class
   rejected.json      structural reject reasons for every non-emitted extractor
+  enrich-log.json    per-attempt live-fetch log (hosts in file only; live runs)
   REPORT.md          aggregate counts + needs-review THEMES (no site names)
 """
 
@@ -16,11 +18,22 @@ import os
 import re
 from collections import Counter
 
-from . import analyzer, emit, validate
+from . import analyzer, emit, enrich, validate
 
 SCHEMA_POINTER = (
     "app/src/main/java/com/example/purebrowser/media/rules/RuleData.kt "
     "(SiteRule.parse) + examples in app/src/main/assets/rules/site-rules.json"
+)
+
+FETCH_HOSTS_SCHEMA_NOTE = (
+    "Schema extension (v0.2.0 plan section 3 / T108): a fetch spec may declare "
+    "`fetch[].hosts`: a JSON array of 1-4 explicit extra fetch domains (plain "
+    "registrable-style host strings, no IP literals / private hosts). "
+    "Load-time contract: every fetch URL's host must satisfy registrable_domain"
+    "(fetch_host) IN { registrable_domain(d) for d in match.hosts literals } "
+    "UNION { registrable_domain(d) for d in fetch[].hosts }. Importer-tier "
+    "documents must NOT use the extension (reject on sight); app-side wiring "
+    "belongs to the orchestrator."
 )
 
 
@@ -37,7 +50,8 @@ def read_ytdlp_version(src_root: str) -> str:
     return "unknown"
 
 
-def run(src_root: str, out_dir: str) -> dict:
+def run(src_root: str, out_dir: str, live_enrich: bool = False,
+        enrich_budget: int = enrich.DEFAULT_BUDGET, fetcher=None) -> dict:
     os.makedirs(out_dir, exist_ok=True)
     ytdlp_version = read_ytdlp_version(src_root)
     records = analyzer.analyze_tree(src_root)
@@ -45,6 +59,7 @@ def run(src_root: str, out_dir: str) -> dict:
     counts = Counter(rec.classification for rec in records)
     used_ids: set[str] = set()
     candidates: list[dict] = []
+    provisional: list[dict] = []
     rejected: list[dict] = []
     emitted = 0
     validated = 0
@@ -61,7 +76,7 @@ def run(src_root: str, out_dir: str) -> dict:
             })
             continue
         try:
-            candidate, reason = emit.emit_candidate(rec, used_ids)
+            candidate, reason = emit.emit_candidate(rec, used_ids, allow_http_upgrade=True)
         except Exception as exc:  # defensive: one bad extractor never stops the run
             candidate, reason = None, "emitter error (%s)" % type(exc).__name__
             _ = exc
@@ -86,13 +101,36 @@ def run(src_root: str, out_dir: str) -> dict:
                 "stage": "render-qa", "reason": "fetch template does not bind against test URL",
             })
             continue
-        validated += 1
-        candidates.append({
+        entry = {
             "rule": candidate.rule,
             "needs_review": candidate.needs_review,
             "reasons": candidate.reasons,
             "themes": candidate.themes,
             "source": candidate.source,
+        }
+        if candidate.provisional_http:
+            provisional.append(entry)
+        else:
+            validated += 1
+            candidates.append(entry)
+
+    enrichment = {"requests": 0, "measured": 0, "promoted_provisional": 0, "log": []}
+    if live_enrich:
+        enrichment = enrich.enrich(candidates, provisional, budget=enrich_budget,
+                                   fetcher=fetcher or enrich.curl_fetch)
+        validated += enrichment["promoted_provisional"]
+        with open(os.path.join(out_dir, "enrich-log.json"), "w", encoding="utf-8") as fh:
+            json.dump({"budget": enrichment["budget"], "requests": enrichment["requests"],
+                       "measured": enrichment["measured"],
+                       "attempts": enrichment["log"]}, fh, indent=1, ensure_ascii=False)
+    failed_provisional = enrichment.get("failed_provisional_entries", []) if live_enrich else provisional
+    for entry in failed_provisional:
+        rejected.append({
+            "module": entry["source"].get("module"), "class": entry["source"].get("class"),
+            "ie": entry["source"].get("ie"), "stage": "http-upgrade",
+            "reason": ("http endpoint upgrade not live-verified"
+                       if live_enrich else
+                       "http endpoint upgrade requires live enrichment (not run)"),
         })
 
     doc_failures = validate.validate_document([c["rule"] for c in candidates])
@@ -101,7 +139,8 @@ def run(src_root: str, out_dir: str) -> dict:
     _write_csv(out_dir, records)
     _write_rejected(out_dir, rejected)
     summary = _write_report(out_dir, ytdlp_version, records, counts, candidates,
-                            rejected, validation_failures, doc_failures, emitted)
+                            rejected, validation_failures, doc_failures, emitted,
+                            enrichment)
     summary["validated"] = validated
     summary["emitted"] = emitted
     return summary
@@ -110,16 +149,27 @@ def run(src_root: str, out_dir: str) -> dict:
 def _write_candidates(out_dir: str, candidates: list[dict], version: str, doc_failures: list[str]) -> None:
     doc = {
         "schema": "purebrowser-rules-v3-candidates/1",
-        "generated_by": "tools/rules-transcriber (T99)",
+        "generated_by": "tools/rules-transcriber (T99; T108 recursive pointers + fetch.hosts)",
         "yt_dlp_version": version,
         "rule_schema_pointer": SCHEMA_POINTER,
-        "validation": "ported load-time validators: transcriber/validate.py",
+        "schema_notes": {
+            "fetch.hosts": FETCH_HOSTS_SCHEMA_NOTE,
+            "measured": (
+                "Entries carrying measured=true have their jsonExtract pointers "
+                "verified against a live fetch of the rendered template against "
+                "source.test_url (see enrich-log.json); source.measured holds the "
+                "verified pointer list with kind/quality and sample hosts."
+            ),
+        },
+        "validation": "ported load-time validators: transcriber/validate.py (fetch.hosts extension semantics included)",
         "document_level_failures": doc_failures,
         "consumption": (
             "Each entry's `rule` is a schema-v3 SiteRule JSON object exactly as the "
             "loader expects; merge into rules[] of a version:3 document after human "
-            "review of needs_review/reasons. `themes` flags the review focus. "
-            "T100 should treat `source.test_url` as the manual smoke-test URL."
+            "review of needs_review/reasons. `themes` flags the review focus; "
+            "measured=true entries have live-verified pointers. T109 should treat "
+            "`source.test_url` as the manual smoke-test URL and prioritize "
+            "measured=true entries."
         ),
         "rules": candidates,
     }
@@ -143,13 +193,25 @@ def _write_rejected(out_dir: str, rejected: list[dict]) -> None:
 
 
 def _write_report(out_dir, version, records, counts, candidates, rejected,
-                  validation_failures, doc_failures, emitted: int) -> dict:
+                  validation_failures, doc_failures, emitted: int,
+                  enrichment: dict | None = None) -> dict:
+    enrichment = enrichment or {}
     emit_reasons = Counter(
-        r["reason"] for r in rejected if r["stage"] in ("emit", "render-qa")
+        r["reason"] for r in rejected if r["stage"] in ("emit", "render-qa", "http-upgrade")
     )
     theme_counts = Counter(t for c in candidates for t in c["themes"])
+    measured_count = sum(1 for c in candidates if c.get("measured"))
+    fetch_hosts_declared = sum(
+        1 for c in candidates
+        if any(isinstance(spec.get("hosts"), list) for spec in c["rule"].get("fetch", []))
+    )
+    prov = Counter()
+    for c in candidates:
+        for flags in (c["source"].get("json_pointer_provenance") or {}).values():
+            for flag in flags.split(","):
+                prov[flag] += 1
     lines = [
-        "# T99 yt-dlp rules transcriber report",
+        "# T99/T108 yt-dlp rules transcriber report",
         "",
         "Corpus: yt-dlp %s (pinned stable, cloned to /tmp/ytdlp-src, not committed)." % version,
         "",
@@ -163,6 +225,15 @@ def _write_report(out_dir, version, records, counts, candidates, rejected,
         "- candidates constructed: %d" % emitted,
         "- candidates passing ported load-time validators + render QA: %d" % len(candidates),
         "- rejected before/at validation: %d (see rejected.json; names withheld to files)" % len(rejected),
+        "",
+        "## T108 root-cause fixes",
+        "",
+        "- recursive pointer synthesis: %d pointers across candidates "
+        "(provenance: %s)" % (sum(prov.values()), ", ".join("%s=%d" % kv for kv in prov.most_common())),
+        "- fetch.hosts extension declared on %d candidates (cross-origin API hosts, "
+        "see schema_notes in candidates.json for the app-side wiring contract)" % fetch_hosts_declared,
+        "- live enrichment: %d/%d requests budget used, %d candidates measured=true"
+        % (enrichment.get("requests", 0), enrichment.get("budget", 0), measured_count),
         "",
         "## Rejection reasons (aggregate, structural)",
         "",
@@ -180,7 +251,7 @@ def _write_report(out_dir, version, records, counts, candidates, rejected,
         "(Aggregate review focus areas; site names withheld to files.)",
         "",
     ]
-    for theme, n in theme_counts.most_common(10):
+    for theme, n in theme_counts.most_common(12):
         lines.append("- %s: %d" % (theme, n))
     if doc_failures:
         lines += ["", "## Document-level validation", ""] + ["- %s" % f for f in doc_failures]
@@ -191,11 +262,14 @@ def _write_report(out_dir, version, records, counts, candidates, rejected,
         "- candidates.json — validated v3 candidates + provenance + review metadata",
         "- classification.csv — per-extractor classification (names in file only)",
         "- rejected.json — structural reject reasons per extractor",
+        "- enrich-log.json — live enrichment attempt log (live runs only; hosts in file only)",
         "- REPORT.md — this aggregate report",
         "",
-        "## T100 consumption",
+        "## T109 consumption",
         "",
         "Read output/candidates.json; each `.rules[] entry.rule` is a schema-v3 rule.",
+        "Prioritize measured=true entries for the ≥30-site verification pool; every",
+        "measured pointer list was verified against the live endpoint.",
         "Schema source of truth: %s" % SCHEMA_POINTER,
     ]
     with open(os.path.join(out_dir, "REPORT.md"), "w", encoding="utf-8") as fh:

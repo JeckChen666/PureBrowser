@@ -50,7 +50,7 @@ object RuleFetchPolicy {
      * matched by the rule's hosts face, no IP literals, no private or link-local hosts, no
      * dotless intranet names.
      */
-    fun target(url: String, hostsPattern: Regex?): FetchDecision {
+    fun target(url: String, hostsPattern: Regex?, extraHosts: Set<String> = emptySet()): FetchDecision {
         if (url.isEmpty() || url.length > 8192 || url.any { it.isWhitespace() || it.code < 0x20 }) {
             return FetchDecision.denied(FetchDeny.INVALID_URL)
         }
@@ -69,7 +69,8 @@ object RuleFetchPolicy {
             isIpLiteral(host) -> return FetchDecision.denied(FetchDeny.IP_LITERAL)
             isPrivateOrLinkLocal(host) -> return FetchDecision.denied(FetchDeny.PRIVATE_OR_LINK_LOCAL)
         }
-        if (hostsPattern == null || !runCatching { hostsPattern.containsMatchIn(host) }.getOrDefault(false)) {
+        val extended = extraHosts.any { it == host || host.endsWith(".$it") }
+        if (!extended && (hostsPattern == null || !runCatching { hostsPattern.containsMatchIn(host) }.getOrDefault(false))) {
             return FetchDecision.denied(FetchDeny.HOST_NOT_WHITELISTED)
         }
         return FetchDecision(true, resolvedUrl = url)

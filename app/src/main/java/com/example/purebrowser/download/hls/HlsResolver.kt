@@ -1,24 +1,56 @@
 package com.example.purebrowser.download.hls
 
 import com.example.purebrowser.download.*
+import com.example.purebrowser.media.codec.Av1Capability
+import com.example.purebrowser.media.codec.Av1CapabilityProvider
+import com.example.purebrowser.media.codec.Av1DecodeSupport
 
-class HlsResolver(transport:HttpTransport,access:AccessContextProvider,private val allowLocalHttp:Boolean) {
+class HlsResolver(
+    transport:HttpTransport,
+    access:AccessContextProvider,
+    private val allowLocalHttp:Boolean,
+    /** T110 AV1 runtime gate at the offer layer; the default keeps pre-T110 test behavior. */
+    private val av1:Av1CapabilityProvider = Av1CapabilityProvider { Av1DecodeSupport.AVAILABLE },
+) {
     private val client=HlsHttpClient(transport,access,allowLocalHttp)
     fun resolveEntry(draft:DownloadDraft,cancel:TransferCancellation):HlsOptions {
         val record=previewRecord(draft)
         val (text,finalUrl)=client.text(record,draft.candidate.url,cancel)
-        return HlsOptions(draft.candidate.url,finalUrl,parse(text,finalUrl))
+        return HlsOptions(draft.candidate.url,finalUrl,gateAv1(parse(text,finalUrl)))
+    }
+    /**
+     * T110 post-parse offer policy (the parser itself stays capability-blind and pure): HIDDEN
+     * drops AV1 variants outright — hidden, not greyed — including from default-variant picking;
+     * WARNED keeps them selectable (honest attempt) and appends the fixed software-decode note to
+     * the parser's codec warning. An unsupported variant's reason stays an exclusion and is never
+     * softened into a warning.
+     */
+    private fun gateAv1(playlist:HlsPlaylist):HlsPlaylist {
+        val master=playlist as? HlsPlaylist.Master ?: return playlist
+        val support=av1.support()
+        val gated=master.variants.mapNotNull { variant ->
+            when {
+                Av1Capability.hidden(variant.codecs,support) -> null
+                support==Av1DecodeSupport.WARNED && variant.supported && Av1Capability.isAv1Codecs(variant.codecs) ->
+                    variant.copy(unsupportedReason=Av1Capability.annotated(variant.unsupportedReason,support))
+                else -> variant
+            }
+        }
+        if(gated==master.variants) return master
+        return HlsPlaylist.Master(gated,master.audioRenditions)
     }
     fun resolvePlan(draft:DownloadDraft,options:HlsOptions,variant:HlsVariant?,cancel:TransferCancellation):HlsDownloadPlan {
         require(options.entryUrl==draft.candidate.url)
         val record=previewRecord(draft)
         val plan=when(val playlist=options.playlist) {
-            is HlsPlaylist.Media -> HlsDownloadPlan(options.entryUrl,options.finalUrl,transferableMedia(options.finalUrl,playlist),null)
+            is HlsPlaylist.Media -> HlsDownloadPlan(options.entryUrl,options.finalUrl,
+                transferableMedia(options.finalUrl,playlist,SegmentFormat.Role.SINGLE_TRACK),null)
             is HlsPlaylist.Master -> {
                 val chosen=variant?.takeIf { it.supported && playlist.variants.any { v->v==it } }
                     ?: throw TransferFailure(FailureKind.UNSUPPORTED,"请选择受支持的视频档位")
                 val (text,finalUrl)=client.text(record,chosen.url,cancel)
-                val media=transferableMedia(finalUrl,parse(text,finalUrl))
+                val media=parse(text,finalUrl) as? HlsPlaylist.Media
+                    ?: throw TransferFailure(FailureKind.UNSUPPORTED,"不支持嵌套主清单")
                 val audio=chosen.audioGroup?.let { group ->
                     // Only renditions that declare their own address form a dual-track plan; a
                     // URI-less group means audio is muxed into the variant stream (single-track).
@@ -26,17 +58,29 @@ class HlsResolver(transport:HttpTransport,access:AccessContextProvider,private v
                         .takeIf { it.isNotEmpty() }?.let { resolveAudioTrack(record,it,cancel) }
                         ?.also { dualTrackGates(chosen,media,it.media) }
                 }
-                HlsDownloadPlan(options.entryUrl,finalUrl,media,chosen,audio)
+                // The variant's container gate depends on the carrying pipeline: only a
+                // separate-audio dual-track plan can assemble fMP4 per track (T107); a muxed
+                // single-track transfer keeps the TS-only remux path.
+                HlsDownloadPlan(options.entryUrl,finalUrl,
+                    transferableMedia(finalUrl,media,
+                        if(audio!=null) SegmentFormat.Role.DUAL_TRACK_VIDEO else SegmentFormat.Role.SINGLE_TRACK),
+                    chosen,audio)
             }
         }
         plan.media.segments.forEach { RequestPolicy.validateUrl(it.url,allowLocalHttp) }
         plan.audio?.media?.segments?.forEach { RequestPolicy.validateUrl(it.url,allowLocalHttp) }
+        plan.media.initSegment?.let { RequestPolicy.validateUrl(it.url,allowLocalHttp) }
+        plan.audio?.media?.initSegment?.let { RequestPolicy.validateUrl(it.url,allowLocalHttp) }
         return plan
     }
-    /** The parser classifies fMP4; this is the single seam that keeps it out of transfer until T96. */
-    private fun transferableMedia(finalUrl:String,playlist:HlsPlaylist):HlsPlaylist.Media {
+    /** The parser classifies fMP4; this seam decides which pipeline may carry it (T107). */
+    private fun transferableMedia(finalUrl:String,playlist:HlsPlaylist,role:SegmentFormat.Role):HlsPlaylist.Media {
         val media=playlist as? HlsPlaylist.Media ?: throw TransferFailure(FailureKind.UNSUPPORTED,"不支持嵌套主清单")
-        media.format.requireTransferSupported()
+        media.format.requireTransferSupported(role)
+        // fMP4 assembly is init-segment driven; a classified fMP4 playlist without EXT-X-MAP
+        // has an unknowable init and is refused instead of guessed.
+        if(media.format==SegmentFormat.FMP4 && media.initSegment==null)
+            throw TransferFailure(FailureKind.UNSUPPORTED,"fMP4 清单缺少初始化段声明，本版无法组装")
         return media
     }
     /** Default-or-single rendition selection; honest ambiguity refusals, never a silent language pick. */
@@ -49,7 +93,7 @@ class HlsResolver(transport:HttpTransport,access:AccessContextProvider,private v
             else -> throw TransferFailure(FailureKind.UNSUPPORTED,"音轨分组声明了多个默认音轨")
         }
         val (text,finalUrl)=client.text(record,chosen.uri ?: error("音轨缺少地址"),cancel)
-        return HlsAudioTrack(finalUrl,transferableMedia(finalUrl,parse(text,finalUrl)),chosen)
+        return HlsAudioTrack(finalUrl,transferableMedia(finalUrl,parse(text,finalUrl),SegmentFormat.Role.DUAL_TRACK_AUDIO),chosen)
     }
     /** Declaration-level dual-track gates; segment content is still verified during transfer. */
     private fun dualTrackGates(variant:HlsVariant,video:HlsPlaylist.Media,audio:HlsPlaylist.Media) {

@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import android.system.Os
 import android.system.OsConstants
 import androidx.core.content.FileProvider
+import com.example.purebrowser.media.codec.DeviceAv1CapabilityProvider
 import java.io.File
 import java.security.MessageDigest
 
@@ -63,6 +64,11 @@ class ManagedFileStore(private val app: Context) {
             extractor.selectTrack(i)
             if(extractor.sampleTime<0) return MediaInspection(FormatCheck.INVALID)
             val format=extractor.getTrackFormat(i)
+            // T110 成品校验含解码可用性: an AV1 track saved on a device with no AV1 decoder at
+            // all can never play back — reject it here instead of publishing an unusable file.
+            if(com.example.purebrowser.media.codec.Av1Capability.rejectsFinishedProduct(
+                    format.getString(MediaFormat.KEY_MIME), DeviceAv1CapabilityProvider.support()))
+                return MediaInspection(FormatCheck.INVALID)
             val duration=if(format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION)/1000 else null
             MediaInspection(FormatCheck.PASSED,mime,duration)
         } catch(_:Exception) { MediaInspection(FormatCheck.UNCONFIRMED) } finally { extractor.release() }

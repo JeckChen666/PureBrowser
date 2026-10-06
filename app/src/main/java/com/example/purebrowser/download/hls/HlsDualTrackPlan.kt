@@ -7,11 +7,12 @@ import com.example.purebrowser.download.site.DualTrackTaskPlan
 import java.security.MessageDigest
 
 /**
- * The v0.1.9 separate-audio HLS dual-track declaration: each track is an ORDERED TS SEGMENT LIST
+ * The v0.1.9 separate-audio HLS dual-track declaration: each track is an ORDERED SEGMENT LIST
  * (variant media playlist ＋ audio-rendition media playlist), not closed-range byte chunks of two
  * complete MP4s. It rides the existing dual-track lease/cleanup semantics: one use, no resume
- * bytes, honest re-parse on any interruption. Segment format is declared per track and the
- * [SegmentFormat] seam keeps fMP4 out of transfer until the fMP4 assembly foundation lands.
+ * bytes, honest re-parse on any interruption. Segment format is declared per track: TS tracks are
+ * remuxed (TsToMp4Remuxer), fMP4 tracks (T107) are assembled through Fmp4SegmentAssembler after
+ * their EXT-X-MAP init is fetched — same budgets, same cleanup.
  *
  * Track URLs (including signatures) live only in memory; identity is hashed before persistence.
  */
@@ -28,6 +29,10 @@ class HlsDualTrackPlan(
     val language: String?,
     val channels: String?,
     override val durationUs: Long,
+    val videoFormat: SegmentFormat = SegmentFormat.MPEG_TS,
+    val audioFormat: SegmentFormat = SegmentFormat.MPEG_TS,
+    val videoInitSegment: HlsInitSegment? = null,
+    val audioInitSegment: HlsInitSegment? = null,
     override val safeSourceUrl: String? = null,
 ) : DualTrackTaskPlan {
     init {
@@ -41,6 +46,9 @@ class HlsDualTrackPlan(
         listOf(videoDurationUs, audioDurationUs, durationUs).forEach {
             require(it in 1..DualTrackMetadata.MAX_DURATION_US) { "分轨时长超出预算" }
         }
+        listOf(videoFormat to videoInitSegment, audioFormat to audioInitSegment).forEach { (format, init) ->
+            require((format == SegmentFormat.FMP4) == (init != null)) { "分轨 fMP4 初始化声明无效" }
+        }
         metadata().validate()
         DualTrackDownloadPlan.validateSafeSourceUrl(safeSourceUrl)
     }
@@ -49,6 +57,7 @@ class HlsDualTrackPlan(
         RequestPolicy.validateUrl(videoUrl, allowLocalHttp)
         RequestPolicy.validateUrl(audioUrl, allowLocalHttp)
         (videoSegments + audioSegments).forEach { RequestPolicy.validateUrl(it.url, allowLocalHttp) }
+        listOfNotNull(videoInitSegment, audioInitSegment).forEach { RequestPolicy.validateUrl(it.url, allowLocalHttp) }
     }
 
     override fun metadata() = DualTrackMetadata(
@@ -76,6 +85,8 @@ class HlsDualTrackPlan(
                 videoCodec = videoCodec, audioCodec = audioCodec,
                 language = audio.rendition.language, channels = audio.rendition.channels,
                 durationUs = plan.media.durationUs, safeSourceUrl = safeSourceUrl,
+                videoFormat = plan.media.format, audioFormat = audio.media.format,
+                videoInitSegment = plan.media.initSegment, audioInitSegment = audio.media.initSegment,
             )
         }
 

@@ -126,7 +126,7 @@ class HlsPlaylistParserTest {
     }
 
     @Test fun excludedMediaFeaturesCannotBeIgnored() {
-        listOf("#EXT-X-MAP:URI=\"init.m3u8\",BYTERANGE=100@0", "#EXT-X-BYTERANGE:100@0", "#EXT-X-DISCONTINUITY",
+        listOf("#EXT-X-BYTERANGE:100@0", "#EXT-X-DISCONTINUITY",
             "#EXT-X-DISCONTINUITY-SEQUENCE:0", "#EXT-X-GAP", "#EXT-X-I-FRAMES-ONLY").forEach {
             rejected(media(extra = it))
         }
@@ -246,10 +246,23 @@ class HlsPlaylistParserTest {
         assertEquals(4_010_666L, result.durationUs)
     }
 
-    @Test fun extMapDeclaresFmp4WithoutByterangeAndOnlyOnce() {
-        assertEquals(SegmentFormat.FMP4, (parse(media(extra = "#EXT-X-MAP:URI=\"init.mp4\"")) as HlsPlaylist.Media).format)
-        listOf("#EXT-X-MAP:URI=\"init.mp4\"\n#EXT-X-MAP:URI=\"init.mp4\"", "#EXT-X-MAP:URI=\"init.m3u8\",BYTERANGE=100@0",
-            "#EXT-X-MAP:BYTERANGE=100@0").forEach { rejected(media(extra = it)) }
+    @Test fun extMapDeclaresFmp4WithAnOptionalExactClosedByterange() {
+        val plain = parse(media(extra = "#EXT-X-MAP:URI=\"init.mp4\"")) as HlsPlaylist.Media
+        assertEquals(SegmentFormat.FMP4, plain.format)
+        assertEquals("https://media.example/path/init.mp4", plain.initSegment!!.url)
+        assertNull(plain.initSegment!!.closedByteRange())
+        // T107: a quoted BYTERANGE window is carried as the exact closed interval, never re-sliced.
+        val ranged = parse(media(extra = "#EXT-X-MAP:URI=\"init.mp4\",BYTERANGE=\"712@96\"")) as HlsPlaylist.Media
+        assertEquals(96L..807L, ranged.initSegment!!.closedByteRange())
+        assertEquals(0L, (parse(media(extra = "#EXT-X-MAP:URI=\"init.mp4\",BYTERANGE=\"712\"")) as HlsPlaylist.Media)
+            .initSegment!!.byteOffset)
+        listOf("#EXT-X-MAP:URI=\"init.mp4\"\n#EXT-X-MAP:URI=\"init.mp4\"", // declared only once
+            "#EXT-X-MAP:URI=\"init.m3u8\",BYTERANGE=100@0",                  // unquoted window is an invalid attribute
+            "#EXT-X-MAP:BYTERANGE=100@0",                                    // missing address
+            "#EXT-X-MAP:URI=\"init.mp4\",BYTERANGE=\"0\"",                   // empty window
+            "#EXT-X-MAP:URI=\"init.mp4\",BYTERANGE=\"100@\"",                // truncated offset
+            "#EXT-X-MAP:URI=\"init.mp4\",BYTERANGE=\"-1\"",                  // negative length
+            "#EXT-X-MAP:URI=\"init.mp4\",X-OTHER=\"1\"").forEach { rejected(media(extra = it)) } // unknown attribute
     }
 
     @Test fun subtitleSelectionsDowngradeToWarningsWhileSeparateVideoGroupsStayUnsupported() {

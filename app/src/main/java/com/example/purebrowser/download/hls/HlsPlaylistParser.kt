@@ -18,6 +18,7 @@ object HlsPlaylistParser {
     private const val SECOND_US = 1_000_000L
     private val unsignedInteger = Regex("[0-9]+")
     private val decimal = Regex("[0-9]+(?:\\.[0-9]+)?")
+    private val byteRangeValue = Regex("[0-9]{1,20}(?:@[0-9]{1,20})?")
     private val attributeName = Regex("[A-Z0-9-]+")
     private val resolution = Regex("([0-9]+)x([0-9]+)")
     private val codecName = Regex("[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*")
@@ -68,6 +69,7 @@ object HlsPlaylistParser {
         val segments = arrayListOf<HlsSegment>()
         // Container classification only; transport support is gated later at the SegmentFormat seam.
         var segmentFormat = SegmentFormat.MPEG_TS
+        var pendingInitSegment: HlsInitSegment? = null
         var pendingVariant: Attributes? = null
         var pendingDuration: Long? = null
         var targetDurationUs: Long? = null
@@ -154,12 +156,15 @@ object HlsPlaylistParser {
                     }
                 }
                 "#EXT-X-MAP" -> {
-                    // The fMP4 init declaration: classified, then honestly gated at the SegmentFormat seam.
+                    // The fMP4 init declaration: carried into the plan; a BYTERANGE window (RFC 8216
+                    // §4.3.2.5) is fetched later as one exact closed interval, never an open-ended slice.
                     mark(Kind.MEDIA)
                     once(tag)
                     val a = attributes(value())
-                    if (a.values.keys != setOf("URI")) reject("本版不支持带字节范围的初始化段")
-                    resolve(base, a.string("URI") ?: reject("初始化段声明缺少地址"))
+                    if (a.values.keys.any { it != "URI" && it != "BYTERANGE" }) reject("初始化段声明格式无效")
+                    val uri = a.string("URI") ?: reject("初始化段声明缺少地址")
+                    val declaredRange = a.string("BYTERANGE")?.let(::byteRange)
+                    pendingInitSegment = HlsInitSegment(resolve(base, uri), declaredRange?.second ?: 0L, declaredRange?.first)
                     segmentFormat = SegmentFormat.FMP4
                 }
                 "#EXT-X-I-FRAME-STREAM-INF" -> {
@@ -245,7 +250,7 @@ object HlsPlaylistParser {
         val target = targetDurationUs ?: reject("媒体清单缺少目标分片时长")
         if (segments.any { ((it.durationUs + SECOND_US / 2) / SECOND_US) * SECOND_US > target })
             reject("分片时长超过清单目标时长")
-        return HlsPlaylist.Media(segments, totalUs, target, mediaSequence, segmentFormat)
+        return HlsPlaylist.Media(segments, totalUs, target, mediaSequence, segmentFormat, pendingInitSegment)
     }
 
     /** Stable order breaks metadata ties. Unknown metadata is never invented. */
@@ -374,6 +379,15 @@ object HlsPlaylistParser {
     }
 
     private fun signedSeconds(text: String) { seconds(text.removePrefix("-"), positive = false) }
+
+    /** BYTERANGE="n[@o]": exact byte length n at byte offset o (default 0). */
+    private fun byteRange(value: String): Pair<Long, Long> {
+        if (value.length > 41 || !byteRangeValue.matches(value)) reject("初始化段字节范围格式无效")
+        val length = value.substringBefore('@').toLongOrNull() ?: reject("初始化段字节范围格式无效")
+        if (length <= 0L) reject("初始化段字节范围格式无效")
+        val offset = value.substringAfter('@', "0").toLongOrNull() ?: reject("初始化段字节范围格式无效")
+        return length to offset
+    }
     private fun yesNo(text: String) { if (text != "YES" && text != "NO") reject("清单布尔属性无效") }
     private fun date(text: String) {
         if (runCatching { OffsetDateTime.parse(text) }.isFailure) reject("清单日期格式无效")

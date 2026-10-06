@@ -39,39 +39,11 @@ class NormMeta:
 def _tokens(pattern: str) -> list[tuple[int, str, bool, bool]]:
     """(index, char, in_class, escaped) for every char, class- and escape-aware.
 
-    ``[``-class contents are marked in_class=True so metacharacter scans can skip
-    them; POSIX ``[:alpha:]`` is not special-cased (Python compile rejects those
-    patterns anyway, which is the outcome we want).
+    Shared scanner (canonical home: validate.scan_tokens; re-exported here).
     """
-    out: list[tuple[int, str, bool, bool]] = []
-    i, n = 0, len(pattern)
-    in_class = False
-    while i < n:
-        c = pattern[i]
-        if c == "\\" and i + 1 < n:
-            out.append((i, c, in_class, True))
-            out.append((i + 1, pattern[i + 1], in_class, True))
-            i += 2
-            continue
-        if not in_class and c == "[":
-            in_class = True
-            out.append((i, c, False, False))
-            i += 1
-            if i < n and pattern[i] == "^":
-                out.append((i, pattern[i], True, False))
-                i += 1
-            if i < n and pattern[i] == "]":  # leading ] is literal inside a class
-                out.append((i, pattern[i], True, False))
-                i += 1
-            continue
-        if in_class and c == "]":
-            in_class = False
-            out.append((i, c, True, False))
-            i += 1
-            continue
-        out.append((i, c, in_class, False))
-        i += 1
-    return out
+    from .validate import scan_tokens
+
+    return scan_tokens(pattern)
 
 
 def _outside(pattern: str):

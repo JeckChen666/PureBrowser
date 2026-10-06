@@ -1,13 +1,21 @@
 package com.example.purebrowser.download.dash
 
 import com.example.purebrowser.download.*
+import com.example.purebrowser.media.codec.Av1Capability
+import com.example.purebrowser.media.codec.Av1CapabilityProvider
 
 /**
  * T97 DASH resolution, mirroring [com.example.purebrowser.download.hls.HlsResolver]: nothing is
  * fetched until an explicit dialog action calls these; the MPD is read once per resolveEntry and
  * the plan is built from the already-parsed document without a second GET.
  */
-class DashResolver(transport: HttpTransport, access: AccessContextProvider, private val allowLocalHttp: Boolean) {
+class DashResolver(
+    transport: HttpTransport,
+    access: AccessContextProvider,
+    private val allowLocalHttp: Boolean,
+    /** T110 AV1 runtime gate at the offer layer; the default keeps pre-T110 test behavior. */
+    private val av1: Av1CapabilityProvider = Av1CapabilityProvider { com.example.purebrowser.media.codec.Av1DecodeSupport.AVAILABLE },
+) {
     private val client = com.example.purebrowser.download.hls.HlsHttpClient(transport, access, allowLocalHttp)
 
     data class DashOptions(val entryUrl: String, val finalUrl: String, val document: MpdPlanParser.MpdDocument) {
@@ -19,7 +27,23 @@ class DashResolver(transport: HttpTransport, access: AccessContextProvider, priv
         val (text, finalUrl) = client.text(record, draft.candidate.url, cancel)
         val document = try { MpdPlanParser.parse(text, finalUrl) }
         catch (e: DashPlanException) { throw TransferFailure(FailureKind.UNSUPPORTED, e.safeReason) }
-        return DashOptions(draft.candidate.url, finalUrl, document)
+        return DashOptions(draft.candidate.url, finalUrl, gateAv1(document))
+    }
+
+    /**
+     * T110 post-parse offer policy; MpdPlanParser stays capability-blind and pure. On a
+     * no-decoder device AV1 representations are REMOVED from the offer list (hidden, not
+     * greyed-out with a reason), so default-variant picking never suggests them either. On
+     * decoder-present devices nothing changes here: the fMP4 assembler honestly accepts only
+     * H.264/AAC, so an AV1 representation keeps its parser exclusion rather than being offered
+     * as a download that is guaranteed to fail late; the software-decode performance note for
+     * such devices is carried by the candidate surface (VariantSummary.warning), not by offers.
+     */
+    private fun gateAv1(document: MpdPlanParser.MpdDocument): MpdPlanParser.MpdDocument {
+        val support = av1.support()
+        val gated = document.videoOffers.filterNot { Av1Capability.hidden(it.codecs, support) }
+        if (gated.size == document.videoOffers.size) return document
+        return MpdPlanParser.MpdDocument(document.mpdUrl, document.durationUs, gated, document.audioOffer)
     }
 
     fun resolvePlan(

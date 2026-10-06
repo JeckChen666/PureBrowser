@@ -1,5 +1,8 @@
 package com.example.purebrowser.media
 
+import com.example.purebrowser.media.codec.Av1Capability
+import com.example.purebrowser.media.codec.Av1CapabilityProvider
+import com.example.purebrowser.media.codec.Av1DecodeSupport
 import com.example.purebrowser.media.verify.ProbeResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -7,7 +10,15 @@ import java.net.URI
 import java.util.Locale
 
 /** Bounded, navigation-scoped store. Called by both WebView workers and main-thread DOM callbacks. */
-class ResourceSniffer {
+class ResourceSniffer(
+    /**
+     * T110 AV1 runtime gating at the candidate layer. The default keeps the pre-T110 behavior for
+     * unmigrated/test constructions (AV1 entries stay listed); production injects the device
+     * provider so HIDDEN devices never see AV1 variants and software-decode devices get the
+     * performance warning in [VariantSummary.warning].
+     */
+    private val av1: Av1CapabilityProvider = Av1CapabilityProvider { Av1DecodeSupport.AVAILABLE },
+) {
     private var epoch = 0L
     private val entries = linkedMapOf<String, MediaCandidate>()
     private val mutableCandidates = MutableStateFlow<List<MediaCandidate>>(emptyList())
@@ -116,9 +127,13 @@ class ResourceSniffer {
         pageEpoch: Long,
         url: String,
         kindHint: MediaKind,
-        variants: List<VariantSummary>,
+        rawVariants: List<VariantSummary>,
     ) {
-        if (pageEpoch != epoch || variants.isEmpty()) return
+        if (pageEpoch != epoch || rawVariants.isEmpty()) return
+        // T110: rule-sourced variants pass the same AV1 gate before they can surface. An all-AV1
+        // list on a HIDDEN device gates to nothing, which is the intended absence, not an update.
+        val variants = Av1Capability.applyToSummaries(rawVariants, av1.support())
+        if (variants.isEmpty()) return
         val key = url.substringBefore('#')
         val old = entries[key] ?: return
         val kind = if (old.kind == MediaKind.UNKNOWN && (kindHint == MediaKind.HLS || kindHint == MediaKind.DASH)) kindHint else old.kind
@@ -133,22 +148,29 @@ class ResourceSniffer {
     }
 
     /** Applies one background verification outcome; stale epochs and unknown URLs are ignored. */
-    @Synchronized fun applyProbeResult(url: String, epoch: Long, result: ProbeResult, variants: List<VariantSummary>? = null) {
+    @Synchronized fun applyProbeResult(url: String, epoch: Long, result: ProbeResult, rawVariants: List<VariantSummary>? = null) {
         if (epoch != this.epoch) return
         val key = url.substringBefore('#')
         val old = entries[key] ?: return
+        // T110: both variant entry paths (probe-embedded and explicit override) pass the AV1 gate.
+        val support = av1.support()
+        val override = rawVariants?.let { Av1Capability.applyToSummaries(it, support) }
         val updated = when (result) {
             is ProbeResult.Verified -> {
+                // T110: probe-sourced variant lists pass the AV1 gate here — the candidate layer,
+                // after the pure parse, never inside HlsPlaylistParser/MpdCatalog.
+                val gated = result.variants?.let { Av1Capability.applyToSummaries(it, support) }
+                val verifiedResult = if (gated != null && gated !== result.variants) result.copy(variants = gated) else result
                 // Verified manifests upgrade unknown endpoints; the DASH listing stays display-only
                 // here, resolution/selection moved to the T97 DASH confirmation dialog.
                 // A content-verified mpegurl body also corrects a master whose URL shape (e.g. a
                 // trailing .mp4) pinned it as FILE at first sight — the probe already knows the
                 // truth, so the kind follows the served media type, not the suffix (v0.1.7 S-E).
-                val verifiedMime = result.mime?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)
+                val verifiedMime = verifiedResult.mime?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)
                 val upgraded = when {
-                    result.kindHint == MediaKind.HLS && old.kind == MediaKind.UNKNOWN -> MediaKind.HLS
-                    result.kindHint == MediaKind.HLS && old.kind == MediaKind.FILE && verifiedMime?.contains("mpegurl") == true -> MediaKind.HLS
-                    result.kindHint == MediaKind.DASH && old.kind == MediaKind.UNKNOWN -> MediaKind.DASH
+                    verifiedResult.kindHint == MediaKind.HLS && old.kind == MediaKind.UNKNOWN -> MediaKind.HLS
+                    verifiedResult.kindHint == MediaKind.HLS && old.kind == MediaKind.FILE && verifiedMime?.contains("mpegurl") == true -> MediaKind.HLS
+                    verifiedResult.kindHint == MediaKind.DASH && old.kind == MediaKind.UNKNOWN -> MediaKind.DASH
                     else -> old.kind
                 }
                 old.copy(
@@ -158,12 +180,12 @@ class ResourceSniffer {
                         MediaKind.DASH -> "application/dash+xml"
                         else -> old.mimeType
                     },
-                    totalBytes = result.totalBytes ?: old.totalBytes,
-                    resumable = result.resumable,
-                    verifiedMime = result.mime ?: old.verifiedMime,
+                    totalBytes = verifiedResult.totalBytes ?: old.totalBytes,
+                    resumable = verifiedResult.resumable,
+                    verifiedMime = verifiedResult.mime ?: old.verifiedMime,
                     probeState = ProbeState.VERIFIED,
-                    variants = (variants ?: result.variants) ?: old.variants,
-                    pageUrl = result.pageUrl ?: old.pageUrl,
+                    variants = (override ?: gated) ?: old.variants,
+                    pageUrl = verifiedResult.pageUrl ?: old.pageUrl,
                 )
             }
             is ProbeResult.NotMedia, is ProbeResult.Unreachable -> old.copy(probeState = ProbeState.FAILED)

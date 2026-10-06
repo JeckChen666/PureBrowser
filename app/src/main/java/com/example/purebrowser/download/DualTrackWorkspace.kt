@@ -10,7 +10,9 @@ class DualTrackWorkspace(private val filesRoot: File) {
     private val root get() = File(filesRoot, "dual-track")
     private val leaves = setOf("video.mp4", "audio.mp4")
     // v0.1.9 separate-audio HLS: per-track TS segment parts, remuxed into the mp4 leaves.
-    private val segmentLeaf = Regex("(video|audio)-seg-[0-9]{1,4}\\.ts")
+    // v0.2.0 T107: fMP4 tracks additionally hold an EXT-X-MAP init part beside their .m4s segments.
+    private val segmentLeaf = Regex("(video|audio)-seg-[0-9]{1,4}\\.(ts|m4s)")
+    private val initLeaf = Regex("(video|audio)-init\\.mp4")
 
     private fun directory(id: TaskId, create: Boolean): File {
         DirectCheckpointStore.checkId(id)
@@ -33,20 +35,29 @@ class DualTrackWorkspace(private val filesRoot: File) {
         return File(dir, "video.mp4") to File(dir, "audio.mp4")
     }
 
-    /** One ordered TS segment slot of one track; created fresh per task, never a resume target. */
-    fun segment(id: TaskId, video: Boolean, index: Int): File {
+    /** One ordered segment slot of one track; created fresh per task, never a resume target. */
+    fun segment(id: TaskId, video: Boolean, index: Int, fmp4: Boolean = false): File {
         require(index in 0..9999)
         val dir = directory(id, true)
-        val file = File(dir, "${if (video) "video" else "audio"}-seg-$index.ts")
+        val file = File(dir, "${if (video) "video" else "audio"}-seg-$index.${if (fmp4) "m4s" else "ts"}")
         require(!Files.isSymbolicLink(file.toPath()) && file.canonicalFile.parentFile == dir.canonicalFile)
         require(!file.exists() || file.isFile)
         return file
     }
 
-    /** Segment bytes are dropped as soon as both per-track MP4s exist; the muxer never needs TS again. */
+    /** One fMP4 track's EXT-X-MAP init slot; fresh per task with the same semantics as segments. */
+    fun init(id: TaskId, video: Boolean): File {
+        val dir = directory(id, true)
+        val file = File(dir, "${if (video) "video" else "audio"}-init.mp4")
+        require(!Files.isSymbolicLink(file.toPath()) && file.canonicalFile.parentFile == dir.canonicalFile)
+        require(!file.exists() || file.isFile)
+        return file
+    }
+
+    /** Segment/init bytes are dropped as soon as both per-track MP4s exist; the muxer never needs them again. */
     fun deleteSegments(id: TaskId) {
         val dir = directory(id, false)
-        dir.listFiles()?.filter { segmentLeaf.matches(it.name) }?.forEach { check(it.delete()) }
+        dir.listFiles()?.filter { segmentLeaf.matches(it.name) || initLeaf.matches(it.name) }?.forEach { check(it.delete()) }
     }
 
     fun requireSpace(id: TaskId, bytes: Long) {
@@ -72,7 +83,7 @@ class DualTrackWorkspace(private val filesRoot: File) {
         val dir = directory(id, false)
         if (!dir.exists()) return
         val children = dir.listFiles() ?: throw IOException("双轨临时目录无法读取")
-        require(children.all { it.name in leaves || segmentLeaf.matches(it.name) }) { "双轨临时目录含有非任务文件" }
+        require(children.all { it.name in leaves || segmentLeaf.matches(it.name) || initLeaf.matches(it.name) }) { "双轨临时目录含有非任务文件" }
         children.forEach {
             if (it.name in leaves) check(it, id) else DirectCheckpointStore.checkLeaf(it)
             if (!it.delete()) throw IOException("双轨临时文件无法清理")

@@ -27,8 +27,9 @@ class HlsDualTrackPlanTest {
         appendLine("#EXT-X-STREAM-INF:$variantAttrs")
         appendLine("video.m3u8")
     }.trimIndent()
-    private fun videoPlaylist(target: Int = 2, entries: String = "#EXTINF:2.000000,\nvideo-000.ts\n#EXTINF:2.000000,\nvideo-001.ts") =
-        "#EXTM3U\n#EXT-X-TARGETDURATION:$target\n#EXT-X-PLAYLIST-TYPE:VOD\n$entries\n#EXT-X-ENDLIST\n"
+    private fun videoPlaylist(target: Int = 2, entries: String = "#EXTINF:2.000000,\nvideo-000.ts\n#EXTINF:2.000000,\nvideo-001.ts",
+        map: String = "") =
+        "#EXTM3U\n#EXT-X-TARGETDURATION:$target\n#EXT-X-PLAYLIST-TYPE:VOD\n$map$entries\n#EXT-X-ENDLIST\n"
     private fun audioPlaylist(target: Int = 3, entries: String = "#EXTINF:2.005333,\naudio-000.ts\n#EXTINF:1.994667,\naudio-001.ts",
         extra: String = "") = "#EXTM3U\n#EXT-X-TARGETDURATION:$target\n#EXT-X-PLAYLIST-TYPE:VOD\n$extra$entries\n#EXT-X-ENDLIST\n"
 
@@ -105,13 +106,87 @@ class HlsDualTrackPlanTest {
         unsupported(master(), defaultPlaylists(audio = live), word = "结束标记")
     }
 
-    @Test fun fmp4AudioRenditionIsDeclaredButRejectedAtTheSegmentFormatSeam() {
+    @Test fun fmp4AudioRenditionWithoutAMapIsHonestlyRefused() {
+        // .m4s addresses classify the rendition as fMP4, but assembly is init-segment driven:
+        // an EXT-X-MAP-less fMP4 playlist has an unknowable init and is refused, never guessed.
         val fmp4 = audioPlaylist(entries = "#EXTINF:2.0,\naudio-000.m4s\n#EXTINF:2.0,\naudio-001.m4s")
-        val failure = unsupported(master(), defaultPlaylists(audio = fmp4), word = "fMP4")
-        // The seam's message is fixed safe text, usable from any caller.
-        try { SegmentFormat.FMP4.requireTransferSupported(); fail("Expected the seam to refuse fMP4") }
-        catch (seam: TransferFailure) { assertEquals(failure.safeMessage, seam.safeMessage) }
-        SegmentFormat.MPEG_TS.requireTransferSupported()
+        unsupported(master(), defaultPlaylists(audio = fmp4), word = "初始化段")
+    }
+
+    @Test fun fmp4AudioRenditionWithAMapBuildsADualTrackPlan() {
+        val fmp4 = audioPlaylist(
+            entries = "#EXTINF:2.0,\naudio-000.m4s\n#EXTINF:2.0,\naudio-001.m4s",
+            extra = "#EXT-X-MAP:URI=\"init.mp4\",BYTERANGE=\"712@96\"\n",
+        )
+        val plan = resolve(defaultPlaylists(audio = fmp4))
+        assertNotNull(plan.audio)
+        assertEquals(SegmentFormat.MPEG_TS, plan.media.format)
+        assertEquals(SegmentFormat.FMP4, plan.audio!!.media.format)
+        val init = plan.audio!!.media.initSegment!!
+        assertEquals("https://cdn.example/talk/init.mp4", init.url)
+        assertEquals(96L..807L, init.closedByteRange())
+        val declaration = HlsDualTrackPlan.from(plan)
+        assertEquals(SegmentFormat.MPEG_TS, declaration.videoFormat)
+        assertEquals(SegmentFormat.FMP4, declaration.audioFormat)
+        assertEquals(init, declaration.audioInitSegment)
+        assertNull(declaration.videoInitSegment)
+        declaration.validate(false)
+        assertFalse(declaration.toString().contains("https://"))
+    }
+
+    @Test fun mapWithoutByterangeCoversTheWholeResource() {
+        val fmp4 = audioPlaylist(
+            entries = "#EXTINF:2.0,\naudio-000.m4s",
+            extra = "#EXT-X-MAP:URI=\"init.mp4\"\n",
+        )
+        val plan = resolve(defaultPlaylists(audio = fmp4))
+        val init = plan.audio!!.media.initSegment!!
+        assertEquals(0L, init.byteOffset)
+        assertNull(init.closedByteRange())
+    }
+
+    @Test fun malformedMapByteRangeIsRejected() {
+        listOf("0", "712@", "712@-1", "-712", "712@0x1").forEach { value ->
+            val fmp4 = audioPlaylist(
+                entries = "#EXTINF:2.0,\naudio-000.m4s",
+                extra = "#EXT-X-MAP:URI=\"init.mp4\",BYTERANGE=\"$value\"\n",
+            )
+            unsupported(master(), defaultPlaylists(audio = fmp4), word = "字节范围")
+        }
+    }
+
+    @Test fun fmp4VariantWithoutSeparateAudioStaysRefusedForTheSingleTrackPipeline() {
+        val fmp4Video = videoPlaylist(entries = "#EXTINF:2.000000,\nvideo-000.m4s",
+            map = "#EXT-X-MAP:URI=\"v-init.mp4\"\n")
+        unsupported(master(variantAttrs = "BANDWIDTH=800000,RESOLUTION=1280x720,CODECS=\"avc1.4d401f,mp4a.40.2\"", media = emptyList()),
+            defaultPlaylists(video = fmp4Video), word = "fMP4")
+    }
+
+    @Test fun fmp4VariantWithSeparateAudioBuildsADualTrackPlan() {
+        val fmp4Video = videoPlaylist(entries = "#EXTINF:2.000000,\nvideo-000.m4s\n#EXTINF:2.000000,\nvideo-001.m4s",
+            map = "#EXT-X-MAP:URI=\"v-init.mp4\"\n")
+        val plan = resolve(defaultPlaylists(video = fmp4Video))
+        assertEquals(SegmentFormat.FMP4, plan.media.format)
+        assertEquals("https://cdn.example/talk/v-init.mp4", plan.media.initSegment!!.url)
+        assertNull(plan.media.initSegment!!.closedByteRange())
+        val declaration = HlsDualTrackPlan.from(plan)
+        assertEquals(SegmentFormat.FMP4, declaration.videoFormat)
+        assertEquals(declaration.videoInitSegment, plan.media.initSegment)
+        declaration.validate(false)
+    }
+
+    @Test fun segmentFormatPolicyMatrixAllowsFmp4OnlyInDualTrackRoles() {
+        SegmentFormat.Role.entries.forEach { role -> SegmentFormat.MPEG_TS.requireTransferSupported(role) }
+        SegmentFormat.FMP4.requireTransferSupported(SegmentFormat.Role.DUAL_TRACK_AUDIO)
+        SegmentFormat.FMP4.requireTransferSupported(SegmentFormat.Role.DUAL_TRACK_VIDEO)
+        try {
+            SegmentFormat.FMP4.requireTransferSupported(SegmentFormat.Role.SINGLE_TRACK)
+            fail("Expected the seam to refuse single-track fMP4")
+        } catch (seam: TransferFailure) {
+            assertEquals(FailureKind.UNSUPPORTED, seam.kind)
+            assertTrue(seam.safeMessage, seam.safeMessage.contains("fMP4"))
+            assertFalse(seam.safeMessage.contains("://"))
+        }
     }
 
     @Test fun multipleRenditionsWithoutADefaultAreRefusedInsteadOfGuessing() {

@@ -165,6 +165,8 @@ data class FetchSpec(
     val urlTemplate: String,
     val maxBytes: Int,
     val ruleId: String,
+    /** Built-in-tier only: extra registrable domains the fetch may target beyond the match hosts. */
+    val hosts: List<String> = emptyList(),
 )
 
 /**
@@ -514,7 +516,17 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
                 if (!RuleTemplatePolicy.validatePlaceholders(template, pathPattern, path)) return null
                 val maxBytes = (spec["maxBytes"] as? Double)?.toInt() ?: return null // required, no default
                 if (maxBytes <= 0 || maxBytes > MAX_FETCH_BYTES) return null
-                out += FetchSpec(id, method, template, maxBytes, ruleId)
+                // Built-in-tier host extension: 1..4 plain registrable-style literals, verified
+                // against the hosts face's registrable domains; the importer tier never sees them.
+                val extraHosts = ((spec["hosts"] as? List<*>) ?: emptyList<Any?>())
+                    .filterIsInstance<String>().map { it.trim().lowercase(Locale.ROOT) }
+                if (extraHosts.size > 4) return null
+                val faceRegistrable = hostsFaceRegistrableDomains(hostsPattern) ?: return null
+                for (extra in extraHosts) {
+                    if (extra.isEmpty() || extra.length > 253 || extra.contains('*') || !extra.contains('.')) return null
+                    if (extra !in faceRegistrable) return null
+                }
+                out += FetchSpec(id, method, template, maxBytes, ruleId, extraHosts)
             }
             return out.toList()
         }
@@ -523,6 +535,9 @@ class RuleSet(val rules: List<SiteRule>, val version: Int) {
          * Session declarations (T82): plain host literals only, each one matched by the hosts face
          * AND inside one of its registrable domains (eTLD+1 containment, D6). Null rejects the rule.
          */
+        private fun hostsFaceRegistrableDomains(hostsPattern: Regex?): Set<String>? =
+            RegistrableDomains.fromHostPattern(hostsPattern?.pattern ?: return null).ifEmpty { null }
+
         private fun parseSession(entry: Map<String, Any?>, hostsPattern: Regex?, hosts: String?): SessionSpec? {
             val raw = entry["session"] as? Map<String, Any?> ?: return null
             val hostsRaw = raw["hosts"] as? List<*> ?: return null

@@ -287,10 +287,12 @@ class SiteRulesCoordinator(
             return null
         }
         val hosts = rule.match.hostsPattern
+        // The fetch-host extension is a built-in-tier privilege; importer rules load without it.
+        val extraHosts = if (imported) emptySet() else spec.hosts.toSet()
         var current = url.value
         var hop = 0
         while (hop++ <= MAX_FETCH_REDIRECTS) {
-            if (!RuleFetchPolicy.target(current, hosts).allowed) {
+            if (!RuleFetchPolicy.target(current, hosts, extraHosts).allowed) {
                 fetchOverflowEpoch = epoch
                 return null
             }

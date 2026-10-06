@@ -50,11 +50,92 @@ def test_split_faces_no_scheme():
     assert err == "no scheme separator"
 
 
+# --------------------------------------------- alternation-aware splitting
+def test_split_url_pattern_branches():
+    branches, err = emit.split_url_pattern(
+        r"https?://(?:(?:t|www)\.example\.com/(?:opus|dynamic)/(?<id>\d+)/?"
+        r"|api\.example\.com/feed/(?<id>\d+))")
+    assert err == ""
+    hosts = [h for h, _p in branches]
+    paths = [p for _h, p in branches]
+    assert r"(?:t|www)\.example\.com" in hosts
+    assert r"api\.example\.com" in hosts
+    assert any(p.startswith("/(?:opus|dynamic)/") for p in paths)
+    assert any(p.startswith("/feed/") for p in paths)
+    assert not any(")" == p[:1] for p in paths)  # no stray-paren corruption
+
+
+def test_split_url_pattern_single_branch_matches_split_faces():
+    pattern = r"https?://(?:www\.)example\.com/watch/(?P<id>[0-9]+)"
+    host, path, err = emit.split_faces(pattern)
+    branches, err2 = emit.split_url_pattern(pattern)
+    assert err == err2 == ""
+    assert branches == [(host, path)]
+
+
+def test_split_url_pattern_no_scheme():
+    branches, err = emit.split_url_pattern(r"example\.com/x")
+    assert branches == []
+    assert err == "no scheme separator"
+
+
+def test_emit_candidate_alt_branch_pattern_end_to_end():
+    # NOTE: branch group names must stay distinct — java.util.regex refuses
+    # duplicate names, so per-branch (?P<id>) reuse cannot become a rule face.
+    src = """
+    from .common import InfoExtractor
+
+    class AltIE(InfoExtractor):
+        _VALID_URL = r'https?://(?:(?:t|www)\\.example\\.com/(?:opus|dynamic)/(?P<id>\\d+)/?|api\\.example\\.com/feed/(?P<fid>\\d+))'
+        _TESTS = [{'url': 'https://t.example.com/opus/123'}]
+
+        def _real_extract(self, url):
+            video_id = self._match_id(url)
+            data = self._download_json('https://cdn.example.com/x/' + video_id, video_id)
+            return {'id': video_id, 'url': data['url']}
+    """
+    rec = make_record(src)
+    candidate, reason = emit.emit_candidate(rec, set())
+    assert candidate is not None, reason
+    rule = candidate.rule
+    # both branch hosts (t/www/api .example.com) collapse to the registrable
+    assert rule["match"]["hosts"] == r"(^|\.)example\.com$"
+    assert rule["match"]["path"].startswith("(?:")
+    assert "/(?:opus|dynamic)/(?<id>\\d+)/?" in rule["match"]["path"]
+    assert emit.THEME_ALT_HOSTS in candidate.themes
+    assert validate.validate_rule(rule) == []
+    assert emit.fetch_qa_ok(rule, rec.test_url)
+
+
+def test_emit_duplicate_branch_group_names_rejected():
+    src = """
+    from .common import InfoExtractor
+
+    class DupIE(InfoExtractor):
+        _VALID_URL = r'https?://(?:(?:t|www)\\.example\\.com/a/(?P<id>\\d+)|api\\.example\\.com/b/(?P<id>\\d+))'
+
+        def _real_extract(self, url):
+            video_id = self._match_id(url)
+            data = self._download_json('https://cdn.example.com/x/' + video_id, video_id)
+            return {'id': video_id, 'url': data['url']}
+    """
+    rec = make_record(src)
+    candidate, reason = emit.emit_candidate(rec, set())
+    assert candidate is None
+    assert "duplicate or colliding group name" in reason
+
+
 def test_domain_literals():
-    assert emit.domain_literals(r"(?:www\.)?example\.com") == ["example.com"]
-    assert emit.domain_literals(r"(?:(?:www|m)\.)?example\.com") == ["example.com"]
+    # T108: literal-label alternations expand (www. prefix now enumerated too,
+    # collapsing to the same registrable domain downstream)
+    assert emit.domain_literals(r"(?:www\.)?example\.com") == ["example.com", "www.example.com"]
+    assert emit.registrable_domains(r"(?:www\.)?example\.com") == ["example.com"]
+    assert emit.domain_literals(r"(?:(?:www|m)\.)?example\.com") == [
+        "example.com", "m.example.com", "www.example.com"]
     assert emit.domain_literals(r"video\.example\.com") == ["video.example.com"]
     assert emit.domain_literals(r"(?:[a-z]+\.)?example\.com") == ["example.com"]
+    assert emit.domain_literals(r"(?:nbcnews|today|msnbc)\.com") == [
+        "msnbc.com", "nbcnews.com", "today.com"]
     assert emit.domain_literals(r"(?P<host>[^/]+)") == []
 
 
@@ -186,6 +267,43 @@ def test_emit_rejects_non_https():
     candidate, reason = emit.emit_candidate(rec, set())
     assert candidate is None
     assert reason == "fetch url not https"
+
+
+def test_emit_http_upgrade_provisional():
+    rec = make_record(SIMPLE_SRC.replace("https://api", "http://api"))
+    candidate, reason = emit.emit_candidate(rec, set(), allow_http_upgrade=True)
+    assert candidate is not None, reason
+    assert candidate.provisional_http is True
+    assert candidate.rule["fetch"][0]["url"].startswith("https://api.example.com")
+    assert emit.THEME_HTTP_UPGRADE in candidate.themes
+    assert emit.REASON_HTTP_UNVERIFIED in candidate.reasons
+    assert validate.validate_rule(candidate.rule) == []
+
+
+def test_emit_declares_fetch_hosts_for_cross_origin_api():
+    src = """
+    from .common import InfoExtractor
+
+    class CrossIE(InfoExtractor):
+        _VALID_URL = r'https?://(?:www\\.)?example\\.com/watch/(?P<id>[0-9]+)'
+        _TESTS = [{'url': 'https://www.example.com/watch/5'}]
+
+        def _real_extract(self, url):
+            video_id = self._match_id(url)
+            data = self._download_json('https://cdn.othercdn.net/embed/' + video_id, video_id)
+            return {'id': video_id, 'url': data['url']}
+    """
+    rec = make_record(src)
+    candidate, reason = emit.emit_candidate(rec, set())
+    assert candidate is not None, reason
+    fetch_spec = candidate.rule["fetch"][0]
+    assert fetch_spec["hosts"] == ["othercdn.net"]
+    assert emit.THEME_FETCH_HOSTS in candidate.themes
+    reasons = validate.validate_rule(candidate.rule)
+    assert reasons == []
+    # importer tier must refuse the extension
+    blocked = validate.validate_rule(candidate.rule, allow_fetch_hosts_extension=False)
+    assert "fetch.hosts extension not permitted (importer tier)" in blocked
 
 
 def test_emit_rejects_page_url_fetch():

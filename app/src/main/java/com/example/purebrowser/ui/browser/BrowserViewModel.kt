@@ -79,9 +79,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private val runtime = com.example.purebrowser.download.DownloadRuntime.get(application)
     val repository = runtime.repository
     // Same request/access policy as queue execution; constructing this never fetches a playlist.
-    val hlsResolver by lazy { HlsResolver(repository.guardedTransport(UrlConnectionTransport()), WebsiteAccessContext(), repository.allowLocalHttp) }
+    val hlsResolver by lazy { HlsResolver(repository.guardedTransport(UrlConnectionTransport()), WebsiteAccessContext(), repository.allowLocalHttp, com.example.purebrowser.media.codec.DeviceAv1CapabilityProvider) }
     /** T97: DASH MPD resolution for the confirmation dialog; constructed lazily, never fetches. */
-    val dashResolver by lazy { com.example.purebrowser.download.dash.DashResolver(repository.guardedTransport(UrlConnectionTransport()), WebsiteAccessContext(), repository.allowLocalHttp) }
+    val dashResolver by lazy { com.example.purebrowser.download.dash.DashResolver(repository.guardedTransport(UrlConnectionTransport()), WebsiteAccessContext(), repository.allowLocalHttp, com.example.purebrowser.media.codec.DeviceAv1CapabilityProvider) }
     val mediaProbe by lazy { com.example.purebrowser.media.resolver.MediaProbe(repository.guardedTransport(UrlConnectionTransport()),repository.allowLocalHttp) }
     val youTubeResolver by lazy { com.example.purebrowser.media.site.YouTubeResolver(getApplication(),repository::guardedTransport) }
     val siteResolver by lazy { com.example.purebrowser.media.resolver.SiteResolverRegistry(listOf(

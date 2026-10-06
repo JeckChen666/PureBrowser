@@ -71,7 +71,10 @@ class ExtractorRecord:
     id_group_pos: int | None = None  # N when m.group(N) feeds the URL
     id_group_name: str | None = None # name when m.group('name') feeds the URL
     json_pointers: list[str] = field(default_factory=list)
+    # pointer -> provenance flags (subset of direct/nested/loop/traversal)
+    json_pointer_prov: dict[str, str] = field(default_factory=dict)
     class_consts: dict[str, str] = field(default_factory=dict)
+    module_string_consts: dict[str, str] = field(default_factory=dict)
     parse_error: str | None = None
     classification: str = OTHER
     classify_reason: str = ""
@@ -267,6 +270,18 @@ def _analyze_real_extract(fn: ast.FunctionDef, rec: ExtractorRecord) -> None:
                             group_call = ast.Call(
                                 func=stmt.value.func, args=[arg], keywords=[])
                             assigns.setdefault(sub_target.id, group_call)
+                elif isinstance(target, ast.Tuple) and isinstance(stmt.value, ast.Call) \
+                        and isinstance(stmt.value.func, ast.Attribute) \
+                        and stmt.value.func.attr == "groups" and not stmt.value.args:
+                    # `uploader, date = self._match_valid_url(url).groups()`:
+                    # positional groups in declaration order
+                    for pos, sub_target in enumerate(target.elts, start=1):
+                        if isinstance(sub_target, ast.Name):
+                            group_attr = ast.Attribute(
+                                value=stmt.value.func.value, attr="group", ctx=ast.Load())
+                            group_call = ast.Call(
+                                func=group_attr, args=[ast.Constant(pos)], keywords=[])
+                            assigns.setdefault(sub_target.id, group_call)
     rec.assigns = assigns
 
     for node in ast.walk(fn):
@@ -298,7 +313,7 @@ def _analyze_real_extract(fn: ast.FunctionDef, rec: ExtractorRecord) -> None:
                 rec.json_var = target_var
             if attr in ("_download_webpage", "_download_webpage_handle") and target_var and not rec.webpage_var:
                 rec.webpage_var = target_var
-        elif attr == "_search_regex" and node.args:
+        elif attr in ("_search_regex", "_html_search_regex") and node.args:
             pattern = _const_str(node.args[0])
             if pattern is not None:
                 rec.search_regex_patterns.append(pattern)
@@ -348,9 +363,254 @@ def _analyze_real_extract(fn: ast.FunctionDef, rec: ExtractorRecord) -> None:
                 rec.json_var = var
                 break
 
-    # json pointer heuristics on the downloaded-JSON variable
+    # json pointer synthesis on the downloaded-JSON variable (T108 root cause 1):
+    # recursive value-walk emulation over the AST — nested subscript/.get chains,
+    # intermediate assignments, loop variables and traversal-helper tuples.
     if rec.json_var:
-        rec.json_pointers = _collect_json_pointers(fn, rec.json_var)
+        rec.json_pointers, rec.json_pointer_prov = _collect_json_pointers(fn, rec.json_var)
+
+
+# A response path is a tuple of segments: str = dict key, ("i", n) = array
+# index, ("*",) = iteration over an array (concretized to [0], flagged 'loop').
+MAX_POINTER_DEPTH = 6
+MAX_POINTER_CHARS = 64
+
+# helpers whose (root, path-spec) arguments reveal response shapes. NOTE:
+# traverse_obj is tracked for POINTER SYNTHESIS only — classification
+# heaviness (_TRAVERSAL_FUNCS) is unchanged.
+_PATH_HELPERS = _TRAVERSAL_FUNCS | {"traverse_obj"}
+
+_URL_LEAF_HINTS = (
+    "url", "file", "manifest", "src", "source", "stream", "playback",
+    "media", "content", "videolink", "hls", "dash", "mp4", "m3u8", "video",
+)
+_QUALITY_LEAVES = {
+    "height", "width", "quality", "label", "resolution", "bitrate",
+    "tbr", "abr", "fps", "ext", "format", "formatid",
+}
+
+
+def _is_identifier_key(key: str) -> bool:
+    return bool(key) and key.replace("-", "_").isidentifier() and not key[0].isdigit()
+
+
+def _chain_path(expr: ast.AST, env: dict[str, tuple]) -> tuple | None:
+    """Resolve a subscript/.get chain rooted at an env-tracked variable."""
+    segs: list = []
+    node = expr
+    while True:
+        if isinstance(node, ast.Subscript):
+            sl = node.slice
+            if isinstance(sl, ast.Constant):
+                if isinstance(sl.value, str):
+                    if not _is_identifier_key(sl.value):
+                        return None
+                    segs.append(sl.value)
+                elif isinstance(sl.value, int) and 0 <= sl.value < 1000:
+                    segs.append(("i", sl.value))
+                else:
+                    return None
+            else:
+                return None  # computed subscript
+            node = node.value
+            continue
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            if not _is_identifier_key(node.args[0].value):
+                return None
+            segs.append(node.args[0].value)
+            node = node.func.value
+            continue
+        break
+    if isinstance(node, ast.Name) and node.id in env:
+        return env[node.id] + tuple(reversed(segs))
+    return None
+
+
+def _is_path_helper(node: ast.Call) -> bool:
+    if isinstance(node.func, ast.Name):
+        return node.func.id in _PATH_HELPERS
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr in _PATH_HELPERS
+    return False
+
+
+def _traversal_path(node: ast.Call, env: dict[str, tuple]) -> tuple | None:
+    """try_get/dict_get(rooted, ('key', 0, ...)) and traverse_obj(rooted,
+    ('data', ..., 'url', {filter}, lambda ...)) -> path tuple. Type filters
+    ({str}, {url_or_none}) are skipped; element filters (lambdas, `...`,
+    builtins like `any`) concretize as array iteration."""
+    if not (len(node.args) >= 2):
+        return None
+    root = _chain_path(node.args[0], env)
+    if root is None:
+        return None
+    spec = node.args[1]
+    elts = spec.elts if isinstance(spec, (ast.Tuple, ast.List)) else [spec]
+    segs: list = []
+    for elt in elts:
+        if isinstance(elt, ast.Constant):
+            value = elt.value
+            if isinstance(value, str):
+                if not _is_identifier_key(value):
+                    return None
+                segs.append(value)
+            elif isinstance(value, bool):
+                return None
+            elif isinstance(value, int) and 0 <= value < 1000:
+                segs.append(("i", value))
+            elif value is Ellipsis:
+                segs.append(("*",))
+            elif value is None:
+                continue
+            else:
+                return None
+        elif isinstance(elt, ast.Lambda):
+            segs.append(("*",))  # per-element predicate: array iteration
+        elif isinstance(elt, (ast.Set, ast.List)):
+            continue  # {type}/[{type}] filters: transparent
+        else:
+            return None
+    return root + tuple(segs)
+
+
+def _concretize(path: tuple) -> tuple[str, str] | None:
+    """path -> (pointer, provenance-flags); None when not expressible/bounded."""
+    parts: list[str] = []
+    flags: set[str] = set()
+    keys = 0
+    for seg in path:
+        if isinstance(seg, str):
+            if not _is_identifier_key(seg):
+                return None
+            parts.append(seg)
+            keys += 1
+        elif isinstance(seg, tuple):
+            if not parts:
+                return None  # index before any key: not expressible
+            if seg[0] == "*":
+                parts[-1] += "[0]"
+                flags.add("loop")
+            elif seg[0] == "i":
+                parts[-1] += "[%d]" % seg[1]
+            else:
+                return None
+        else:
+            return None
+    if not parts or keys > MAX_POINTER_DEPTH or len(parts) > MAX_POINTER_DEPTH:
+        return None
+    pointer = ".".join(parts)
+    if len(pointer) > MAX_POINTER_CHARS:
+        return None
+    if len(parts) > 1:
+        flags.add("nested")
+    if not flags:
+        flags.add("direct")
+    return pointer, ",".join(sorted(flags))
+
+
+def _flag_rank(flags: str) -> int:
+    score = 0
+    if "loop" in flags:
+        score += 2
+    if "traversal" in flags:
+        score += 2
+    if "nested" in flags:
+        score += 1
+    return score
+
+
+def _leaf_rank(pointer: str) -> int:
+    leaf = pointer.split(".")[-1].split("[")[0].lower()
+    if "url" in leaf or leaf in _URL_LEAF_HINTS:
+        return 0
+    if leaf in _QUALITY_LEAVES:
+        return 1
+    return 2
+
+
+def _collect_json_pointers(fn: ast.FunctionDef, var: str) -> tuple[list[str], dict[str, str]]:
+    """Dot-paths of response accesses: chains on the JSON variable plus
+    everything reachable through intermediate assigns, loop variables and
+    traversal helpers (T108 recursive value-walk over the AST)."""
+    env: dict[str, tuple] = {var: ()}
+    ambiguous: set[str] = set()
+
+    # environment: assignments and for-loops over rooted chains (flow-insensitive)
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assign):
+            value = node.value
+            path = _chain_path(value, env)
+            if path is None and isinstance(value, ast.Call) and _is_path_helper(value):
+                path = _traversal_path(value, env)
+            if path is not None:
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        if target.id in env and env[target.id] != path:
+                            ambiguous.add(target.id)
+                        env[target.id] = path
+        elif isinstance(node, ast.For):
+            path = _chain_path(node.iter, env)
+            if path is None and isinstance(node.iter, ast.Call) and _is_path_helper(node.iter):
+                path = _traversal_path(node.iter, env)
+            if path is not None:
+                for target in node.target.elts if isinstance(node.target, ast.Tuple) else [node.target]:
+                    if isinstance(target, ast.Name):
+                        if target.id in env and env[target.id] != path + (("*",),):
+                            ambiguous.add(target.id)
+                        env[target.id] = path + (("*",),)
+
+    for name in ambiguous:
+        env.pop(name, None)
+
+    # every rooted access anywhere becomes a candidate path (-> came from a
+    # traversal helper); provenance flags are computed at concretization
+    found: dict[tuple, bool] = {}
+    for node in ast.walk(fn):
+        path: tuple | None = None
+        traversal = False
+        if isinstance(node, ast.Subscript):
+            path = _chain_path(node, env)
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute) and node.func.attr == "get":
+                path = _chain_path(node, env)
+            elif _is_path_helper(node):
+                path = _traversal_path(node, env)
+                traversal = True
+        if path is None:
+            continue
+        found[path] = found.get(path, False) or traversal
+
+    # drop prefix chains subsumed by a deeper access (info['files']['mp4'] is
+    # not a pointer when info['files']['mp4'][0]['url'] is recorded)
+    paths = list(found)
+    for path in paths:
+        for other in paths:
+            if len(other) > len(path) and other[: len(path)] == path:
+                found.pop(path, None)
+                break
+
+    pointers: dict[str, str] = {}
+    for path, traversal in found.items():
+        got = _concretize(path)
+        if got is None:
+            continue
+        pointer, concretized = got
+        if traversal:
+            concretized = ",".join(sorted(set(concretized.split(",")) | {"traversal"}))
+        old = pointers.get(pointer)
+        if old is None or _flag_rank(concretized) < _flag_rank(old):
+            pointers[pointer] = concretized
+
+    ranked = sorted(pointers, key=lambda p: (_leaf_rank(p), p.count(".") + p.count("["), p))
+    out = ranked[:8]
+    return out, {p: pointers[p] for p in out}
 
 
 def _wraps_download(expr: ast.AST, webpage_var: str | None) -> bool:
@@ -362,75 +622,6 @@ def _wraps_download(expr: ast.AST, webpage_var: str | None) -> bool:
             if node.func.attr in DOWNLOAD_FUNCS:
                 return True
     return False
-
-
-def _collect_json_pointers(fn: ast.FunctionDef, var: str) -> list[str]:
-    """Dot-paths of constant subscript/.get chains on the JSON variable."""
-    pointers: list[str] = []
-    seen: set[str] = set()
-
-    def add(path: str) -> None:
-        if path and path not in seen and len(path) <= 64:
-            seen.add(path)
-            pointers.append(path)
-
-    for node in ast.walk(fn):
-        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id == var:
-            chain = _subscript_chain(node)
-            if chain is not None:
-                add(chain)
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "get"
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == var
-            and node.args
-        ):
-            key = _const_str(node.args[0])
-            if key:
-                add(key)
-
-    # format-array heuristic: iteration over <var>['formats'] with height/url reads
-    text_keys = {p.split(".")[0].split("[")[0] for p in pointers}
-    if "formats" in text_keys:
-        for extra in ("formats[0].url", "formats[0].height", "formats[0].ext"):
-            add(extra)
-    return pointers[:8]
-
-
-def _subscript_chain(node: ast.Subscript) -> str | None:
-    """`info['formats'][0]['url']` -> 'formats[0].url' for a Name-rooted chain."""
-    parts: list[str] = []
-    current: ast.AST = node
-    while isinstance(current, ast.Subscript):
-        sl = current.slice
-        if isinstance(sl, ast.Constant):
-            if isinstance(sl.value, str):
-                if not sl.value.replace("_", "a").isidentifier():
-                    return None  # key not expressible in the pointer grammar
-                parts.append(sl.value)
-            elif isinstance(sl.value, int) and 0 <= sl.value < 1000:
-                parts.append("[%d]" % sl.value)
-            else:
-                return None
-        else:
-            return None  # computed subscript: not a static pointer
-        current = current.value
-    if not isinstance(current, ast.Name):
-        return None
-    parts.reverse()
-    out: list[str] = []
-    for part in parts:
-        if part.startswith("["):
-            if not out:
-                return None
-            out[-1] = out[-1] + part
-        else:
-            if not part.replace("_", "a").isidentifier():
-                return None
-            out.append(part)
-    return ".".join(out) if out else None
 
 
 def _first_test_url(node: ast.AST) -> str | None:
@@ -498,6 +689,9 @@ def analyze_module(path: str, tree: ast.Module, resolver: _StaticResolver) -> li
             ie_name = cls.name[:-2] if cls.name.endswith("IE") else cls.name
         rec = ExtractorRecord(module=module, cls=cls.name, ie_name=ie_name)
         rec.class_consts = merged_consts(cls, {cls.name})
+        for name, expr in resolver.module_consts.get(module, {}).items():
+            if isinstance(expr, ast.Constant) and isinstance(expr.value, str) and len(expr.value) <= 256:
+                rec.module_string_consts.setdefault(name, expr.value)
 
         working = _class_attr(cls, "_WORKING")
         if working is not None:

@@ -33,6 +33,16 @@ THEME_HEADERS = "upstream headers not expressible"
 THEME_RENAMED = "python group renamed for java"
 THEME_DEFAULT_POINTER = "default url pointer"
 THEME_JSON_HEURISTIC = "json pointer heuristics"
+THEME_POINTER_UNCERTAIN = "pointer-uncertain (no AST-visible response access)"
+THEME_POINTER_DEPTH = "nested pointer synthesized from AST (depth > 1)"
+THEME_LOOP_CONCRETIZED = "array traversal concretized to [0] (loop over response array)"
+THEME_FETCH_HOSTS = "cross-origin fetch host declared via fetch.hosts extension"
+THEME_URL_TRANSFORM = "fetch url transform approximated (runtime string op dropped)"
+THEME_HTTP_UPGRADE = "http endpoint upgraded to https (requires live verification)"
+THEME_MEASURED = "pointers measured from live API response"
+THEME_ALT_HOSTS = "url pattern alternation split into merged faces"
+REASON_POINTER_UNCERTAIN = "pointer-uncertain"
+REASON_HTTP_UNVERIFIED = "http-endpoint-upgrade-needs-live-verification"
 
 
 @dataclass
@@ -42,6 +52,7 @@ class Candidate:
     reasons: list[str] = field(default_factory=list)
     themes: list[str] = field(default_factory=list)
     source: dict = field(default_factory=dict)
+    provisional_http: bool = False
 
 
 def slug(ie_name: str, used: set[str]) -> str:
@@ -84,52 +95,115 @@ def split_faces(pattern: str) -> tuple[str, str, str]:
     return pattern[host_start:host_end], pattern[host_end:], ""
 
 
-_DOMAIN_LABEL = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\Z")
+# ---------------------------------------------- alternation-aware splitting
+def _depth0_bar_positions(text: str) -> list[int]:
+    """Top-level '|' positions (outside classes/escapes, depth-0 groups)."""
+    out: list[int] = []
+    depth = 0
+    for i, c, in_class, escaped in normalize._tokens(text):
+        if in_class or escaped:
+            continue
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+        elif c == "|" and depth == 0:
+            out.append(i)
+    return out
+
+
+def _scheme_sep_at(text: str) -> int:
+    for i, c, in_class, escaped in normalize._tokens(text):
+        if not in_class and not escaped and c == ":" and text[i : i + 3] == "://":
+            return i
+    return -1
+
+
+def _outer_group(text: str) -> tuple[str, str] | None:
+    """(inner, tail) when text is ONE balanced group wrapping (nearly) all of
+    itself; only anchor/slash-only tails are tolerated."""
+    if not text.startswith("("):
+        return None
+    depth = 0
+    for i, c, in_class, escaped in normalize._tokens(text):
+        if in_class or escaped:
+            continue
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                tail = text[i + 1:]
+                if tail and not re.fullmatch(r"[/?^$]*", tail):
+                    return None  # partial-prefix group: not a branch wrapper
+                inner = text[1:i]
+                if inner.startswith("?:"):
+                    inner = inner[2:]
+                elif inner.startswith("?<") or inner.startswith("?P<"):
+                    gt = inner.find(">")
+                    if gt < 0:
+                        return None
+                    inner = inner[gt + 1:]
+                elif inner.startswith("?"):
+                    return None  # lookaround/flags wrapper: do not unwrap
+                return inner, tail
+    return None
+
+
+def _url_branches(text: str, depth: int = 0) -> list[str]:
+    """Alternation branches of a post-scheme URL pattern segment."""
+    if depth > 6:
+        return [text]
+    sep = _scheme_sep_at(text)
+    if sep >= 0:
+        return _url_branches(text[sep + 3:], depth + 1)
+    bars = _depth0_bar_positions(text)
+    if bars:
+        parts: list[str] = []
+        start = 0
+        for pos in bars:
+            parts.extend(_url_branches(text[start:pos], depth + 1))
+            start = pos + 1
+        parts.extend(_url_branches(text[start:], depth + 1))
+        return parts
+    unwrapped = _outer_group(text)
+    if unwrapped is not None:
+        inner, tail = unwrapped
+        return [branch + tail for branch in _url_branches(inner, depth + 1)]
+    return [text]
+
+
+def split_url_pattern(pattern: str) -> tuple[list[tuple[str, str]], str]:
+    """[(host_segment, path_segment), ...] per alternation branch, error.
+
+    Handles the yt-dlp idiom of one scheme prefix followed by an alternation of
+    complete host+path branches (T108: the old first-'/' cut corrupted path
+    faces of such patterns and dropped concrete domains in later branches)."""
+    sep_idx = _scheme_sep_at(pattern)
+    if sep_idx < 0:
+        return [], "no scheme separator"
+    rest = pattern[sep_idx + 3:]
+    if not rest:
+        return [], "empty host segment"
+    out: list[tuple[str, str]] = []
+    for branch in _url_branches(rest):
+        outside = _outside_seq(branch)
+        host_end = len(branch)
+        for i, c in outside:
+            if c in "/#;":
+                host_end = i
+                break
+        if branch[:host_end]:
+            out.append((branch[:host_end], branch[host_end:]))
+    if not out:
+        return [], "empty host segment"
+    return out, ""
 
 
 def domain_literals(host_seg: str) -> list[str]:
-    """Concrete dotted domain literals built from escaped dots, outside classes."""
-    run: list[str] = []
-    expect_label = True
-    out: list[str] = []
-
-    def flush() -> None:
-        nonlocal run
-        text = "".join(run)
-        run = []
-        if not text:
-            return
-        labels = text.split(".")
-        if (
-            len(labels) >= 2
-            and all(_DOMAIN_LABEL.match(lb) for lb in labels)
-            and labels[-1].isalpha()
-            and len(labels[-1]) >= 2
-        ):
-            out.append(text.lower())
-
-    for _i, c, in_class, escaped in normalize._tokens(host_seg):
-        if in_class:
-            flush()
-            expect_label = True
-        elif escaped:
-            if c == "\\":
-                continue  # first half of an escape pair; next token has the char
-            if c == "." and run and run[-1] != "." and not expect_label:
-                run.append(".")
-                expect_label = True
-            else:
-                flush()
-                expect_label = True
-        elif c.isalnum() or c == "-":
-            run.append(c)
-            expect_label = False
-        else:
-            flush()
-            expect_label = True
-    flush()
-    seen: set[str] = set()
-    return [d for d in out if not (d in seen or seen.add(d))]
+    """Concrete dotted domains, with literal-label alternation expansion
+    (T108 root cause 2). Canonical implementation: validate.pattern_domain_literals."""
+    return validate.pattern_domain_literals(host_seg)
 
 
 def registrable_domains(host_seg: str) -> list[str]:
@@ -182,6 +256,42 @@ class TemplateCtx:
     rec: analyzer.ExtractorRecord
     path_src: str | None
     token_map: dict[str, str | None] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)  # approximation flags for themes
+    _positional_names: list[str | None] | None = None
+
+    def positional_group_name(self, number: int) -> str | None:
+        """Name of the Nth capturing group of the (renamed) path face."""
+        if self._positional_names is None:
+            self._positional_names = _positional_group_names(self.path_src)
+        if 1 <= number <= len(self._positional_names):
+            return self._positional_names[number - 1]
+        return None
+
+
+def _positional_group_names(path_src: str | None) -> list[str | None]:
+    """Capturing-group names of a path face in positional order (None=unnamed)."""
+    if not path_src:
+        return []
+    out: list[str | None] = []
+    outside = _outside_seq(path_src)
+    for i, c in outside:
+        if c != "(":
+            continue
+        nxt = path_src[i + 1 : i + 2]
+        if nxt != "?":
+            out.append(None)
+            continue
+        after = path_src[i + 2 : i + 3]
+        if after == "<":
+            j = path_src.find(">", i + 3)
+            name = path_src[i + 3 : j] if j > 0 else ""
+            if name and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name):
+                out.append(name)
+                continue
+            out.append(None)
+            continue
+        # (?: (?= (?! (?<= (?<! — non-capturing
+    return out
 
 
 def _id_placeholder(path_src: str | None) -> str | None:
@@ -215,6 +325,10 @@ def _expr_placeholder(expr: ast.AST, ctx: TemplateCtx) -> str | None:
             if isinstance(val, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", val):
                 return "{{match.%s}}" % val.replace("_", "")
             if isinstance(val, int) and 1 <= val <= 9:
+                # prefer the path face's own name for the positional group
+                name = ctx.positional_group_name(val)
+                if name:
+                    return "{{match.%s}}" % name.replace("_", "")
                 return "{{m%d}}" % val
         return None
     if isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute) and expr.func.attr == "_match_id":
@@ -292,10 +406,48 @@ def derive_template(expr: ast.AST | None, ctx: TemplateCtx) -> str | None:
     if isinstance(expr, ast.Name):
         if expr.id == "url":
             return "{{pageUrl}}"
+        module_const = ctx.rec.module_string_consts.get(expr.id)
+        if module_const is not None:
+            return module_const
         return _var_placeholder(expr.id, ctx)
+    if isinstance(expr, ast.IfExp):
+        # only when both branches derive to the SAME template is the
+        # conditional statically safe to collapse
+        body = derive_template(expr.body, ctx)
+        orelse = derive_template(expr.orelse, ctx)
+        if body is not None and body == orelse:
+            return body
+        return None
     if isinstance(expr, ast.Call) and isinstance(expr.func, ast.Name) and expr.func.id in ("quote", "quote_plus"):
         # URL-quoting of an id: unwrap; ids are verbatim-inserted by the engine
         return derive_template(expr.args[0], ctx) if expr.args else None
+    if (
+        isinstance(expr, ast.Call)
+        and (isinstance(expr.func, ast.Name) and expr.func.id == "urljoin"
+             or isinstance(expr.func, ast.Attribute) and expr.func.attr == "urljoin")
+        and len(expr.args) == 2
+    ):
+        # urljoin(literal_base, id-shaped tail) == base + tail for the shapes
+        # the transcriber emits (absolute https base, relative tail)
+        base = derive_template(expr.args[0], ctx)
+        tail = derive_template(expr.args[1], ctx)
+        if base is None or tail is None or not base.lower().startswith("https://"):
+            return None
+        return base + tail
+    if (
+        isinstance(expr, ast.Call)
+        and isinstance(expr.func, ast.Attribute)
+        and expr.func.attr == "replace"
+        and len(expr.args) == 2
+        and all(isinstance(a, ast.Constant) and isinstance(a.value, str) for a in expr.args)
+    ):
+        # '<id>'.replace(a, b) on a placeholder-shaped inner: the engine inserts
+        # ids verbatim; record the approximation and keep the inner template
+        inner = derive_template(expr.func.value, ctx)
+        if inner is not None and "{{" in inner:
+            ctx.notes.append(THEME_URL_TRANSFORM)
+            return inner
+        return None
     if isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.Add):
         left = derive_template(expr.left, ctx)
         right = derive_template(expr.right, ctx)
@@ -362,10 +514,16 @@ def derive_template(expr: ast.AST | None, ctx: TemplateCtx) -> str | None:
 
 # ------------------------------------------------------------- emission
 
-def emit_candidate(rec: analyzer.ExtractorRecord, used_ids: set[str]) -> tuple[Candidate | None, str]:
-    """Returns (candidate, None) or (None, structural_reject_reason)."""
+def emit_candidate(rec: analyzer.ExtractorRecord, used_ids: set[str],
+                   allow_http_upgrade: bool = False) -> tuple[Candidate | None, str]:
+    """Returns (candidate, None) or (None, structural_reject_reason).
+
+    With allow_http_upgrade, upstream http://-only API endpoints are upgraded
+    to https:// and flagged provisional — they only stay in the pool when the
+    live enrichment pass measures the https endpoint (T108)."""
     reasons = ["auto-transcribed behavior needs human review"]
     themes: list[str] = []
+    provisional_http = False
 
     try:
         norm_url, meta = normalize.normalize_pattern(rec.valid_url)
@@ -374,27 +532,50 @@ def emit_candidate(rec: analyzer.ExtractorRecord, used_ids: set[str]) -> tuple[C
     if meta.renamed_groups:
         themes.append(THEME_RENAMED)
 
-    host_seg, path_seg, err = split_faces(norm_url)
+    branches, err = split_url_pattern(norm_url)
     if err:
         return None, err
-    if not host_seg:
+    host_segs = [host for host, _path in branches]
+    if not host_segs:
         return None, "empty host segment"
-    regs = registrable_domains(host_seg)
+    regs: list[str] = []
+    seen_regs: set[str] = set()
+    for host_seg in host_segs:
+        for reg in registrable_domains(host_seg):
+            if reg not in seen_regs:
+                seen_regs.add(reg)
+                regs.append(reg)
+    regs = regs[:MAX_HOST_DOMAINS]
     if not regs:
         return None, "no concrete host domain"
-    # Capturing groups in the host segment shift the extractor's positional
-    # group numbers relative to the stand-alone path face; adjust below.
-    host_caps = validate.capturing_group_count(host_seg)
-    host_names = validate.named_group_names(host_seg)
-    # The canonical id group living in the host segment cannot bind to the
-    # path face at all — reject rather than silently misbind.
+    # Capturing groups in host segments shift the extractor's positional group
+    # numbers relative to the stand-alone path face; adjust below.
+    host_caps = sum(validate.capturing_group_count(host_seg) for host_seg in host_segs)
+    host_names: set[str] = set()
+    for host_seg in host_segs:
+        host_names |= validate.named_group_names(host_seg)
+    # The canonical id group living in a host segment cannot bind to the path
+    # face at all — reject rather than silently misbind.
     if rec.id_group_name and rec.id_group_name in host_names:
         return None, "id group captured in host segment"
-    if any(len(d.split(".")) > 2 and validate.registrable_domain(d) != d for d in domain_literals(host_seg)):
+    if any(
+        len(d.split(".")) > 2 and validate.registrable_domain(d) != d
+        for host_seg in host_segs
+        for d in domain_literals(host_seg)
+    ):
         themes.append(THEME_WIDENED_HOSTS)
+    if len(host_segs) > 1:
+        themes.append(THEME_ALT_HOSTS)
     hosts = hosts_face(regs)
 
-    path = strip_anchors(path_seg) or None
+    branch_paths = [strip_anchors(path_seg) for _host, path_seg in branches]
+    branch_paths = [p for p in branch_paths if p]
+    if not branch_paths:
+        path = None
+    elif len(branch_paths) == 1:
+        path = branch_paths[0]
+    else:
+        path = "(?:" + "|".join(branch_paths) + ")"
     if path is not None and len(path) > validate.MAX_PATTERN_LENGTH:
         return None, "path face over 512 chars"
     if path and validate.capturing_group_count(path) >= 1:
@@ -410,8 +591,22 @@ def emit_candidate(rec: analyzer.ExtractorRecord, used_ids: set[str]) -> tuple[C
     if template.startswith("{{pageUrl}}"):
         return None, "fetch target is the page URL itself (schema needs https literal prefix)"
     if not template.lower().startswith("https://"):
-        return None, "fetch url not https"
+        low = template.lower()
+        if not (allow_http_upgrade and low.startswith("http://") and len(template) >= 8):
+            return None, "fetch url not https"
+        template = "https://" + template[7:]
+        themes.append(THEME_HTTP_UPGRADE)
+        reasons.append(REASON_HTTP_UNVERIFIED)
+        provisional_http = True
+    for note in ctx.notes:
+        if note not in themes:
+            themes.append(note)
     if host_caps and re.search(r"\{\{m[1-9]\}\}", template):
+        if len(host_segs) > 1:
+            # positional groups across alternation branches cannot be shifted
+            # deterministically into the merged path face
+            return None, "positional placeholder across alternation branches"
+
         def shift(m: re.Match) -> str:
             new = int(m.group(1)) - host_caps
             return "{{m%d}}" % new if new >= 1 else "{{m0}}"
@@ -445,14 +640,23 @@ def emit_candidate(rec: analyzer.ExtractorRecord, used_ids: set[str]) -> tuple[C
     # ---- action ----------------------------------------------------------
     action: dict
     if rec.json_var:
-        pointers = [p for p in rec.json_pointers if validate.json_pointer_is_valid(p)]
+        prov_map = rec.json_pointer_prov
+        pointers = [p for p in prov_map if validate.json_pointer_is_valid(p)]
         if not pointers:
+            # AST cannot see any response access: conservative WILDCARD-free
+            # default pointer, explicitly marked for review (T108 root cause 1)
             pointers = ["url"]
             themes.append(THEME_DEFAULT_POINTER)
+            themes.append(THEME_POINTER_UNCERTAIN)
+            reasons.append(REASON_POINTER_UNCERTAIN)
         else:
             themes.append(THEME_JSON_HEURISTIC)
-        if any(p.startswith("formats") for p in pointers):
-            themes.append(THEME_FORMATS)
+            if any(p.startswith("formats") for p in pointers):
+                themes.append(THEME_FORMATS)
+            if any("nested" in prov_map.get(p, "") for p in pointers):
+                themes.append(THEME_POINTER_DEPTH)
+            if any(set(prov_map.get(p, "").split(",")) & {"loop", "traversal"} for p in pointers):
+                themes.append(THEME_LOOP_CONCRETIZED)
         action = {"type": "jsonExtract", "pointers": pointers[: validate.MAX_JSON_POINTERS]}
     else:
         pattern = _pick_regex_pattern(rec)
@@ -461,13 +665,22 @@ def emit_candidate(rec: analyzer.ExtractorRecord, used_ids: set[str]) -> tuple[C
         action = {"type": "regexExtract", "pattern": pattern}
         themes.append(THEME_WEBPAGE_REGEX)
 
+    # ---- fetch spec (with T108 fetch.hosts cross-origin declaration) ------
+    fetch_spec: dict = {"id": FETCH_ID, "url": template, "maxBytes": FETCH_MAX_BYTES}
+    fetch_host = validate.template_literal_host(template)
+    if fetch_host is not None:
+        fetch_reg = validate.registrable_domain(fetch_host)
+        if fetch_reg and fetch_reg not in regs:
+            fetch_spec["hosts"] = [fetch_reg]
+            themes.append(THEME_FETCH_HOSTS)
+
     rule = {
         "id": slug(rec.ie_name, used_ids),
         "version": 1,
         "match": {"hosts": hosts, **({"path": path} if path else {})},
         "actions": [action],
-        "fetch": [{"id": FETCH_ID, "url": template, "maxBytes": FETCH_MAX_BYTES}],
-        "note": "Auto-transcribed (T99) from yt-dlp behavior: single GET fetch; needs review.",
+        "fetch": [fetch_spec],
+        "note": "Auto-transcribed (T99/T108) from yt-dlp behavior: single GET fetch; needs review.",
     }
 
     # ---- QA: derived faces must match the extractor's own test URL --------
@@ -481,6 +694,7 @@ def emit_candidate(rec: analyzer.ExtractorRecord, used_ids: set[str]) -> tuple[C
         "download": dl.func,
         "loc": rec.loc,
         "test_url": rec.test_url,
+        "json_pointer_provenance": dict(rec.json_pointer_prov),
         "normalization": {
             "ignorecase": meta.ignorecase,
             "verbose_stripped": meta.verbose_stripped,
@@ -489,7 +703,8 @@ def emit_candidate(rec: analyzer.ExtractorRecord, used_ids: set[str]) -> tuple[C
         },
         "original_valid_url": rec.valid_url,
     }
-    return Candidate(rule=rule, reasons=reasons, themes=themes, source=source), ""
+    return Candidate(rule=rule, reasons=reasons, themes=themes, source=source,
+                     provisional_http=provisional_http), ""
 
 
 def _pick_regex_pattern(rec: analyzer.ExtractorRecord) -> str | None:

@@ -13,6 +13,8 @@ import com.example.purebrowser.download.UrlConnectionTransport
 import com.example.purebrowser.download.hls.HlsPlaylistParser
 import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.ResourceSniffer
+import com.example.purebrowser.media.codec.Av1Capability
+import com.example.purebrowser.media.codec.DeviceAv1CapabilityProvider
 import com.example.purebrowser.media.fingerprint.FamilyDetector
 import com.example.purebrowser.media.fingerprint.PlayerConfigParser
 import com.example.purebrowser.media.fingerprint.PlayerFamily
@@ -50,7 +52,7 @@ class BrowserSession(
 ) {
     private val app = appContext.applicationContext
     private val context = MutableContextWrapper(app)
-    val sniffer = ResourceSniffer()
+    val sniffer = ResourceSniffer(DeviceAv1CapabilityProvider)
     val engine = BrowserEngine(sniffer, message, record.url, changed, visited, link, ruleSetProvider = { RuleSet.loadMerged(app) })
     private val mounted = AtomicReference<WebView?>()
     private val webView: WebView? get() = mounted.get()
@@ -180,8 +182,13 @@ class BrowserSession(
             }
             is PageSignal.BlobManifest -> {
                 val pageUrl = engine.page.value.url
-                HlsPlaylistParser.variantSummaries(signal.content, pageUrl)
-                    .forEach { sniffer.observe(epoch, it.url, Evidence.DOM) }
+                // T110: on a no-decoder device the AV1 variant addresses never surface as
+                // candidates at all (hidden, not greyed); warning annotation is irrelevant here
+                // because only the address is observed.
+                Av1Capability.applyToSummaries(
+                    HlsPlaylistParser.variantSummaries(signal.content, pageUrl),
+                    DeviceAv1CapabilityProvider.support(),
+                ).forEach { sniffer.observe(epoch, it.url, Evidence.DOM) }
             }
             is PageSignal.ApiPayload -> {
                 val pageUrl = engine.page.value.url
