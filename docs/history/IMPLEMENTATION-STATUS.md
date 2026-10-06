@@ -4,7 +4,7 @@
 
 当前输入API37 302、API28 162、视觉60、手机窗口截图15、JVM156通过；Lint0错误／33提醒、主机34通过。API36同一生产实现系统专项21次JUnit，实际系统分屏／TalkBack焦点及24标签压力补验完成。签名升级资格及8项冒烟通过；最终冻结包重新核验源码／安装hash及同组冒烟，实际结果见附件。
 
-详见[完成摘要](V0.1.4-COMPLETION.md)、[验收台账](RELEASE-ACCEPTANCE-V0.1.4.md)、[用户指南](USER-GUIDE.md)、[运行截图](design/compact-browser-2026-10-03/runtime-v0.1.4/README.md)。旧大／长任务证据明确复用v0.1.3，不声称本版重跑；OEM／网站大样本／多人长期试用／TalkBack音频未覆盖。
+详见[完成摘要](V0.1.4-COMPLETION.md)、[验收台账](RELEASE-ACCEPTANCE-V0.1.4.md)、[用户指南](../USER-GUIDE.md)、[运行截图](../design/compact-browser-2026-10-03/runtime-v0.1.4/README.md)。旧大／长任务证据明确复用v0.1.3，不声称本版重跑；OEM／网站大样本／多人长期试用／TalkBack音频未覆盖。
 
 ## v0.1.5 计划失败关闭；v0.1.6仅移交
 
@@ -20,7 +20,7 @@
 
 ## v0.1.3 发行快照
 
-版本 **0.1.3 / versionCode 10**，正式包与长期证书不变。T31–T40 的交付和最终包核验见 [完成摘要](V0.1.3-COMPLETION.md) 与 [发行说明](releases/v0.1.3.md)。下文 rc.1/rc.2 及旧版状态保留为历史，不能用其中“当前/未发行”描述覆盖本节。
+版本 **0.1.3 / versionCode 10**，正式包与长期证书不变。T31–T40 的交付和最终包核验见 [完成摘要](V0.1.3-COMPLETION.md) 与 [发行说明](../releases/v0.1.3.md)。下文 rc.1/rc.2 及旧版状态保留为历史，不能用其中“当前/未发行”描述覆盖本节。
 
 ## 以下为收尾前历史记录
 
@@ -74,7 +74,7 @@ APK：`app/build/outputs/apk/release/app-release.apk`；本地证据：`app/buil
 
 # 当前实现与验证状态
 
-**T1–T14 已完成，当前交付为 0.1.0 本地产品预览版，versionCode=2。** 第一轮历史证据见 T1-T7-COMPLETION.md，T8 历史见 ROUND-2-STATUS.md，当前完整验收见 ROUND-2-COMPLETION.md。
+**T1–T14 已完成，当前交付为 0.1.0 本地产品预览版，versionCode=2。** 第一轮历史证据见 T1-T7-COMPLETION.md，当前完整验收见 ROUND-2-COMPLETION.md。
 
 ## 当前能力
 

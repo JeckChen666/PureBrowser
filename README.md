@@ -4,7 +4,7 @@
 
 不提供自有云存储、云解析、云同步、账号、遥测或后端；仍可联网访问用户选择的网站。
 
-**v0.1.5 版本计划已失败关闭，终止发行（2026-10-04）**：YouTube实际完整成品及跨服务新增成功等必要目标未达成；已有局部实现保留为未完整验收的开发资产，不作为正式能力承诺。见 [失败关闭总结](docs/V0.1.5-CLOSEOUT.md) 与 [v0.1.6待承接清单](docs/V0.1.6-CARRYOVER.md)。本次保留v0.1.4已验收发布基线；v0.1.6尚未启动实现／发行。
+**v0.1.5 版本计划已失败关闭，终止发行（2026-10-04）**：YouTube实际完整成品及跨服务新增成功等必要目标未达成；已有局部实现保留为未完整验收的开发资产，不作为正式能力承诺。见 [失败关闭总结](docs/history/V0.1.5-CLOSEOUT.md) 与 [v0.1.6待承接清单](docs/history/V0.1.6-CARRYOVER.md)。本次保留v0.1.4已验收发布基线；v0.1.6尚未启动实现／发行。
 
 ## 获取与开源
 
@@ -12,7 +12,7 @@
 - Apache-2.0，见 [LICENSE](LICENSE)、[NOTICE](NOTICE)。贡献与安全说明见 [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)。
 - 正式包：`io.github.jeckchen666.purebrowser`；Debug 包：`io.github.jeckchen666.purebrowser.debug`。最低 Android 8.0 / API26。
 - **v0.1.0 的 `com.example.purebrowser` 不会被覆盖，也不自动迁移其私有数据/网站登录。** 后续正式版本沿同包同签名升级。
-- [实现与验收](docs/V0.1.4-COMPLETION.md) · [后续版本路线图](docs/VERSION-ROADMAP-0.1.md)。
+- [实现与验收](docs/history/V0.1.4-COMPLETION.md) · [后续版本路线图](docs/VERSION-ROADMAP-0.1.md)。
 
 ## v0.1.4：统一 UI 与核心交互
 
@@ -22,7 +22,7 @@ T41–T50交付：顶部唯一地址入口／底部五动作、标签网格／�
 - API36同一生产实现的字体／横屏／15分钟后台／通知拒绝／FGS timeout共21次JUnit，适用范围有实际ZIP／源码核对；实际系统分屏及TalkBack焦点交互补验完成，不宣称音频／OEM认证。
 - v0.1.3/code10同签名覆盖资格验收、旧历史／自定义站点／偏好／任务／成品实际保留；签名资格8项通过，最终冻结包的精确源码／安装哈希与重复冒烟以Release附件为准。
 - 同设备24标签实际切换与菜单／资源压力12轮有配对数据，不宣称帧率或确定加速。大文件／长HLS明确为v0.1.3历史复用，不冒充本版重跑。
-- [完成摘要](docs/V0.1.4-COMPLETION.md) · [验收台账](docs/RELEASE-ACCEPTANCE-V0.1.4.md) · [发行说明](docs/releases/v0.1.4.md) · [实际组件截图与取舍](docs/design/compact-browser-2026-10-03/runtime-v0.1.4/README.md)。截图是当前code13输入的生产组件／合成FIXTURE，非最终签名APK截图或真实下载成功证明。
+- [完成摘要](docs/history/V0.1.4-COMPLETION.md) · [验收台账](docs/history/RELEASE-ACCEPTANCE-V0.1.4.md) · [发行说明](docs/releases/v0.1.4.md) · [实际组件截图与取舍](docs/design/compact-browser-2026-10-03/runtime-v0.1.4/README.md)。截图是当前code13输入的生产组件／合成FIXTURE，非最终签名APK截图或真实下载成功证明。
 
 ## v0.1.3：可恢复的本地下载
 
@@ -32,7 +32,7 @@ T41–T50交付：顶部唯一地址入口／底部五动作、标签网格／�
 - 暂停、取消、继续、另建下载语义分离；冷启动先对账，由用户主动恢复，不静默启动下载。
 - schema v5 备份迁移、停止原因/缓存反馈、通知动作、本地隐私分项清理与主动脱敏诊断。
 - 修复导航后扫描占位和弹窗焦点/键盘问题，降低大文件传输的重复元数据开销。
-- [发行说明](docs/releases/v0.1.3.md) · [最终验收摘要](docs/V0.1.3-COMPLETION.md) · [用户指南](docs/USER-GUIDE.md) · [隐私说明](docs/PRIVACY.md)。
+- [发行说明](docs/releases/v0.1.3.md) · [最终验收摘要](docs/history/V0.1.3-COMPLETION.md) · [用户指南](docs/USER-GUIDE.md) · [隐私说明](docs/PRIVACY.md)。
 - 129 JVM、候选生产代码对应的 API37 单批 225 项、API28/36 专项已验证；最终签名包另验证升级、浏览入口、真实跨 UID 分享及三个获授权 HTTPS 作品。历史候选与最终包的证据边界见验收摘要。
 - **主要在模拟器验证，OEM 后台行为待补测**；真机、多站点大样本和多人长期试用不作为本次 Pre-release 的阻断项，不声称全机型/全网站稳定。
 
@@ -43,7 +43,7 @@ T41–T50交付：顶部唯一地址入口／底部五动作、标签网格／�
 - 每任务2片并发，临时网络错误有限重试；分片进度与封装阶段分开，不把100%分片当成已保存。
 - schema v4 备份迁移、任务私有工作目录、完整校验后公共发布、取消/进程终止对账。
 - 仅必要 Media3 extractor/muxer组件，无FFmpeg运行时、无新播放器/云服务。
-- 实绩与未满足门槛见 [候选验收](docs/V0.1.2-CANDIDATE.md)；测试站点见 [HLS fixtures](docs/HLS-FIXTURES.md)。不把候选称为已发布v0.1.2。
+- 实绩与未满足门槛见 [候选验收](docs/history/V0.1.2-CANDIDATE.md)；测试站点见 [HLS fixtures](docs/HLS-FIXTURES.md)。不把候选称为已发布v0.1.2。
 
 ## v0.1.1 新增
 
@@ -137,21 +137,23 @@ python3 tools/fixtures/serve_video_fixture.py
 
 ## 项目文档
 
-- [v0.1.4 版本与执行计划](docs/EXECUTION-PLAN-V0.1.4.md) · [发行验收台账](docs/RELEASE-ACCEPTANCE-V0.1.4.md) · [条件性完成摘要](docs/V0.1.4-COMPLETION.md) · [发行说明草稿](docs/releases/v0.1.4.md)：T41–T48已实现，T49进行中，T50 pending；未发布，不改变当前v0.1.3发行状态。
+- [文档索引](docs/README.md)：当前有效文档、按版本的发行说明／执行计划／验收台账入口。
+
+- [v0.1.4 版本与执行计划](docs/history/EXECUTION-PLAN-V0.1.4.md) · [发行验收台账](docs/history/RELEASE-ACCEPTANCE-V0.1.4.md) · [条件性完成摘要](docs/history/V0.1.4-COMPLETION.md) · [发行说明草稿](docs/releases/v0.1.4.md)：T41–T48已实现，T49进行中，T50 pending；未发布，不改变当前v0.1.3发行状态。
 
 - [UI 设计方向：紧凑版浏览器 V4](docs/design/compact-browser-2026-10-03/README.md)：15个界面总览与交互参考；T41–T48已实现，生成图不是实机或最终包验收证据。
 
 - `docs/releases/v0.1.3.md`：本次正式签名公开测试版的发行说明。
-- `docs/V0.1.3-COMPLETION.md`：最终包身份、验收与证据复用边界。
+- `docs/history/V0.1.3-COMPLETION.md`：最终包身份、验收与证据复用边界。
 - `docs/releases/v0.1.0.md`：首个开源源码预览的历史发布说明。
 - `docs/SOURCE-RESEARCH.md`：GitHub 参考项目、许可证、固定提交、采用与不采用的设计。
-- `docs/T1-T7-COMPLETION.md`：第一轮交付、验收与边界。
-- `docs/IMPLEMENTATION-STATUS.md`：当前测试和功能边界。
-- `docs/PRODUCT-PLAN.md`：已确认的纯本地、产品化优先方向。
+- `docs/history/T1-T7-COMPLETION.md`：第一轮交付、验收与边界。
+- `docs/history/IMPLEMENTATION-STATUS.md`：v0.1.x 各阶段测试与功能边界的历史快照。
+- `docs/history/PRODUCT-PLAN.md`：已确认的纯本地、产品化优先方向。
 - `docs/VERSION-ROADMAP-0.1.md`：v0.1.0–v0.1.4 建议版本范围、用户效果、发布与发行验收门槛；历史规划与当前交付状态分别标注。
-- `docs/EXECUTION-PLAN.md`：第一轮 T1–T7 的已完成执行清单。
-- `docs/EXECUTION-PLAN-ROUND-2.md`：第二轮 T8–T14 的已完成执行清单。
-- `docs/ROUND-2-STATUS.md`：Git 基线、T8 增量与验证边界。
+- `docs/history/EXECUTION-PLAN.md`：第一轮 T1–T7 的已完成执行清单。
+- `docs/history/EXECUTION-PLAN-ROUND-2.md`：第二轮 T8–T14 的已完成执行清单。
+- `docs/history/ROUND-2-COMPLETION.md`：第二轮 T9–T14 完整验收与证据。
 - `docs/SECURITY-BASELINE.md`：本次安全对齐说明与 Manifest diff。
 - `docs/DEVELOPMENT-ENVIRONMENT.md`：最初环境准备的历史记录。
 - `CONTEXT.md`：资源线索、视频候选、下载任务、成品等术语。
@@ -171,4 +173,4 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`；证据与截图：`app/build
 
 57 单元 / 91 API37 无跳过全回归；API28 公共文件、队列、实际权限拒绝与 host 强停恢复；API36 Cookie/来源/动态同源 frame、Signed Release 10 授权视频/3 HTTPS 环境及签名升级；API37 实际 chooser MP4/WebM 跨 UID 读取与最终核心 15 分钟锁屏传输。Lint 0 错误/28 提醒。
 
-上述不是全网站或真机长电影认证。先前失败尝试保留，本轮限定结果详见 `docs/V0.1.1-COMPLETION.md`；证据目录为本地 `app/build/reports/v0.1.1/`。发行 APK 不包含测试接收器、测试媒体或 HTTP 例外。
+上述不是全网站或真机长电影认证。先前失败尝试保留，本轮限定结果详见 `docs/history/V0.1.1-COMPLETION.md`；证据目录为本地 `app/build/reports/v0.1.1/`。发行 APK 不包含测试接收器、测试媒体或 HTTP 例外。

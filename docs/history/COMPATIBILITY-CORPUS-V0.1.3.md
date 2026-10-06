@@ -1,7 +1,7 @@
 # Compatibility corpus v0.1.3 — T39 research ledger, not acceptance
 
 **Status: T39 release gates remain PENDING.** This bounded sidecar owns only
-`docs/COMPATIBILITY-CORPUS-V0.1.3.md` and
+`docs/history/COMPATIBILITY-CORPUS-V0.1.3.md` and
 `tools/fixtures/authorized-corpus-v0.1.3.json`. No existing documentation,
 application/common code, test fixtures, release state or infrastructure was changed by this work.
 

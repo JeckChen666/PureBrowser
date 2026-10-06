@@ -87,7 +87,7 @@ WebView 隔离、Safe Intent Redirection、最小权限、凭据与备份隔离�
 - 选择时冻结来源/UA/页面代次；签名 query 原样保存，DTO 日志表示及测试失败诊断不输出敏感地址或 UA。
 - 本轮新增任务明确限制为 HTTPS；Debug 仅允许已有本地 fixture 主机的 HTTP，不放行生产明文下载。仍不附带 Cookie/Authorization，也不保证系统下载器每跳可控。
 - 文件缺失/读取拒绝/系统状态不可确认分别处理；格式初检不等同于完整媒体或安全保证。迁移不调用 enqueue/remove，存储提交失败的回滚只针对本次创建的任务。
-- 未新增 Manifest 导出组件、权限、后台服务、运行时依赖或云端接口。受控故障、真实系统样本与迁移证据见 ROUND-2-STATUS.md；不是完整安全审计或 API26–28 真机保证。
+- 未新增 Manifest 导出组件、权限、后台服务、运行时依赖或云端接口。受控故障、真实系统样本与迁移证据见 history/ROUND-2-COMPLETION.md；不是完整安全审计或 API26–28 真机保证。
 
 ## T9–T14：文件闭环与权限边界
 

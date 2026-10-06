@@ -4,7 +4,7 @@
 
 状态：**FAILED_CLOSED，v0.1.5计划失败，终止发行；T51–T60未全部完成。** 保留0.1.5-dev/code14开发资产，未完成／失败移交v0.1.6。 实绩与阻断见 [候选记录](V0.1.5-CANDIDATE.md)。
 开发基线：已发布 `v0.1.4 / versionCode 13`，源码 `e3405ee059eeb8f2a18a0a0ae76c44851eda1cc5`。
-发行基线：[v0.1.4 完成摘要](V0.1.4-COMPLETION.md)及[发行说明](releases/v0.1.4.md)。
+发行基线：[v0.1.4 完成摘要](V0.1.4-COMPLETION.md)及[发行说明](../releases/v0.1.4.md)。
 关联：[必要验收台账](RELEASE-ACCEPTANCE-V0.1.5.md)、[跨站样本与对比合同](COMPATIBILITY-CORPUS-V0.1.5.md)。
 
 ## 1. 版本定位：通用能力优先，YouTube 是代表性难点

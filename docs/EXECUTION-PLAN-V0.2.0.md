@@ -2,7 +2,7 @@
 
 状态：**DRAFT，D17–D21 待用户确认冻结；尚未实现。** 日期：2026-10-07（Asia/Shanghai）。分支：`feat/v0.2.0`（自 `main@403df83`）。
 开发基线：已发行 `v0.1.9 / versionCode 18`（tag `v0.1.9`，APK SHA256 `35e53949…f5336`）。本版目标 `versionCode 19`。
-关联：[v0.1.9 台账](RELEASE-ACCEPTANCE-V0.1.9.md)、[T88 窗口研究](V0.1.8-T88-WINDOW-RESEARCH.md)、[AV1 探针](V0.1.9-T102-AV1-PROBE.md)、[T100 规则证据](V0.1.9-T100-RULES-EVIDENCE.md)（转写根因）、[红线修订记录](VERSION-ROADMAP-0.1.md)。
+关联：[v0.1.9 台账](history/RELEASE-ACCEPTANCE-V0.1.9.md)、[T88 窗口研究](history/V0.1.8-T88-WINDOW-RESEARCH.md)、[AV1 探针](history/V0.1.9-T102-AV1-PROBE.md)、[T100 规则证据](history/V0.1.9-T100-RULES-EVIDENCE.md)（转写根因）、[红线修订记录](VERSION-ROADMAP-0.1.md)。
 
 ## 1. 版本定位：能力完整度——关闭已知死胡同 ＋ 规则规模化
 
@@ -27,7 +27,7 @@ v0.2.0 的里程碑语义：v0.1.x 完成了能力面的搭建（通用分层→
 | 转写器（2020 提取器分析、64 候选、失败分类） | tools/rules-transcriber | T108 根因修复 |
 | `Fmp4SegmentAssembler`（公开 API，DASH 已用） | v0.1.9 T96 | T107 HLS 侧接线 |
 | AV1 探针类（能力查询可复用） | v0.1.9 T102 | T110 运行时门控 |
-| 边界站点清单（fMP4/BYTERANGE/裸 AAC 分片） | [T103 证据](V0.1.9-T103-ACCEPTANCE-EVIDENCE.md) | T107 验收语料 |
+| 边界站点清单（fMP4/BYTERANGE/裸 AAC 分片） | [T103 证据](history/V0.1.9-T103-ACCEPTANCE-EVIDENCE.md) | T107 验收语料 |
 
 ## 3. 能力层次与支持合同
 

@@ -1,7 +1,7 @@
 # v0.1.4 发行验收台账（统一 UI 与核心交互改版）
 
 日期：2026-10-03（Asia/Shanghai）。**M1–M8资格验收通过；最终包仍必须以精确冻结身份重复核验后才能tag／发布。** 结果及继承边界见[完成摘要](V0.1.4-COMPLETION.md)，最终源码／APK／证书／安装哈希与签名8项实绩取Release身份附件，不将资格包哈希写成最终包。
-范围以 [版本与执行计划](EXECUTION-PLAN-V0.1.4.md) 的 P0 为准；视觉与交互依据 [紧凑版 V4](design/compact-browser-2026-10-03/README.md)。
+范围以 [版本与执行计划](EXECUTION-PLAN-V0.1.4.md) 的 P0 为准；视觉与交互依据 [紧凑版 V4](../design/compact-browser-2026-10-03/README.md)。
 本表适用于正式签名 APK / GitHub Pre-release，不代表商店审核、全网站或全 OEM 认证。
 
 ## 1. 必须通过

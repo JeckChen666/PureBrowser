@@ -3,8 +3,8 @@
 规划日期：2026-10-03（Asia/Shanghai）。
 状态：**T41–T50已实现并完成资格验收；最终冻结／发布按身份附件门槛执行。** 当前code13输入的完整结果及证据边界见 [完成摘要](V0.1.4-COMPLETION.md)。下方保留最初范围和依赖，不将概念图当运行证据。
 开发基线：本地 `main` / `8c32570`；当前发行 `v0.1.3 / versionCode 10`，以 [完成摘要](V0.1.3-COMPLETION.md) 为准。
-设计依据：[用户基本认可的紧凑版 V4](design/compact-browser-2026-10-03/README.md)、[设计落地清单](design/compact-browser-2026-10-03/IMPLEMENTATION-CHECKLIST.md)。
-发行门槛：[v0.1.4 验收台账](RELEASE-ACCEPTANCE-V0.1.4.md)。实现与条件性结果见 [完成摘要](V0.1.4-COMPLETION.md)、[候选记录](V0.1.4-CANDIDATE.md)和[发行说明草稿](releases/v0.1.4.md)。
+设计依据：[用户基本认可的紧凑版 V4](../design/compact-browser-2026-10-03/README.md)、[设计落地清单](../design/compact-browser-2026-10-03/IMPLEMENTATION-CHECKLIST.md)。
+发行门槛：[v0.1.4 验收台账](RELEASE-ACCEPTANCE-V0.1.4.md)。实现与条件性结果见 [完成摘要](V0.1.4-COMPLETION.md)、[候选记录](V0.1.4-CANDIDATE.md)和[发行说明草稿](../releases/v0.1.4.md)。
 
 ## 1. 版本定位
 

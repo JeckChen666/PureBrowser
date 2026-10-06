@@ -2,7 +2,7 @@
 
 状态：**ACTIVE，D1–D4 已于 2026-10-04 经用户确认按默认建议冻结；T71 启动。** 分支：`feat/v0.1.7`。
 开发基线：已发行 `v0.1.6 / versionCode 15`（tag `v0.1.6`，APK SHA256 `dc5b3835…61cc1`）。
-关联：[v0.1.6 验收台账](RELEASE-ACCEPTANCE-V0.1.6.md)（增强级 E1–E7 欠账）、[嗅探能力调研报告](V0.1.6-SNIFFING-ENHANCEMENT-RESEARCH.md)、[T67 门控诊断](V0.1.6-T67-GATE-DIAGNOSTIC.md)、[红线修订记录](VERSION-ROADMAP-0.1.md)（2026-10-04：仅本地、允许参考竞品、非开源竞品不指名）。
+关联：[v0.1.6 验收台账](RELEASE-ACCEPTANCE-V0.1.6.md)（增强级 E1–E7 欠账）、[嗅探能力调研报告](V0.1.6-SNIFFING-ENHANCEMENT-RESEARCH.md)、[T67 门控诊断](V0.1.6-T67-GATE-DIAGNOSTIC.md)、[红线修订记录](../VERSION-ROADMAP-0.1.md)（2026-10-04：仅本地、允许参考竞品、非开源竞品不指名）。
 
 ## 1. 版本定位：站点规则层 ＋ YouTube 会话路线 ＋ 欠账清偿
 

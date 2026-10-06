@@ -2,7 +2,7 @@
 
 状态：**已发行（2026-10-07）。T94–T104 完成：独立音轨 HLS 双轨保存（含真实缺陷修复）、fMP4 组装与 DASH 下载、yt-dlp 转写流水线（20 条规则、3 站新增成品）、Ed25519 规则签名、API28 矩阵恢复、AV1 探针结论（缓）。R4（YouTube 会话电池）待用户人工登录后执行。**
 开发基线：已发行 `v0.1.8 / versionCode 17`（tag `v0.1.8`，APK SHA256 `64d5763f…ee51`）。本版目标 `versionCode 18`。
-关联：[v0.1.8 台账](RELEASE-ACCEPTANCE-V0.1.8.md)、[T88 窗口研究](V0.1.8-T88-WINDOW-RESEARCH.md)（匿名 No-go）、[AV1 评估](V0.1.8-AV1-EVALUATION.md)、[T89 规则证据](V0.1.8-T89-RULES-EVIDENCE.md)、[红线修订记录](VERSION-ROADMAP-0.1.md)。
+关联：[v0.1.8 台账](RELEASE-ACCEPTANCE-V0.1.8.md)、[T88 窗口研究](V0.1.8-T88-WINDOW-RESEARCH.md)（匿名 No-go）、[AV1 评估](V0.1.8-AV1-EVALUATION.md)、[T89 规则证据](V0.1.8-T89-RULES-EVIDENCE.md)、[红线修订记录](../VERSION-ROADMAP-0.1.md)。
 
 ## 1. 版本定位：保存能力补全 ＋ yt-dlp 规则流水线
 
