@@ -1,6 +1,6 @@
 # PureBrowser v0.2.0 版本与执行计划
 
-状态：**DRAFT，D17–D21 待用户确认冻结；尚未实现。** 日期：2026-10-07（Asia/Shanghai）。分支：`feat/v0.2.0`（自 `main@403df83`）。
+状态：**ACTIVE（2026-10-07 用户确认，D17–D21 按默认建议冻结；T105 完成，T106 起执行）。** 分支：`feat/v0.2.0`。
 开发基线：已发行 `v0.1.9 / versionCode 18`（tag `v0.1.9`，APK SHA256 `35e53949…f5336`）。本版目标 `versionCode 19`。
 关联：[v0.1.9 台账](history/RELEASE-ACCEPTANCE-V0.1.9.md)、[T88 窗口研究](history/V0.1.8-T88-WINDOW-RESEARCH.md)、[AV1 探针](history/V0.1.9-T102-AV1-PROBE.md)、[T100 规则证据](history/V0.1.9-T100-RULES-EVIDENCE.md)（转写根因）、[红线修订记录](VERSION-ROADMAP-0.1.md)。
 
