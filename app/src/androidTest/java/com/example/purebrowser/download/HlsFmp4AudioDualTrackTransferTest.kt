@@ -65,7 +65,10 @@ class HlsFmp4AudioDualTrackTransferTest {
                     appendLine("#EXT-X-MEDIA-SEQUENCE:0")
                     appendLine("#EXT-X-PLAYLIST-TYPE:VOD")
                     appendLine("#EXTINF:2.000000,")
-                    append("video-000.ts")
+                    appendLine("video-000.ts")
+                    // VOD media playlists must close with the end marker; the production parser's
+                    // live gate (no ENDLIST => honest refusal) applies to the fixture too.
+                    append("#EXT-X-ENDLIST")
                 }.toByteArray()
                 text["https://cdn.example/fls-fmp4/audio.m3u8"] = buildString {
                     appendLine("#EXTM3U")
