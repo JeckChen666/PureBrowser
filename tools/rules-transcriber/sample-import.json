@@ -4,8 +4,9 @@
       "actions": [
         {
           "pointers": [
-            "contentUrlHls",
-            "contentUrl"
+            "info.fullUrl",
+            "info.photoCropUrl",
+            "info.videoPhotoUrl"
           ],
           "type": "jsonExtract"
         }
@@ -14,29 +15,26 @@
         {
           "id": "api",
           "maxBytes": 131072,
-          "url": "https://medal.tv/api/content/{{match.id}}"
+          "url": "https://arhiiv.err.ee/api/v1/content/video/{{match.id}}"
         }
       ],
-      "id": "ytdlp-medaltv",
+      "id": "ytdlp-errarhiiv",
       "match": {
-        "hosts": "(^|\\.)medal\\.tv$",
-        "path": "/games/[^/?#&]+/clips/(?<id>[^/?#&]+)"
+        "hosts": "(^|\\.)err\\.ee$",
+        "path": "/video/(?:vaata/)?(?<id>[^/?#]+)"
       },
-      "note": "medal.tv clip page: controlled fetch of the content API, jsonExtract surfaces contentUrlHls/contentUrl (HLS master + direct MP4); live-verified T100 (rule-surfaced VERIFIED 1080p HLS, save SUCCEEDED 16.2MB).",
+      "note": "ERR archive video page: jsonExtract surfaces the page/API media pointers; live-verified T109 (site HLS master VERIFIED via page requests, save SUCCEEDED 208,453,130 B through the T107 fMP4 dual-track path, protocol=DUAL_TRACK, ftyp ok, 608.7s).",
       "version": 1
     },
     {
       "actions": [
         {
           "pointers": [
-            "status",
-            "reddit_title",
-            "title",
-            "description",
-            "files",
-            "thumbnail_url",
-            "date_added",
-            "duration"
+            "media_attachments[0].source_mp4",
+            "url",
+            "account.url",
+            "card.url",
+            "media_attachments[0].preview_url"
           ],
           "type": "jsonExtract"
         }
@@ -45,29 +43,22 @@
         {
           "id": "api",
           "maxBytes": 131072,
-          "url": "https://ajax.streamable.com/videos/{{match.id}}"
+          "url": "https://gab.com/api/v1/statuses/{{match.id}}"
         }
       ],
-      "id": "ytdlp-streamable",
+      "id": "ytdlp-gab",
       "match": {
-        "hosts": "(^|\\.)streamable\\.com$",
-        "path": "/(?:[es]/)?(?<id>\\w+)"
+        "hosts": "(^|\\.)gab\\.com$",
+        "path": "/[^/]+/posts/(?<id>\\d+)"
       },
-      "note": "streamable.com clip page: controlled fetch of the ajax videos API (jsonExtract pointer set kept from transcription); live-verified T100 at site level (save SUCCEEDED 19.3MB via page candidates; rule pointers resolved to non-string containers).",
+      "note": "post page: controlled fetch + jsonExtract; live-verified T109 (rule-surfaced VERIFIED direct MP4 11.9MB, RULE source; save SUCCEEDED 11,947,252 B DIRECT, ftyp ok, 104s - desktop UA).",
       "version": 1
     },
     {
       "actions": [
         {
           "pointers": [
-            "title",
-            "source_url",
-            "body",
-            "duration",
-            "created_at_i",
-            "total_views_count",
-            "hearts_count",
-            "comments_count"
+            "streamUrl"
           ],
           "type": "jsonExtract"
         }
@@ -76,22 +67,151 @@
         {
           "id": "api",
           "maxBytes": 131072,
-          "url": "https://hitrecord.org/api/web/records/{{match.id}}"
+          "url": "https://api.godresource.com/api/Streams/{{match.id}}"
         }
       ],
-      "id": "ytdlp-hitrecord",
+      "id": "ytdlp-godresource",
       "match": {
-        "hosts": "(^|\\.)hitrecord\\.org$",
-        "path": "/records/(?<id>\\d+)"
+        "hosts": "(^|\\.)godresource\\.com$",
+        "path": "/video/(?<id>\\w+)"
       },
-      "note": "hitrecord.org record page: controlled fetch of the records API (jsonExtract pointer set kept from transcription); live-verified T100 at site level (save SUCCEEDED 71.9MB via page candidates; rule pointers resolved to non-string containers).",
+      "note": "video page: controlled fetch + jsonExtract; live-verified T109 discovery run (rule-surfaced VERIFIED HLS master, RULE source direct; the save run one page-epoch later did not resettle the candidate - recorded honestly, single retry budget).",
+      "version": 1
+    },
+    {
+      "actions": [
+        {
+          "pointers": [
+            "videoURL",
+            "videoReencode640",
+            "videoReencode1280",
+            "vodURL"
+          ],
+          "type": "jsonExtract"
+        }
+      ],
+      "fetch": [
+        {
+          "hosts": [
+            "17app.co"
+          ],
+          "id": "api",
+          "maxBytes": 131072,
+          "url": "https://wap-api.17app.co/api/v1/vods/{{match.id}}"
+        }
+      ],
+      "id": "ytdlp-ichinanalivevod",
+      "match": {
+        "hosts": "(^|\\.)17\\.live$",
+        "path": "/ja/vod/[^/?#]+/(?<id>[^/?#]+)"
+      },
+      "note": "17.live VOD page (fetch.hosts declared): page-level chain verified T109 (VERIFIED direct MP4 123.6MB via REQUEST).",
+      "version": 1
+    },
+    {
+      "actions": [
+        {
+          "pointers": [
+            "archiveMirrorUrl",
+            "sourceLink",
+            "streamer.sourceLink"
+          ],
+          "type": "jsonExtract"
+        }
+      ],
+      "fetch": [
+        {
+          "id": "api",
+          "maxBytes": 131072,
+          "url": "https://api.livestreamfails.com/clip/{{match.id}}"
+        }
+      ],
+      "id": "ytdlp-livestreamfails",
+      "match": {
+        "hosts": "(^|\\.)livestreamfails\\.com$",
+        "path": "/(?:clip|post)/(?<id>[0-9]+)"
+      },
+      "note": "clip page: page-level chain verified T109 (VERIFIED direct MP4 8.5MB via METADATA/REQUEST/DOM; rule face predates site redesign, no direct rule contribution observed).",
+      "version": 1
+    },
+    {
+      "actions": [
+        {
+          "pointers": [
+            "media.m3u8",
+            "media.mp4"
+          ],
+          "type": "jsonExtract"
+        }
+      ],
+      "fetch": [
+        {
+          "id": "api",
+          "maxBytes": 131072,
+          "url": "https://www.masters.com/relatedcontent/rest/v2/masters_v1/en/content/masters_v1_{{match.id}}_en"
+        }
+      ],
+      "id": "ytdlp-masters",
+      "match": {
+        "hosts": "(^|\\.)masters\\.com$",
+        "path": "/en_US/watch/(?<date>\\d{4}-\\d{2}-\\d{2})/(?<id>\\d+)"
+      },
+      "note": "watch page: controlled fetch + jsonExtract; live-verified T109 (rule-surfaced VERIFIED direct MP4, RULE+METADATA sources, 86.7MB).",
+      "version": 1
+    },
+    {
+      "actions": [
+        {
+          "pointers": [
+            "path.quality[0].url",
+            "path.quality[1].url",
+            "path.quality[2].url"
+          ],
+          "type": "jsonExtract"
+        }
+      ],
+      "fetch": [
+        {
+          "id": "api",
+          "maxBytes": 131072,
+          "url": "https://www.tvc.ru/video/json/id/{{match.id}}"
+        }
+      ],
+      "id": "ytdlp-tvc",
+      "match": {
+        "hosts": "(^|\\.)tvc\\.ru$",
+        "path": "/video/iframe/id/(?<id>\\d+)"
+      },
+      "note": "iframe video page: controlled fetch + jsonExtract; live-verified T109 (rule-surfaced VERIFIED direct MP4 tiers, RULE source, 110MB/64MB).",
+      "version": 1
+    },
+    {
+      "actions": [
+        {
+          "pattern": "(?s)({.+})",
+          "type": "regexExtract"
+        }
+      ],
+      "fetch": [
+        {
+          "id": "api",
+          "maxBytes": 131072,
+          "url": "https://{{match.query}}/api/photo/list?{{match.id}}"
+        }
+      ],
+      "id": "ytdlp-twentythreevideo",
+      "match": {
+        "hosts": "(^|\\.)(?:23video\\.com|filmweb\\.no|twentythree\\.net)$",
+        "path": "/v\\.ihtml/player\\.html\\?(?<query>.*?\\bphoto(?:_|%5f)id=(?<id>\\d+).*)"
+      },
+      "note": "embedded player page: page-level chain verified T109 (VERIFIED direct MP4 8.8MB via REQUEST/DOM).",
       "version": 1
     }
   ],
   "signature": {
     "algorithm": "Ed25519",
     "keyid": "pb-k-c7dff25a",
-    "value": "uWX5U/7lS3VxnRBXoi7lpJTsE6iBLXYSYGE796mkLqCTn85XwDWqCxEV1JzU9WBHynwaAHY1gAgjLaPiTPaJBg=="
+    "value": "2DSqqct7SG+0L3UM4ubGYOuEg5hpMDZjrtDtrm18W/UiJLNgOHzWZ3vFl2S3+Nuy0tCWVsGnb4xmWGwFBbuCCg=="
   },
   "version": 3
 }
