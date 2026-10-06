@@ -1,6 +1,6 @@
 # PureBrowser v0.2.0 版本与执行计划
 
-状态：**ACTIVE（2026-10-07 用户确认，D17–D21 按默认建议冻结；T105 完成，T106 起执行）。** 分支：`feat/v0.2.0`。
+状态：**已发行（2026-10-07）。T105–T114 完成：HLS fMP4 音视频双轨（含 BYTERANGE init，实站 208MB 成品）；转写根因修复＋12 条新规则（共 32 条）；AV1 运行时门控；FFmpeg 永不引入结案；QuickJS 不立项（实测 0 阻断）。R4 规模化部分达成（5/12 成品率 42%，如实登记）；R2（YouTube 会话）待人工登录。**
 开发基线：已发行 `v0.1.9 / versionCode 18`（tag `v0.1.9`，APK SHA256 `35e53949…f5336`）。本版目标 `versionCode 19`。
 关联：[v0.1.9 台账](history/RELEASE-ACCEPTANCE-V0.1.9.md)、[T88 窗口研究](history/V0.1.8-T88-WINDOW-RESEARCH.md)、[AV1 探针](history/V0.1.9-T102-AV1-PROBE.md)、[T100 规则证据](history/V0.1.9-T100-RULES-EVIDENCE.md)（转写根因）、[红线修订记录](VERSION-ROADMAP-0.1.md)。
 
