@@ -1,6 +1,6 @@
 # PureBrowser v0.2.1 版本与执行计划
 
-状态：**ACTIVE（2026-10-07 用户确认，D22 委托默认 B"下载即主角"，D23–D25 按默认冻结；T115 完成，T116 起执行）。** 分支：`feat/v0.2.1`。
+状态：**已发行（2026-10-07）。T115–T120 完成：LOGO（B 方向）全位落地；下载默认路径 2 步（S-A/S-B 实测）＋长按快捷 1 步；提示语用户化（23 文件 0 违禁术语、失败→建议映射、技术详情折叠）；R3 规则站 2 步路径因 fMP4 硬边界部分达成（如实登记）。**
 开发基线：已发行 `v0.2.0 / versionCode 19`（tag `v0.2.0`，APK SHA256 `b6f0171a…8aa76`）。本版目标 `versionCode 20`。
 关联：[v0.2.0 台账](RELEASE-ACCEPTANCE-V0.2.0.md)、[路线图](VERSION-ROADMAP-0.1.md)、LOGO 探索稿 `artifacts/ui-exploration/logo-video-focus-v2/`（本地，四方向 A–D）。
 
