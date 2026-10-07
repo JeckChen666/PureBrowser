@@ -171,10 +171,10 @@ fun RuleFormatConfirmation(
         Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium)
         ResourceMetadata(frozen.candidate)
         ResourceSource(frozen)
-        Text("站点规则报告了 ${rows.size} 个可选格式，已按“最佳”预选；点选其他格式或改用偏好后保存。清单类地址在保存时读取并准备所选清晰度。", style = MaterialTheme.typography.bodySmall)
+        Text("站点规则报告了 ${rows.size} 个可选格式，已按“最佳”预选；点选其他格式或改用偏好后保存。播放地址类资源在保存时读取并准备所选清晰度。", style = MaterialTheme.typography.bodySmall)
         ResourceOption(
             label = "使用当前网站访问条件",
-            description = if (contextAvailable) "只使用适用的同源会话和最小来源；修改后需重新读取清单" else "没有可靠页面关联，不使用网站会话",
+            description = if (contextAvailable) "只使用适用的同源会话和最小来源；修改后需重新读取播放地址" else "没有可靠页面关联，不使用网站会话",
             checked = useContext,
             enabled = contextAvailable && !submitted,
             onChange = {
@@ -251,7 +251,7 @@ fun RuleFormatConfirmation(
                         Column(Modifier.padding(end = 8.dp)) {
                             Text(FormatChoice.label(row))
                             if (row.kind == MediaKind.HLS || row.kind == MediaKind.DASH) Text(
-                                "清单地址，保存时将读取并准备所选清晰度",
+                                "播放地址，保存时将读取并准备所选清晰度",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -290,7 +290,9 @@ fun RuleFormatConfirmation(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("rule-format-repick"),
             ) { Text("重新选择格式") }
         }
-        if (wifiPreviewBlocked) ResourceStatus(error = true) {
+        // T119: the notice tracks the live gate — it clears as soon as Wi-Fi is back, and
+        // clearing it never restarts anything by itself (the user's next 保存 does).
+        if (wifiPreviewBlocked && wifiOnly && runCatching { !wifiAvailable() }.getOrDefault(true)) ResourceStatus(error = true) {
             Text("仅 Wi-Fi 已开启；请连接 Wi-Fi，或关闭“仅 Wi-Fi”后再保存。不会自动重试。",
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("rule-format-wifi-required"))
         }

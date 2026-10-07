@@ -104,7 +104,7 @@ class DownloadQuickSheetUiTest {
         )) })
         scrollQuick("download-segments-task")
         compose.onNodeWithTag("download-segments-task").assert(hasText("3 / 8", substring = true))
-            .assert(hasText("不是整体保存进度", substring = true))
+            .assert(hasText("不代表整体保存进度", substring = true))
         compose.onNodeWithTag("download-bytes-task").assert(hasText("总大小未知", substring = true))
         scrollQuick("download-progress-task")
         compose.onNodeWithTag("download-progress-task").assert(
@@ -170,11 +170,11 @@ class DownloadQuickSheetUiTest {
             calls = calls, controlsConnected = true,
         )
         scrollQuick("download-reason-task")
-        compose.onNodeWithTag("download-reason-task").assert(hasText("网站访问条件失效", substring = true))
+        compose.onNodeWithTag("download-reason-task").assert(hasText("链接已过期", substring = true))
         scrollQuick("download-retry-task")
         compose.onNodeWithTag("download-resume-task").assertDoesNotExist()
         compose.onNodeWithTag("download-retry-task").performClick()
-        compose.onNodeWithText("不是暂停后续传", substring = true).assertExists()
+        compose.onNodeWithText("不是在原任务上继续", substring = true).assertExists()
         compose.onNodeWithTag("download-retry-dialog-task-confirm").performClick()
         assertEquals(listOf("retry:task"), calls)
         scrollQuick("download-source-task")

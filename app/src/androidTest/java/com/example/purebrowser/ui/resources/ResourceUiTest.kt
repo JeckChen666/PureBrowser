@@ -57,8 +57,7 @@ class ResourceUiTest {
             MediaCandidate("blob:https://page.example/local-id", MediaKind.LOCAL, setOf(Evidence.DOM), mimeType = "video/mp4"),
         )
         val explanations = listOf(
-            "这是 DASH 播放清单，音频和视频可能分开传输。目前不支持分片下载与音视频合并。",
-            "这是播放器在当前页面中创建的本地媒体地址，不是独立文件直链。请播放视频后，再查看是否发现底层视频直链。",
+            "这是播放器在页面里临时创建的地址，还不是能直接保存的视频文件。请先播放视频，稍后再看看有没有出现可保存的视频文件。",
         )
         val selected = mutableListOf<MediaCandidate>()
         compose.setContent {
@@ -67,32 +66,37 @@ class ResourceUiTest {
             }
         }
 
-        compose.onNodeWithText("1 个可尝试的直链 · 1 个 HLS 清单 · 2 个其他媒体资源").assertExists()
+        compose.onNodeWithText("1 个视频文件 · 1 个播放地址（HLS） · 1 个播放地址（DASH） · 1 个其他媒体资源").assertExists()
         scrollSheetTo(file.displayName)
-        cardFor(file).assert(hasAnyDescendant(hasContentDescription("尝试下载") and hasClickAction()))
+        cardFor(file).assert(hasAnyDescendant(hasContentDescription("保存") and hasClickAction()))
         scrollSheetTo(hls.displayName)
-        cardFor(hls).assert(hasAnyDescendant(hasContentDescription("尝试下载") and hasClickAction()))
-        others.forEach { compose.onAllNodesWithText(it.displayName).assertCountEquals(0) }
+        cardFor(hls).assert(hasAnyDescendant(hasContentDescription("保存") and hasClickAction()))
+        // DASH became a downloadable tier (v0.1.9): it carries the same save affordance.
+        scrollSheetTo(others[0].displayName)
+        cardFor(others[0]).assert(hasAnyDescendant(hasContentDescription("保存") and hasClickAction()))
+        // The blob entry stays in the collapsed group until it is expanded.
+        compose.onAllNodesWithText(others[1].displayName).assertCountEquals(0)
 
-        clickSheetText("其他媒体资源（2） · 展开")
-        others.zip(explanations).forEach { (candidate, explanation) ->
+        clickSheetText("其他媒体资源（1） · 展开")
+        listOf(others[1]).zip(explanations).forEach { (candidate, explanation) ->
             scrollSheetTo(candidate.displayName)
             compose.onNodeWithText(candidate.displayName).assertIsDisplayed()
             val card = cardFor(candidate)
             card.assert(hasAnyDescendant(hasText(explanation)))
             card.assert(hasAnyDescendant(hasText("大小未知")))
             card.assert(hasAnyDescendant(hasContentDescription("查看详情") and hasClickAction()))
-            card.assert(!hasAnyDescendant(hasContentDescription("尝试下载")))
-            // Count every OnClick, including disabled controls: only the real details action
-            // may exist. An extra disabled/no-op download button must fail this assertion.
-            assertEquals("Unexpected action in ${candidate.kind} card", 1, clickActionCount(card.fetchSemanticsNode()))
+            card.assert(!hasAnyDescendant(hasContentDescription("保存")))
+            // Count every OnClick, including disabled controls: the card row's select affordance
+            // (T117 quick-save wiring made rows clickable) plus the details action are the only
+            // ones. An extra disabled/no-op download button must still fail this assertion.
+            assertEquals("Unexpected action in ${candidate.kind} card", 2, clickActionCount(card.fetchSemanticsNode()))
         }
         compose.runOnIdle { assertTrue("Expansion must not select/download anything", selected.isEmpty()) }
 
-        clickSheetText("其他媒体资源（2） · 收起")
-        others.forEach { compose.onAllNodesWithText(it.displayName).assertCountEquals(0) }
+        clickSheetText("其他媒体资源（1） · 收起")
+        compose.onAllNodesWithText(others[1].displayName).assertCountEquals(0)
         scrollSheetTo(file.displayName)
-        compose.onNode(hasContentDescription("尝试下载") and hasClickAction() and
+        compose.onNode(hasContentDescription("保存") and hasClickAction() and
             hasAnyAncestor(hasTestTag("resource-card-${file.displayName}"))).performScrollTo().performClick()
         compose.runOnIdle { assertEquals(listOf(file), selected) }
     }
@@ -115,9 +119,9 @@ class ResourceUiTest {
 
         scrollSheetTo(candidate.displayName)
         val card = cardFor(candidate)
-        card.assert(hasAnyDescendant(hasText("资源主机：media.example")))
-        card.assert(hasAnyDescendant(hasText("视频直链 · video/mp4")))
-        card.assert(hasAnyDescendant(hasText("响应大小 640 B")))
+        card.assert(hasAnyDescendant(hasText("来自：media.example")))
+        card.assert(hasAnyDescendant(hasText("视频文件 · video/mp4")))
+        card.assert(hasAnyDescendant(hasText("大小 640 B")))
         compose.onAllNodesWithText(candidate.url, useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithText("private%2Bsignature", substring = true, useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithText("网络请求 / 视频元素").assertCountEquals(0)
@@ -127,6 +131,8 @@ class ResourceUiTest {
         // Exact matching catches query stripping, decoding %2B/%2F, reordering, or fragment loss.
         compose.onNodeWithText(candidate.url, useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("网络请求 / 视频元素").assertExists()
+        // Protocol wording moved behind the collapsed 技术详情 row (T118); expand before asserting.
+        clickSheetText("技术详情")
         compose.onNodeWithText("地址协议：https").assertExists()
         clickDialogText("返回来源页", dialogTitle = "资源详情")
         compose.onAllNodesWithText(candidate.url, useUnmergedTree = true).assertCountEquals(0)
@@ -153,17 +159,17 @@ class ResourceUiTest {
             }
         }
 
-        compose.onNodeWithText("2 个可尝试的直链 · 1 个 HLS 清单 · 0 个其他媒体资源").assertExists()
+        compose.onNodeWithText("2 个视频文件 · 1 个播放地址（HLS） · 0 个播放地址（DASH） · 0 个其他媒体资源").assertExists()
         // Start at the top and select the first real action, not a named candidate's action.
         // This checks visible order instead of reimplementing the production sort in the test.
-        scrollSheetTo("尝试下载")
-        compose.onAllNodes(hasContentDescription("尝试下载") and hasClickAction()).onFirst()
+        scrollSheetTo("保存")
+        compose.onAllNodes(hasContentDescription("保存") and hasClickAction()).onFirst()
             .performScrollTo().assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(listOf(domFile), selected) }
         scrollSheetTo(requestFile.displayName)
         compose.onNodeWithText(requestFile.displayName).assertIsDisplayed()
         scrollSheetTo(domManifest.displayName)
-        cardFor(domManifest).assert(hasAnyDescendant(hasContentDescription("尝试下载") and hasClickAction()))
+        cardFor(domManifest).assert(hasAnyDescendant(hasContentDescription("保存") and hasClickAction()))
     }
 
     @Test(timeout = 30_000)
@@ -202,8 +208,8 @@ class ResourceUiTest {
             }
         }
 
-        clickSheetText("尝试下载")
-        compose.onNodeWithText("确认下载直链").assertExists()
+        clickSheetText("保存")
+        compose.onNodeWithText("确认下载视频文件").assertExists()
         compose.onNodeWithTag("download-file-name").assert(hasText("sample.mp4"))
         wifiControl().performScrollTo().assertIsOn().performClick().assertIsOff()
         val unsafeName = "../edited\\clip\u0001.mp4"
@@ -231,8 +237,8 @@ class ResourceUiTest {
         compose.runOnIdle { wifiDefault.value = true }
         wifiControl().assertIsOff()
         compose.onNodeWithText(original.candidate.displayName).assertExists()
-        compose.onNodeWithText("来源页面：原始来源页").assertExists()
-        compose.onNodeWithText("来源主机：page.example").assertExists()
+        compose.onNodeWithText("来自页面：原始来源页").assertExists()
+        compose.onNodeWithText("来自网站：page.example").assertExists()
         compose.onAllNodesWithText(newPage.candidate.displayName).assertCountEquals(0)
         compose.onNodeWithTag("download-file-name").assert(hasText(unsafeName))
 
@@ -265,7 +271,7 @@ class ResourceUiTest {
             }
         }
 
-        compose.onNodeWithText("确认下载直链").assertExists()
+        compose.onNodeWithText("确认下载视频文件").assertExists()
         compose.onNodeWithTag("download-file-name").assert(hasText("sample.mp4"))
         wifiControl().performScrollTo().assertIsOff()
         clickDialogText("开始下载")
@@ -301,7 +307,7 @@ class ResourceUiTest {
         }
     }
 
-    private fun actionOrText(text:String)=if(text in setOf("尝试下载","查看详情","返回来源页","关闭详情")) hasContentDescription(text) else hasText(text)
+    private fun actionOrText(text:String)=if(text in setOf("保存","查看详情","返回来源页","关闭详情")) hasContentDescription(text) else hasText(text)
     private fun scrollSheetTo(text: String) {
         compose.onNodeWithTag("resource-sheet").performScrollToNode(actionOrText(text))
     }
@@ -311,7 +317,7 @@ class ResourceUiTest {
         compose.onNode(actionOrText(text)).assertIsDisplayed().performClick()
     }
 
-    private fun clickDialogText(text: String, dialogTitle: String = "确认下载直链") {
+    private fun clickDialogText(text: String, dialogTitle: String = "确认下载视频文件") {
         // The underlying ModalBottomSheet is also a dialog. Its source action must not
         // match the detail dialog's action, so identify the dialog by its own title.
         val owningDialog = isDialog() and hasAnyDescendant(hasText(dialogTitle))

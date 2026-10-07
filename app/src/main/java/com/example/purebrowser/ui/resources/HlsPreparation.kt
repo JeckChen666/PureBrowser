@@ -113,7 +113,7 @@ internal class HlsPreparation(private val resolver: HlsResolver, private val sco
                 // The picked quality vanished or turned unsupported: report and keep the rows.
                 preferredVariantUrl != null && chosen?.supported != true -> {
                     selected = HlsPlaylistParser.defaultVariant(master.variants)
-                    error = "所选清晰度已不在清单中，请重新选择后再保存"
+                    error = "所选清晰度已不在可选范围，请重新选择后再保存"
                 }
                 // No prior pick and a real ladder: stop after the parse for one explicit confirm.
                 preferredVariantUrl == null && master.variants.count { it.supported } > 1 ->
@@ -129,7 +129,7 @@ internal class HlsPreparation(private val resolver: HlsResolver, private val sco
     private fun prepareSelected(draft: DownloadDraft, onReady: (HlsDownloadPlan) -> Unit) {
         val parsed = options ?: return
         val variant = selected?.takeIf { it.supported } ?: run {
-            error = "没有受支持的档位，请返回来源网页重新发现资源"
+            error = "没有受支持的清晰度，请返回来源网页重新发现资源"
             return
         }
         request({ cancel -> resolver.resolvePlan(draft, parsed, variant, cancel) }) { ready ->
@@ -184,7 +184,7 @@ internal class HlsPreparation(private val resolver: HlsResolver, private val sco
                     // Only the transport's policy-owned diagnostics may appear, never raw URLs/headers.
                     error = (failure as? TransferFailure)?.safeMessage
                         ?.takeIf { it.length <= 180 && !it.contains("://") && it.none(Char::isISOControl) }
-                        ?: "清单未能读取，请检查网络或返回来源网页重新发现资源"
+                        ?: "播放地址未能读取，请检查网络或返回来源网页重新发现资源"
                 }
             } finally {
                 if (generation == revision && token === cancellation) {

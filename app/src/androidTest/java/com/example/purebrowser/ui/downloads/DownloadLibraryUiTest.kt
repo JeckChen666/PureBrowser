@@ -157,7 +157,7 @@ class DownloadLibraryUiTest {
         showDownloads(listOf(task().copy(status = DownloadManager.STATUS_FAILED, canRetry = true)), calls = calls)
         scrollDownloads("download-retry-1")
         compose.onNodeWithTag("download-retry-1").performClick()
-        compose.onNodeWithText("不是暂停后续传", substring = true).assertExists()
+        compose.onNodeWithText("不是在原任务上继续", substring = true).assertExists()
         compose.onNodeWithText("旧任务记录和已有文件会保留", substring = true).assertExists()
         compose.runOnIdle { assertTrue(calls.isEmpty()) }
         compose.onNodeWithTag("download-retry-dialog-1-confirm").performClick()
@@ -245,7 +245,7 @@ class DownloadLibraryUiTest {
             canResume = true, cacheBytes = 4096)), calls = calls, onResume = { calls += "resume:$it" })
         scrollDownloads("download-cache-1")
         compose.onNodeWithTag("download-cache-1").assert(hasText(localFileSize(4096), substring = true))
-        compose.onNodeWithTag("download-reason-1").assert(hasText("用户主动暂停", substring = true))
+        compose.onNodeWithTag("download-reason-1").assert(hasText("你暂停了下载", substring = true))
         scrollDownloads("download-resume-1")
         compose.onNodeWithTag("download-resume-1").performClick()
         compose.runOnIdle { assertEquals(listOf("resume:1"), calls) }
@@ -309,7 +309,7 @@ class DownloadLibraryUiTest {
         }
         showDownloads(listOf(failed), calls = calls, onResume = { calls += "resume:$it" })
         scrollDownloads("download-reason-1")
-        compose.onNodeWithTag("download-reason-1").assert(hasText("网络传输失败", substring = true))
+        compose.onNodeWithTag("download-reason-1").assert(hasText("网络连接失败", substring = true))
         scrollDownloads("download-retry-1")
         compose.onNodeWithTag("download-resume-1").assertDoesNotExist()
         compose.onNodeWithTag("download-retry-1").performClick()
@@ -367,8 +367,8 @@ class DownloadLibraryUiTest {
         compose.runOnIdle { assertEquals(listOf("resume:1"), calls) }
         scrollDownloads("download-details-1")
         compose.onNodeWithTag("download-details-1").assertIsDisplayed().performClick()
-        compose.onNodeWithText("私有缓存", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("停止原因", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("已下载的缓存", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("原因与下一步", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("重新下载规则", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("关闭详情").assertIsDisplayed().performClick()
         scrollDownloads("download-cancel-1")

@@ -126,10 +126,10 @@ fun DashDownloadConfirmation(
         Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium)
         ResourceMetadata(frozen.candidate)
         ResourceSource(frozen)
-        Text("点击“保存视频”时读取 DASH 清单并准备所选清晰度，其余操作不发起请求。仅支持未加密的固定点播视频，下载后合并保存为 MP4。", style = MaterialTheme.typography.bodySmall)
+        Text("点击“保存视频”时读取 DASH 播放地址并准备所选清晰度，其余操作不发起请求。仅支持未加密的固定点播视频，下载后合并保存为 MP4。", style = MaterialTheme.typography.bodySmall)
         ResourceOption(
             label = "使用当前网站访问条件",
-            description = if (contextAvailable) "只使用适用的同源会话和最小来源；修改后需重新读取清单" else "没有可靠页面关联，不使用网站会话",
+            description = if (contextAvailable) "只使用适用的同源会话和最小来源；修改后需重新读取播放地址" else "没有可靠页面关联，不使用网站会话",
             checked = useContext,
             enabled = contextAvailable && !submitted,
             onChange = {
@@ -147,7 +147,9 @@ fun DashDownloadConfirmation(
             submitted = submitted,
             onPick = { pickedHeight = it },
         )
-        if (wifiPreviewBlocked) ResourceStatus(error = true) {
+        // T119: the notice tracks the live gate — it clears as soon as Wi-Fi is back, and
+        // clearing it never restarts anything by itself (the user's next 保存 does).
+        if (wifiPreviewBlocked && wifiOnly && runCatching { !wifiAvailable() }.getOrDefault(true)) ResourceStatus(error = true) {
             Text(
                 "仅 Wi-Fi 已开启；请连接 Wi-Fi，或关闭“仅 Wi-Fi”后再保存。不会自动重试。",
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("dash-wifi-required"),
@@ -167,15 +169,15 @@ fun DashDownloadConfirmation(
         }
         ready?.let { plan ->
             ResourceStatus(modifier = Modifier.testTag("dash-plan-ready")) {
-                Text("清单已准备 · ${plan.totalSegments} 个分片")
+                Text("准备完成 · ${plan.totalSegments} 个分片")
                 val seconds = plan.durationUs / 1_000_000
-                Text("清单时长：${seconds / 60} 分 ${seconds % 60} 秒（清单声明）")
+                Text("视频时长：${seconds / 60} 分 ${seconds % 60} 秒（按来源声明）")
                 Text("成品大小未知；下载完成并封装校验后才保存 MP4。", style = MaterialTheme.typography.bodySmall)
             }
         }
         val parsed = preparation.options
         if (parsed != null && ready == null && !preparation.busy && preparation.error == null) {
-            Text("清单已读取：${parsed.document.videoOffers.size} 个清晰度，点选后保存。", style = MaterialTheme.typography.bodySmall)
+            Text("已读取到 ${parsed.document.videoOffers.size} 个清晰度，点选后保存。", style = MaterialTheme.typography.bodySmall)
         }
         HorizontalDivider()
         OutlinedTextField(
@@ -206,7 +208,7 @@ fun DashDownloadConfirmation(
             onChange = { wifiOnly = it; wifiPreviewBlocked = false },
         )
         Text(
-            "会话不写入任务记录，不跨源转发。重新下载会另建任务并重新读取所选档位，不续传；档位消失时不会偷偷改选其他画质。",
+            "会话不写入任务记录，不跨源转发。重新下载会另建任务并重新读取所选清晰度，不续传；所选清晰度消失时不会偷偷改选其他画质。",
             style = MaterialTheme.typography.bodySmall,
         )
         Button(
@@ -257,7 +259,9 @@ internal fun DashQualityRows(
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("dash-variant-$index")
                         .selectable(selected = preparation.selected === offer, enabled = offer.supported && !submitted,
-                            role = Role.RadioButton, onClick = { preparation.select(offer); onPick(offer.height) }),
+                            role = Role.RadioButton, onClick = { preparation.select(offer); onPick(offer.height) })
+                        // TalkBack: announce the pick state explicitly (selectable sets no description).
+                        .semantics { stateDescription = if (preparation.selected === offer) "已选择" else "未选择" },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -266,7 +270,7 @@ internal fun DashQualityRows(
                     Column(Modifier.weight(1f)) {
                         Text(dashVariantLabel(offer))
                         if (!offer.supported) Text(
-                            readableResourceName(offer.unsupportedReason ?: "此档位不在本版支持范围"),
+                            readableResourceName(offer.unsupportedReason ?: "此清晰度不在本版支持范围"),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
                         )
                     }
@@ -274,11 +278,11 @@ internal fun DashQualityRows(
             }
         }
         if (preparation.selected == null)
-            Text("没有受支持的档位，请返回来源网页重新发现资源。", color = MaterialTheme.colorScheme.error)
+            Text("没有受支持的清晰度，请返回来源网页重新发现资源。", color = MaterialTheme.colorScheme.error)
         Text(
-            if (options.document.audioOffer != null) "将同时下载默认 AAC 音频轨，并与所选视频档位合并为一个 MP4。"
-            else if (preparation.selected?.muxedAudio == true) "所选档位音视频同轨，直接封装为一个 MP4。"
-            else "清单未提供受支持的音频轨；将仅保存视频轨，无法合并音频。",
+            if (options.document.audioOffer != null) "将同时下载默认 AAC 音频轨，并与所选视频清晰度合并为一个 MP4。"
+            else if (preparation.selected?.muxedAudio == true) "所选清晰度音视频同轨，直接封装为一个 MP4。"
+            else "播放地址未提供受支持的音频轨；将仅保存视频轨，无法合并音频。",
             style = MaterialTheme.typography.bodySmall,
         )
     } else if (summaries.isNotEmpty()) {
@@ -289,7 +293,10 @@ internal fun DashQualityRows(
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("dash-variant-$index")
                         .selectable(selected = pickedHeight != null && summary.height == pickedHeight, enabled = !submitted,
-                            role = Role.RadioButton, onClick = { onPick(summary.height) }),
+                            role = Role.RadioButton, onClick = { onPick(summary.height) })
+                        // TalkBack: announce the pick state explicitly (selectable sets no description).
+                        .semantics { stateDescription =
+                            if (pickedHeight != null && summary.height == pickedHeight) "已选择" else "未选择" },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -313,6 +320,6 @@ internal fun DashQualityRows(
 
 private fun dashVariantLabel(offer: MpdPlanParser.DashRepresentationOffer): String {
     val resolution = if (offer.height != null) "${offer.height}p" else "分辨率未知"
-    val bandwidth = offer.bandwidth?.let { "$it bit/s（清单声明带宽）" } ?: "带宽未知"
+    val bandwidth = offer.bandwidth?.let { "$it bit/s（来源声明带宽）" } ?: "带宽未知"
     return "$resolution · $bandwidth"
 }

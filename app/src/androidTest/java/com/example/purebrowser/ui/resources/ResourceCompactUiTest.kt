@@ -14,9 +14,11 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isToggleable
@@ -60,13 +62,13 @@ class ResourceCompactUiTest {
             }
         }
         compose.onAllNodes(isDialog()).assertCountEquals(1)
-        compose.onNodeWithText("适用的同源网站会话和最小来源条件", substring = true).assertExists()
+        compose.onNodeWithText("保存时可以选择是否使用网站的登录状态", substring = true).assertExists()
         compose.onAllNodesWithText("仅支持公开文件", substring = true).assertCountEquals(0)
         compose.onNodeWithTag("resource-card-${original.displayName}")
-            .assert(hasAnyDescendant(hasText("响应大小 640 B")))
+            .assert(hasAnyDescendant(hasText("大小 640 B")))
         compose.onAllNodesWithText(original.url, useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithText("网络请求 / 视频元素 / 资源时间线 / 下载回调").assertCountEquals(0)
-        compose.onNodeWithTag(resourceSaveTag(original.url)).assert(hasContentDescription("尝试下载"))
+        compose.onNodeWithTag(resourceSaveTag(original.url)).assert(hasContentDescription("保存"))
             .assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
         compose.onNodeWithTag("查看详情").assert(hasClickAction())
             .assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp).performClick()
@@ -81,6 +83,9 @@ class ResourceCompactUiTest {
         compose.onNodeWithTag("resource-sheet").performScrollToNode(hasText(original.url))
         compose.onNodeWithText(original.url, useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("网络请求 / 视频元素 / 资源时间线 / 下载回调").assertExists()
+        // Protocol wording lives behind the collapsed 技术详情 row (T118): expand before asserting.
+        compose.onNodeWithTag("resource-sheet").performScrollToNode(hasText("技术详情"))
+        compose.onNodeWithText("技术详情").performClick()
         compose.onNodeWithText("地址协议：https").assertExists()
         compose.onNodeWithTag("resource-sheet").performScrollToNode(hasContentDescription("返回来源页"))
         compose.onNodeWithContentDescription("返回来源页").performClick()
@@ -123,21 +128,22 @@ class ResourceCompactUiTest {
     @Test(timeout = 30_000)
     fun equalUrlsWithDifferentEvidenceAreNotDeduplicated_andUnsupportedHasNoSaveAction() {
         val file = candidate()
-        val dash = MediaCandidate("https://media.example/manifest.mpd", MediaKind.DASH, setOf(Evidence.REQUEST))
+        // DASH became a downloadable tier (v0.1.9); blob/LOCAL is the honest unsupported example.
+        val blob = MediaCandidate("blob:https://page.example/local-id", MediaKind.LOCAL, setOf(Evidence.DOM))
         compose.setContent {
             PureBrowserTheme {
-                ResourceSheet(listOf(file, file.copy(sources = setOf(Evidence.REQUEST)), dash), {}, {}, {})
+                ResourceSheet(listOf(file, file.copy(sources = setOf(Evidence.REQUEST)), blob), {}, {}, {})
             }
         }
-        compose.onNodeWithText("2 个可尝试的直链 · 1 个其他媒体资源").assertExists()
+        compose.onNodeWithText("2 个可保存的视频文件 · 1 个其他媒体资源").assertExists()
         compose.onAllNodesWithTag("resource-card-${file.displayName}").assertCountEquals(2)
         compose.onNodeWithTag("resource-sheet").performScrollToNode(hasText("其他媒体资源（1） · 展开"))
         compose.onNodeWithText("其他媒体资源（1） · 展开").performClick()
-        compose.onNodeWithTag("resource-sheet").performScrollToNode(hasText(dash.displayName))
-        compose.onNodeWithTag("resource-card-${dash.displayName}")
+        compose.onNodeWithTag("resource-sheet").performScrollToNode(hasText(blob.displayName))
+        compose.onNodeWithTag("resource-card-${blob.displayName}")
             .assert(hasAnyDescendant(hasContentDescription("查看详情")))
-        compose.onNodeWithTag(resourceSaveTag(dash.url)).assertDoesNotExist()
-        compose.onNodeWithText(dash.unsupportedExplanation()).assertExists()
+        compose.onNodeWithTag(resourceSaveTag(blob.url)).assertDoesNotExist()
+        compose.onNodeWithText(blob.unsupportedExplanation()).assertExists()
     }
 
     @Test(timeout = 30_000)
@@ -154,8 +160,8 @@ class ResourceCompactUiTest {
                 })
             }
         }
-        compose.onNodeWithText("来源页面：冻结来源").assertExists()
-        compose.onNodeWithText("来源主机：media.example").assertExists()
+        compose.onNodeWithText("来自页面：冻结来源").assertExists()
+        compose.onNodeWithText("来自网站：media.example").assertExists()
         compose.onNodeWithTag("download-file-name").performScrollTo().performTextReplacement("../edited.mp4")
         compose.onNodeWithTag("download-file-name").performImeAction()
         compose.onNode(isToggleable() and hasText("仅 Wi-Fi")).performScrollTo().assertIsOn().performClick().assertIsOff()
@@ -189,6 +195,25 @@ class ResourceCompactUiTest {
             assertEquals(1, dismissed)
             assertEquals(0, submitted)
         }
+    }
+
+    @Test(timeout = 30_000)
+    fun quickSaveRowsAnnounceTheirGesturesForTalkBack() {
+        // T119 TalkBack spot check: the T117 long-press quick path must be discoverable —
+        // both gestures carry explicit action labels, not a silent combinedClickable.
+        val file = candidate()
+        compose.setContent {
+            PureBrowserTheme {
+                ResourceSheet(listOf(file), {}, {}, {}, onQuickSave = {})
+            }
+        }
+        // The card hosts several clickables (row + tool buttons); the quick-save row is the one
+        // carrying the long-press action.
+        val row = compose.onAllNodes(hasClickAction() and
+            hasAnyAncestor(hasTestTag("resource-card-${file.displayName}")))
+            .fetchSemanticsNodes().single { androidx.compose.ui.semantics.SemanticsActions.OnLongClick in it.config }
+        assertEquals("打开保存选项", row.config[androidx.compose.ui.semantics.SemanticsActions.OnClick]?.label)
+        assertEquals("用默认设置快速保存", row.config[androidx.compose.ui.semantics.SemanticsActions.OnLongClick]?.label)
     }
 
     private fun candidate(name: String = "clip.mp4") = MediaCandidate(

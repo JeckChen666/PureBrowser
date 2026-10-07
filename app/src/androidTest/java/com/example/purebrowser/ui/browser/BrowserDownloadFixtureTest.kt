@@ -74,7 +74,7 @@ class BrowserDownloadFixtureTest {
         compose.onNodeWithTag("resourcesButton").performClick()
         compose.onNodeWithTag("resource-card-${candidates.first { it.url == "$base/sample.mp4?token=demo%2Bsignature" }.displayName}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag(com.example.purebrowser.ui.resources.resourceSaveTag("$base/sample.mp4?token=demo%2Bsignature")).performScrollTo().performClick()
-        compose.onNodeWithText("确认下载直链").assertIsDisplayed()
+        compose.onNodeWithText("确认下载视频文件").assertIsDisplayed()
         // The fixture is tiny; allow both emulator transports during this integration check.
         compose.onNode(isToggleable() and hasText("仅 Wi-Fi",substring=true)).assertIsOff()
         val previousIds=model.repository.snapshot().map{it.id}.toSet()

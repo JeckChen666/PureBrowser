@@ -63,17 +63,22 @@ class HlsCompactUiTest {
                 })
             }
         }
-        compose.onNodeWithText("清单响应大小 123 B").assertExists()
-        compose.onNodeWithText("成品大小未知（清单响应不代表视频大小）").assertExists()
+        compose.onNodeWithText("播放地址大小 123 B").assertExists()
+        compose.onNodeWithText("保存后的文件大小要等下载完成后才知道").assertExists()
         compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled()
         assertEquals(emptyList<String>(), transport.urls.toList())
 
         // The first save reads the ladder and stops for one explicit confirm of the surfaced rows.
         click("hls-save")
         awaitTag("hls-variant-0")
-        compose.onNodeWithText("清单已读取：3 个清晰度，点选后保存。").assertExists()
+        compose.onNodeWithText("已读取到 3 个清晰度，点选后保存。").assertExists()
         compose.onNodeWithTag("hls-variant-1").assertIsSelected() // ≤1080p-best default.
-        compose.onNodeWithTag("hls-variant-2").assertIsNotEnabled().assertIsNotSelected()
+        // T119 TalkBack spot check: the selected variant row announces its selection state.
+        assertTrue(compose.onNodeWithTag("hls-variant-1").fetchSemanticsNode()
+            .config[SemanticsProperties.StateDescription] != null)
+        // v0.1.9 codec gate: the non-H.264 tier stays selectable and only carries its warning
+        // (a later segment-level incompatibility fails honestly during resolution).
+        compose.onNodeWithTag("hls-variant-2").assertIsEnabled().assertIsNotSelected()
         compose.runOnIdle { assertTrue(submissions.isEmpty()) }
         assertEquals(listOf(ENTRY), transport.urls.toList())
 

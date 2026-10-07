@@ -24,7 +24,7 @@ class LegacyPermissionUiAudit {
         compose.waitUntil(20000) { model.sniffer!!.candidates.value.any { it.url.endsWith("second.mp4") && Evidence.DOM in it.sources } }
         compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("resourcesButton").performClick()
-        compose.onAllNodesWithText("尝试下载").onFirst().performClick()
+        compose.onAllNodesWithContentDescription("保存").onFirst().performClick()
         compose.onNodeWithText("开始下载").performScrollTo().performClick()
         var clicked=false;val until=System.currentTimeMillis()+10000
         while(!clicked && System.currentTimeMillis()<until) {

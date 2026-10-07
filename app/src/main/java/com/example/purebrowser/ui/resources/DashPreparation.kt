@@ -92,7 +92,7 @@ internal class DashPreparation(private val resolver: DashResolver, private val s
             when {
                 preferredHeight != null && chosen?.supported != true -> {
                     selected = MpdPlanParser.defaultVideoOffer(offers)
-                    error = "所选清晰度已不在清单中，请重新选择后再保存"
+                    error = "所选清晰度已不在可选范围，请重新选择后再保存"
                 }
                 preferredHeight == null && offers.count { it.supported } > 1 ->
                     selected = MpdPlanParser.defaultVideoOffer(offers)
@@ -107,7 +107,7 @@ internal class DashPreparation(private val resolver: DashResolver, private val s
     private fun prepareSelected(draft: DownloadDraft, onReady: (DashDownloadPlan) -> Unit) {
         val parsed = options ?: return
         val offer = selected?.takeIf { it.supported } ?: run {
-            error = "没有受支持的档位，请返回来源网页重新发现资源"
+            error = "没有受支持的清晰度，请返回来源网页重新发现资源"
             return
         }
         request({ cancel -> resolver.resolvePlan(draft, parsed, offer, cancel) }) { ready ->
@@ -162,7 +162,7 @@ internal class DashPreparation(private val resolver: DashResolver, private val s
                     // Only the transport's policy-owned diagnostics may appear, never raw URLs/headers.
                     error = (failure as? TransferFailure)?.safeMessage
                         ?.takeIf { it.length <= 180 && !it.contains("://") && it.none(Char::isISOControl) }
-                        ?: "DASH 清单未能读取，请检查网络或返回来源网页重新发现资源"
+                        ?: "DASH 播放地址未能读取，请检查网络或返回来源网页重新发现资源"
                 }
             } finally {
                 if (generation == revision && token === cancellation) {

@@ -22,13 +22,21 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# T118 copy scope (dialog files owned by the T117 dialog track are NOT scanned here).
+# T119 full scope: T118 copy-rewrite files + the dialog files the T117 track landed
+# (4 confirmations, 2 preparation sheets, site analysis dialog).
 SCOPE = [
     "app/src/main/java/com/example/purebrowser/ui/CopyMapping.kt",
     "app/src/main/java/com/example/purebrowser/ui/resources/ResourcePresentation.kt",
     "app/src/main/java/com/example/purebrowser/ui/resources/ResourceCenter.kt",
     "app/src/main/java/com/example/purebrowser/ui/resources/ResourceDetail.kt",
     "app/src/main/java/com/example/purebrowser/ui/resources/ResourceUi.kt",
+    "app/src/main/java/com/example/purebrowser/ui/resources/DashDownloadConfirmation.kt",
+    "app/src/main/java/com/example/purebrowser/ui/resources/DashPreparation.kt",
+    "app/src/main/java/com/example/purebrowser/ui/resources/DownloadConfirmation.kt",
+    "app/src/main/java/com/example/purebrowser/ui/resources/HlsDownloadConfirmation.kt",
+    "app/src/main/java/com/example/purebrowser/ui/resources/HlsPreparation.kt",
+    "app/src/main/java/com/example/purebrowser/ui/resources/RuleFormatConfirmation.kt",
+    "app/src/main/java/com/example/purebrowser/ui/resources/SiteAnalysisDialog.kt",
     "app/src/main/java/com/example/purebrowser/ui/settings/SettingsScreen.kt",
     "app/src/main/java/com/example/purebrowser/ui/downloads/DownloadActions.kt",
     "app/src/main/java/com/example/purebrowser/ui/downloads/DownloadCenterScreen.kt",

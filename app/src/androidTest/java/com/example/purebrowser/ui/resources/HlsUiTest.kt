@@ -127,7 +127,7 @@ class HlsUiTest {
         // Rows come from the detect-and-parse summaries; the default is preselected with no requests.
         compose.onNodeWithTag("hls-variant-1").performScrollTo().assertIsSelected()
         compose.onNodeWithTag("hls-variant-2").assertIsNotSelected() // Supported 2160p is not the default.
-        compose.onNodeWithText("1080p · 3000000 bit/s（清单声明带宽） · 默认", substring = true).assertExists()
+        compose.onNodeWithText("1080p · 3000000 bit/s（来源声明带宽） · 默认", substring = true).assertExists()
         assertEquals(0, fake.requests.size)
 
         click("hls-save")
@@ -333,7 +333,7 @@ class HlsUiTest {
             }
         }
         compose.onNodeWithTag("downloadsList").performScrollToNode(hasTestTag("download-segments-hls-progress"))
-        compose.onNodeWithTag("download-segments-hls-progress").assert(hasText("已下载分片 1 / 2（不是整体保存进度）"))
+        compose.onNodeWithTag("download-segments-hls-progress").assert(hasText("已下载 1 / 2 段（不代表整体保存进度）"))
         compose.onNodeWithTag("download-progress-hls-progress").assert(
             SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(0.5f, 0f..1f)),
         )
@@ -347,9 +347,9 @@ class HlsUiTest {
         compose.onNodeWithTag("download-progress-hls-progress").assert(
             SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate),
         ).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,
-            "正在封装 MP4，尚未保存成品，不显示整体百分比"))
+            "正在合并视频，尚未保存成品，不显示整体百分比"))
         compose.onNodeWithTag("download-bytes-hls-progress").assert(hasText(muxing.byteSummary())).assert(hasText("总大小未知", substring = true))
-        compose.onNodeWithTag("download-status-hls-progress").assert(hasText("正在封装 MP4 · 尚未保存"))
+        compose.onNodeWithTag("download-status-hls-progress").assert(hasText("正在合并视频 · 尚未保存"))
         compose.onAllNodes(hasText("%", substring = true)).assertCountEquals(0)
     }
 

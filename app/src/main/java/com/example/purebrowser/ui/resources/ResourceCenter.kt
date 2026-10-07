@@ -184,8 +184,11 @@ private fun ResourceLine(candidate: MediaCandidate, downloadable: Boolean, onDet
         Row(
             Modifier.fillMaxWidth().padding(vertical = 8.dp).let { m ->
                 if (onQuickSave != null) m.combinedClickable(role = Role.Button,
+                    // TalkBack: the long-press quick path must be announced, not just gesture-only.
+                    onClickLabel = "打开保存选项",
+                    onLongClickLabel = "用默认设置快速保存",
                     onClick = { onSelect() }, onLongClick = { onQuickSave() })
-                else m.clickable(role = Role.Button) { onSelect() }
+                else m.clickable(role = Role.Button, onClickLabel = "打开保存选项") { onSelect() }
             }, horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {

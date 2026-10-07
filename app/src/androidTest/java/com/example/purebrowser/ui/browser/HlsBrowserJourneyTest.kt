@@ -127,7 +127,7 @@ class HlsBrowserJourneyTest {
             compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("resourcesButton").performClick()
             compose.onNodeWithTag("resource-sheet").performScrollToNode(hasTestTag("resource-card-${observed.displayName}"))
-            compose.onNode(hasContentDescription("尝试下载") and hasClickAction() and
+            compose.onNode(hasContentDescription("保存") and hasClickAction() and
                 hasAnyAncestor(hasTestTag("resource-card-${observed.displayName}"))).performScrollTo().performClick()
             compose.onNodeWithText("确认下载 HLS").assertExists()
             // T117 single-screen flow: one enabled 保存 action; no separate parse/prepare steps.

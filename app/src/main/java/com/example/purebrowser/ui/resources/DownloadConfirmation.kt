@@ -66,7 +66,7 @@ fun DownloadConfirmation(
         // would clear the background Activity's focus instead of this field.
         val focusManager = LocalFocusManager.current
         val keyboard = LocalSoftwareKeyboardController.current
-        ResourceHeading(if(frozen.dualTrackPlan==null)"确认下载直链" else "确认保存视频")
+        ResourceHeading(if(frozen.dualTrackPlan==null)"确认下载视频文件" else "确认保存视频")
         Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium)
         ResourceMetadata(frozen.candidate)
         ResourceSource(frozen)
@@ -120,7 +120,7 @@ fun DownloadConfirmation(
             )
         }
         Text(
-            if (frozen.candidate.canTryDownload() && frozen.candidate.kind != MediaKind.HLS) if(frozen.dualTrackPlan==null) "仅支持 MP4/WebM 文件直链；会话不写入任务记录，不跨源转发。签名可能过期，格式初检不等于完整播放保证。" else "将下载 H.264 视频轨和 AAC 音轨，合并并校验后保存为 MP4。只保存你有权下载的内容。不使用网站 Cookie；中断或链接失效后需主动重新分析，不承诺双轨续传。"
+            if (frozen.candidate.canTryDownload() && frozen.candidate.kind != MediaKind.HLS) if(frozen.dualTrackPlan==null) "仅支持 MP4/WebM 视频文件；会话不写入任务记录，不跨源转发。签名可能过期，格式初检不等于完整播放保证。" else "将下载 H.264 视频轨和 AAC 音轨，合并并校验后保存为 MP4。只保存你有权下载的内容。不使用网站 Cookie；中断或链接失效后需主动重新分析，不承诺双轨续传。"
             else frozen.candidate.unsupportedExplanation(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
