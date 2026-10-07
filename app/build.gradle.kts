@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.jeckchen666.purebrowser"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "0.2.0"
+        versionCode = 20
+        versionName = "0.2.1-dev"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
