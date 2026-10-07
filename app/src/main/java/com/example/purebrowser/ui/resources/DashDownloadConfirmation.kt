@@ -18,13 +18,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,19 +44,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.purebrowser.download.DownloadDraft
-import com.example.purebrowser.download.DownloadRules
 import com.example.purebrowser.download.RequestPolicy
 import com.example.purebrowser.download.dash.DashDownloadPlan
 import com.example.purebrowser.download.dash.DashResolver
+import com.example.purebrowser.download.dash.MpdPlanParser
 import com.example.purebrowser.media.MediaKind
+import com.example.purebrowser.media.VariantSummary
 import com.example.purebrowser.ui.components.BrowserGlyph
 import com.example.purebrowser.ui.components.Glyph
 
 /**
- * T97 DASH confirmation, mirroring [HlsDownloadConfirmation]'s shape: nothing is fetched until an
- * explicit 解析/准备 action; the representation list carries height labels and honest unsupported
- * reasons (AV1/加密/indexRange/无编码声明); the default audio Representation is paired
- * automatically; failure never queues a task.
+ * T117 single-screen DASH save, mirroring [HlsDownloadConfirmation]: the representation ladder from
+ * the detect-and-parse summaries with the ≤1080p default preselected, one 保存视频 action whose
+ * progress phase reads the manifest and prepares the plan, failures staying on this screen with the
+ * rows intact. Nothing is fetched before 保存 is tapped.
  */
 @Composable
 fun DashDownloadConfirmation(
@@ -71,8 +72,23 @@ fun DashDownloadConfirmation(
     val scope = rememberCoroutineScope()
     val preparation = remember(frozen, resolver, scope) { DashPreparation(resolver, scope) }
     DisposableEffect(preparation) { onDispose { preparation.close() } }
-    val suggestion = remember(frozen) { dashFileName(suggestedFileName(frozen.candidate)) }
-    var fileName by rememberSaveable(frozen) { mutableStateOf(suggestion) }
+    val summaries = remember(frozen) { frozen.candidate.variants.orEmpty() }
+    val defaultSummary = remember(summaries) { SaveDefaults.defaultVariant(summaries) }
+    var pickedHeight by rememberSaveable(frozen) { mutableStateOf<Int?>(defaultSummary?.height) }
+    val baseName = remember(frozen) { SaveDefaults.saveNameSuggestion(frozen.candidate) }
+    var nameEdited by rememberSaveable(frozen) { mutableStateOf(false) }
+    var fileName by rememberSaveable(frozen) {
+        mutableStateOf(mp4SaveName(qualitySuffixedName(baseName, defaultSummary?.height)))
+    }
+    // A quality change re-prefills the name until the user edits it once.
+    LaunchedEffect(pickedHeight, preparation.selected) {
+        if (!nameEdited) {
+            val height = preparation.selected?.height
+                ?: summaries.firstOrNull { it.height == pickedHeight }?.height
+                ?: defaultSummary?.height
+            fileName = mp4SaveName(qualitySuffixedName(baseName, height))
+        }
+    }
     var wifiOnly by rememberSaveable(frozen) { mutableStateOf(defaultWifiOnly) }
     var wifiPreviewBlocked by remember(frozen) { mutableStateOf(false) }
     val context = LocalContext.current
@@ -94,10 +110,10 @@ fun DashDownloadConfirmation(
     var useContext by rememberSaveable(frozen) { mutableStateOf(contextAvailable && frozen.useAccessContext) }
     var submitted by remember(frozen) { mutableStateOf(false) }
     val requestDraft = frozen.copy(useAccessContext = useContext)
-    val safeName = dashFileName(fileName)
     val ready = preparation.readyPlan(requestDraft)
-    val canConfirm = ready != null && frozen.candidate.kind == MediaKind.DASH && frozen.candidate.canTryDownload() &&
-        fileName.isNotBlank() && fileName.trim() !in setOf(".", "..") && !submitted
+    val canSave = !submitted && !preparation.busy && frozen.candidate.kind == MediaKind.DASH &&
+        frozen.candidate.canTryDownload() && fileName.isNotBlank() &&
+        fileName.trim() !in setOf(".", "..")
     val dismiss = {
         preparation.close()
         onDismiss()
@@ -106,97 +122,47 @@ fun DashDownloadConfirmation(
     ResourceDialog(onDismiss = dismiss) {
         val focus = LocalFocusManager.current
         val keyboard = LocalSoftwareKeyboardController.current
-        val dismissWithKeyboard = {
-            focus.clearFocus(force = true)
-            keyboard?.hide()
-            dismiss()
-        }
         ResourceHeading("确认下载 DASH")
         Text(readableResourceName(frozen.candidate.displayName), style = MaterialTheme.typography.titleMedium)
         ResourceMetadata(frozen.candidate)
         ResourceSource(frozen)
-        Text(
-            "仅在你点击解析或准备时读取 DASH 清单；选择档位不会自动请求分片。仅支持未加密的固定点播 fMP4（H.264 / AAC），" +
-                "下载后合并为独立 MP4。不支持直播、DRM、AV1/HEVC、indexRange 单文件或续传。",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        Text("点击“保存视频”时读取 DASH 清单并准备所选清晰度，其余操作不发起请求。仅支持未加密的固定点播视频，下载后合并保存为 MP4。", style = MaterialTheme.typography.bodySmall)
         ResourceOption(
             label = "使用当前网站访问条件",
-            description = if (contextAvailable) "只使用适用的同源会话和最小来源；修改后需重新解析清单" else "没有可靠页面关联，不使用网站会话",
+            description = if (contextAvailable) "只使用适用的同源会话和最小来源；修改后需重新读取清单" else "没有可靠页面关联，不使用网站会话",
             checked = useContext,
             enabled = contextAvailable && !submitted,
             onChange = {
                 preparation.accessChanged()
                 useContext = it
+                pickedHeight = defaultSummary?.height
             },
             modifier = Modifier.testTag("download-use-context"),
         )
-        OutlinedButton(
-            onClick = { if (previewAllowed()) preparation.parse(requestDraft) },
-            enabled = !submitted && !preparation.busy,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("dash-parse-manifest"),
-        ) {
-            BrowserGlyph(Glyph.LIST, "解析 DASH 清单", Modifier.clearAndSetSemantics {})
-            Text("解析 DASH 清单", modifier = Modifier.padding(start = 8.dp))
-        }
+        DashQualityRows(
+            preparation = preparation,
+            summaries = summaries,
+            defaultHeight = defaultSummary?.height,
+            pickedHeight = pickedHeight,
+            submitted = submitted,
+            onPick = { pickedHeight = it },
+        )
         if (wifiPreviewBlocked) ResourceStatus(error = true) {
             Text(
-                "仅 Wi-Fi 已开启；请连接 Wi-Fi，或关闭“仅 Wi-Fi”后再点击解析/准备。不会自动重试。",
+                "仅 Wi-Fi 已开启；请连接 Wi-Fi，或关闭“仅 Wi-Fi”后再保存。不会自动重试。",
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("dash-wifi-required"),
             )
         }
-        preparation.options?.let { options ->
-            Text("选择视频档位", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "默认优先选择不超过 1080p 的受支持档位；仅作为选择建议，不代表内容已通过校验。分辨率或带宽缺失时不作推测。",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                options.document.videoOffers.forEachIndexed { index, offer ->
-                    Row(
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("dash-variant-$index")
-                            .selectable(selected = preparation.selected === offer, enabled = offer.supported && !submitted,
-                                role = Role.RadioButton, onClick = { preparation.select(offer) }),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        RadioButton(selected = preparation.selected === offer, onClick = null,
-                            enabled = offer.supported && !submitted)
-                        Column(Modifier.weight(1f)) {
-                            Text(dashVariantLabel(offer))
-                            if (!offer.supported) Text(
-                                readableResourceName(offer.unsupportedReason ?: "此档位不在本版支持范围"),
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
-                }
-            }
-            if (preparation.selected == null)
-                Text("没有受支持的档位，请返回来源网页重新发现资源。", color = MaterialTheme.colorScheme.error)
-            Text(
-                if (options.document.audioOffer != null) "将同时下载默认 AAC 音频轨，并与所选视频档位合并为一个 MP4。"
-                else if (preparation.selected?.muxedAudio == true) "所选档位音视频同轨，直接封装为一个 MP4。"
-                else "清单未提供受支持的音频轨；将仅保存视频轨，无法合并音频。",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            OutlinedButton(
-                onClick = { if (previewAllowed()) preparation.prepare(requestDraft) },
-                enabled = !submitted && !preparation.busy && preparation.selected?.supported == true,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("dash-prepare-variant"),
-            ) {
-                BrowserGlyph(Glyph.CHECK, "准备所选档位", Modifier.clearAndSetSemantics {})
-                Text("准备所选档位", modifier = Modifier.padding(start = 8.dp))
-            }
-        }
         if (preparation.busy) ResourceStatus {
-            Text("正在读取清单…", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("dash-preparing"))
+            Text("正在准备…", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("dash-preparing"))
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth().testTag("dash-preparation-progress")
-                .semantics { stateDescription = "正在读取清单，尚未创建下载任务" })
+                .semantics { stateDescription = "正在准备保存，尚未创建下载任务" })
         }
+        if (submitted) ResourceStatus(modifier = Modifier.testTag("dash-saving")) { Text("正在保存…") }
         preparation.error?.let { message ->
             ResourceStatus(error = true) {
                 Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("dash-error"))
+                Text("可再次点“保存视频”重试，或点选其他清晰度后保存。", style = MaterialTheme.typography.bodySmall)
             }
         }
         ready?.let { plan ->
@@ -207,15 +173,20 @@ fun DashDownloadConfirmation(
                 Text("成品大小未知；下载完成并封装校验后才保存 MP4。", style = MaterialTheme.typography.bodySmall)
             }
         }
-        if (ready == null && !preparation.busy) Text("清单准备完成前不能保存。", style = MaterialTheme.typography.bodySmall)
+        val parsed = preparation.options
+        if (parsed != null && ready == null && !preparation.busy && preparation.error == null) {
+            Text("清单已读取：${parsed.document.videoOffers.size} 个清晰度，点选后保存。", style = MaterialTheme.typography.bodySmall)
+        }
         HorizontalDivider()
         OutlinedTextField(
-            value = fileName, onValueChange = { fileName = it.take(200) }, label = { Text("文件名") },
+            value = fileName,
+            onValueChange = { fileName = it.take(200); nameEdited = true },
+            label = { Text("文件名") },
             singleLine = true, enabled = !submitted,
             isError = fileName.isBlank() || fileName.trim() in setOf(".", ".."),
             supportingText = { Text(when {
                 fileName.isBlank() || fileName.trim() in setOf(".", "..") -> "请输入有效的文件名"
-                safeName != fileName -> "安全文件名：$safeName"
+                mp4SaveName(fileName) != fileName -> "安全文件名：${mp4SaveName(fileName)}"
                 else -> "成品统一保存为 MP4。路径、控制字符和特殊字符会过滤。"
             }) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -240,36 +211,108 @@ fun DashDownloadConfirmation(
         )
         Button(
             onClick = {
-                val plan = preparation.readyPlan(requestDraft)
-                if (canConfirm && !submitted && plan != null) {
+                if (!canSave || submitted || !previewAllowed()) return@Button
+                preparation.save(requestDraft, pickedHeight) { plan ->
                     submitted = true
                     preparation.close()
                     focus.clearFocus(force = true)
                     keyboard?.hide()
-                    onConfirm(requestDraft, safeName, wifiOnly, plan)
+                    // Read the name at completion time: it may change while the chain runs.
+                    onConfirm(requestDraft, mp4SaveName(fileName), wifiOnly, plan)
                 }
             },
-            enabled = canConfirm,
+            enabled = canSave,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("dash-save"),
         ) {
             BrowserGlyph(Glyph.DOWNLOAD, "保存视频", Modifier.clearAndSetSemantics {})
-            Text("保存视频", modifier = Modifier.padding(start = 8.dp))
+            Text(if (preparation.busy) "正在准备…" else "保存视频", modifier = Modifier.padding(start = 8.dp))
         }
-        TextButton(onClick = dismissWithKeyboard, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("取消") }
+        TextButton(onClick = {
+            focus.clearFocus(force = true)
+            keyboard?.hide()
+            dismiss()
+        }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("取消") }
     }
 }
 
-private fun dashVariantLabel(offer: com.example.purebrowser.download.dash.MpdPlanParser.DashRepresentationOffer): String {
+/**
+ * The one quality section shared by the DASH save screen and the folded rules screen: parsed
+ * representation rows once a manifest was read, otherwise the pre-attached summaries with the
+ * default preselected (matched by height — the summary tier carries no per-representation URLs).
+ */
+@Composable
+internal fun DashQualityRows(
+    preparation: DashPreparation,
+    summaries: List<VariantSummary>,
+    defaultHeight: Int?,
+    pickedHeight: Int?,
+    submitted: Boolean,
+    onPick: (Int?) -> Unit,
+) {
+    val options = preparation.options
+    if (options != null) {
+        Text("选择清晰度", style = MaterialTheme.typography.titleSmall)
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            options.document.videoOffers.forEachIndexed { index, offer ->
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("dash-variant-$index")
+                        .selectable(selected = preparation.selected === offer, enabled = offer.supported && !submitted,
+                            role = Role.RadioButton, onClick = { preparation.select(offer); onPick(offer.height) }),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    RadioButton(selected = preparation.selected === offer, onClick = null,
+                        enabled = offer.supported && !submitted)
+                    Column(Modifier.weight(1f)) {
+                        Text(dashVariantLabel(offer))
+                        if (!offer.supported) Text(
+                            readableResourceName(offer.unsupportedReason ?: "此档位不在本版支持范围"),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        }
+        if (preparation.selected == null)
+            Text("没有受支持的档位，请返回来源网页重新发现资源。", color = MaterialTheme.colorScheme.error)
+        Text(
+            if (options.document.audioOffer != null) "将同时下载默认 AAC 音频轨，并与所选视频档位合并为一个 MP4。"
+            else if (preparation.selected?.muxedAudio == true) "所选档位音视频同轨，直接封装为一个 MP4。"
+            else "清单未提供受支持的音频轨；将仅保存视频轨，无法合并音频。",
+            style = MaterialTheme.typography.bodySmall,
+        )
+    } else if (summaries.isNotEmpty()) {
+        Text("选择清晰度", style = MaterialTheme.typography.titleSmall)
+        Text("默认优先选择不超过 1080p 的清晰度；点选其他清晰度后保存。", style = MaterialTheme.typography.bodySmall)
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            summaries.forEachIndexed { index, summary ->
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("dash-variant-$index")
+                        .selectable(selected = pickedHeight != null && summary.height == pickedHeight, enabled = !submitted,
+                            role = Role.RadioButton, onClick = { onPick(summary.height) }),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    RadioButton(selected = pickedHeight != null && summary.height == pickedHeight,
+                        onClick = null, enabled = !submitted)
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            summaryVariantLabel(summary) + (if (summary.height != null && summary.height == defaultHeight) " · 默认" else ""),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        summary.warning?.let {
+                            Text(readableResourceName(it), style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun dashVariantLabel(offer: MpdPlanParser.DashRepresentationOffer): String {
     val resolution = if (offer.height != null) "${offer.height}p" else "分辨率未知"
     val bandwidth = offer.bandwidth?.let { "$it bit/s（清单声明带宽）" } ?: "带宽未知"
     return "$resolution · $bandwidth"
-}
-
-/** Reserve the extension within the repository's UTF-8/character limits, even for edited names. */
-private fun dashFileName(value: String): String {
-    var stem = DownloadRules.safeFileName(value.substringBeforeLast('.', value))
-    while (stem.length > 96 || stem.toByteArray(Charsets.UTF_8).size > 236) {
-        stem = stem.dropLast(Character.charCount(stem.codePointBefore(stem.length)))
-    }
-    return "$stem.mp4"
 }

@@ -8,8 +8,8 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -32,6 +32,7 @@ import com.example.purebrowser.media.MediaCandidate
 import com.example.purebrowser.media.MediaKind
 import com.example.purebrowser.theme.PureBrowserTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
@@ -41,12 +42,16 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/** The resolver/parser are real; only the HTTP boundary is faked. No network or storage writes. */
+/**
+ * The resolver/parser are real; only the HTTP boundary is faked. No network or storage writes.
+ * T117: the save action runs the manifest read and preparation itself; rows surfaced by that read
+ * stay on the same screen for confirm/re-pick, and failures keep a retry affordance.
+ */
 class HlsCompactUiTest {
     @get:Rule val compose = createComposeRule()
 
     @Test(timeout = 45_000)
-    fun variantsStayExplicitUnsupportedDisabled_andChangingAccessInvalidatesReadyPlan() {
+    fun unreadLadderSurfacesAfterSave_unsupportedDisabled_accessChangeInvalidatesWithoutRefetch() {
         val transport = TestTransport(mapOf(ENTRY to MASTER, CHILD to MEDIA))
         val resolver = resolver(transport)
         val draft = draft()
@@ -60,32 +65,31 @@ class HlsCompactUiTest {
         }
         compose.onNodeWithText("清单响应大小 123 B").assertExists()
         compose.onNodeWithText("成品大小未知（清单响应不代表视频大小）").assertExists()
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
-        assertEquals(emptyList<String>(), transport.urls.toList())
-        click("hls-parse-playlist")
-        awaitTag("hls-variant-0")
-        compose.onNodeWithTag("hls-variant-0").assertIsSelected()
-        compose.onNodeWithTag("hls-variant-1").assertIsNotEnabled().assertIsNotSelected()
-        assertEquals(listOf(ENTRY), transport.urls.toList())
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
-        click("hls-prepare-variant")
-        awaitTag("hls-plan-ready")
         compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled()
-        assertEquals(listOf(ENTRY, CHILD), transport.urls.toList())
+        assertEquals(emptyList<String>(), transport.urls.toList())
+
+        // The first save reads the ladder and stops for one explicit confirm of the surfaced rows.
+        click("hls-save")
+        awaitTag("hls-variant-0")
+        compose.onNodeWithText("清单已读取：3 个清晰度，点选后保存。").assertExists()
+        compose.onNodeWithTag("hls-variant-1").assertIsSelected() // ≤1080p-best default.
+        compose.onNodeWithTag("hls-variant-2").assertIsNotEnabled().assertIsNotSelected()
+        compose.runOnIdle { assertTrue(submissions.isEmpty()) }
+        assertEquals(listOf(ENTRY), transport.urls.toList())
 
         compose.onNodeWithTag("download-use-context").performScrollTo().assertIsOn().performClick()
-        compose.onNodeWithTag("hls-plan-ready").assertDoesNotExist()
         compose.onNodeWithTag("hls-variant-0").assertDoesNotExist()
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
-        assertEquals(listOf(ENTRY, CHILD), transport.urls.toList()) // No automatic reparse.
+        compose.waitForIdle()
+        assertEquals(listOf(ENTRY), transport.urls.toList()) // No automatic reparse.
 
-        click("hls-parse-playlist")
+        click("hls-save")
         awaitTag("hls-variant-0")
-        click("hls-prepare-variant")
-        awaitTag("hls-plan-ready")
+        click("hls-variant-0")
+        compose.onNodeWithTag("hls-variant-0").assertIsSelected()
         compose.onNodeWithTag("download-file-name").performScrollTo().performTextReplacement("chosen.webm")
         compose.onNodeWithTag("download-file-name").performImeAction()
         click("hls-save")
+        compose.waitUntil(10_000) { submissions.isNotEmpty() }
         compose.onNodeWithTag("hls-save").assertIsNotEnabled().performClick()
         compose.runOnIdle {
             assertEquals(1, submissions.size)
@@ -115,14 +119,13 @@ class HlsCompactUiTest {
             }
         }
         try {
-            click("hls-parse-playlist")
+            click("hls-save")
             compose.waitUntil(10_000) { gate.entered.count == 0L }
             compose.onNodeWithTag("hls-preparing").performScrollTo().assertExists()
             compose.onNodeWithTag("hls-preparation-progress").performScrollTo().assert(
                 SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate),
-            ).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "正在读取清单，尚未创建下载任务"))
+            ).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "正在准备保存，尚未创建下载任务"))
             compose.onAllNodesWithText("%", substring = true).assertCountEquals(0)
-            compose.onNodeWithTag("hls-parse-playlist").assertIsNotEnabled()
             compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
             compose.onNodeWithText("取消").performScrollTo().performClick()
             compose.waitUntil(10_000) { gate.cancelled.count == 0L }
@@ -139,7 +142,7 @@ class HlsCompactUiTest {
     }
 
     @Test(timeout = 30_000)
-    fun rejectedPlaylistKeepsSafeActionableErrorAndDisabledSave_withoutExposingSignedUrl() {
+    fun rejectedPlaylistKeepsSafeActionableError_andSaveStaysEnabledForRetry_withoutExposingSignedUrl() {
         val transport = TestTransport(emptyMap(), status = 403)
         val resolver = resolver(transport)
         var confirmCalls = 0
@@ -148,11 +151,13 @@ class HlsCompactUiTest {
                 HlsDownloadConfirmation(draft(), false, resolver, {}, onConfirm = { _, _, _, _ -> confirmCalls++ })
             }
         }
-        click("hls-parse-playlist")
+        click("hls-save")
         awaitTag("hls-error")
         compose.onNodeWithTag("hls-error").performScrollTo()
             .assert(androidx.compose.ui.test.hasText("当前访问条件不足，请返回来源重新发现"))
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
+        // Failure honesty: same screen, retry affordance, no dead end.
+        compose.onNodeWithText("可再次点“保存视频”重试，或点选其他清晰度后保存。").assertExists()
+        compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled()
         compose.onAllNodesWithText(ENTRY, useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodesWithText("private%2Bsignature", substring = true, useUnmergedTree = true).assertCountEquals(0)
         compose.runOnIdle { assertEquals(0, confirmCalls) }
@@ -219,7 +224,9 @@ class HlsCompactUiTest {
             #EXTM3U
             #EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720,CODECS="avc1.42E01E,mp4a.40.2"
             720.m3u8
-            #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x1080,CODECS="hvc1.1.6.L93.B0,mp4a.40.2"
+            #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x1080,CODECS="avc1.42E01E,mp4a.40.2"
+            1080.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1920x1080,CODECS="hvc1.1.6.L93.B0,mp4a.40.2"
             unsupported.m3u8
         """.trimIndent()
         private val MEDIA = """

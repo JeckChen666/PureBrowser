@@ -10,15 +10,25 @@ import androidx.lifecycle.viewModelScope
 import com.example.purebrowser.browser.*
 import com.example.purebrowser.data.browser.*
 import com.example.purebrowser.download.DownloadDraft
+import com.example.purebrowser.download.FailureKind
+import com.example.purebrowser.download.TransferCancellation
+import com.example.purebrowser.download.TransferFailure
 import com.example.purebrowser.download.UrlConnectionTransport
 import com.example.purebrowser.download.WebsiteAccessContext
 import com.example.purebrowser.download.hls.HlsDownloadPlan
+import com.example.purebrowser.download.hls.HlsPlaylist
+import com.example.purebrowser.download.hls.HlsPlaylistParser
 import com.example.purebrowser.download.hls.HlsResolver
 import com.example.purebrowser.download.VideoAsset
 import com.example.purebrowser.library.VideoLibraryRepository
 import com.example.purebrowser.download.DownloadItem
 import com.example.purebrowser.download.DownloadRepository
 import com.example.purebrowser.media.MediaCandidate
+import com.example.purebrowser.media.MediaKind
+import com.example.purebrowser.ui.resources.SaveDefaults
+import com.example.purebrowser.ui.resources.canTryDownload
+import com.example.purebrowser.ui.resources.mp4SaveName
+import com.example.purebrowser.ui.resources.qualitySuffixedName
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -208,6 +218,96 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 notify("任务已加入下载中心")
             } catch (_: Exception) { notify("无法创建任务，请检查存储权限和资源地址") }
             finally { mutableSubmitting.value = false; refreshDownloads() }
+        }
+    }
+
+    /** T117 smart default: the last save's Wi-Fi choice becomes the next confirmation's default. */
+    fun rememberDownloadDefaults(wifiOnly: Boolean) {
+        if (preferenceWrite || mutableWifiOnly.value == wifiOnly) return
+        preferenceWrite = true
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { preferences.saveWifiOnly(wifiOnly) }
+                mutableWifiOnly.value = wifiOnly
+            } catch (_: Exception) { notify("设置未能保存，请检查本机存储") }
+            finally { preferenceWrite = false }
+        }
+    }
+
+    /**
+     * T117 quick-save ("用默认设置保存"): one tap creates the task with the remembered defaults —
+     * the canonical Best rules format and the ≤1080p default variant. Manifest protocols resolve
+     * their plan off the UI thread first, then hand the finished submission back to the caller
+     * (which routes it through the SAME permission/enqueue path as the confirmation screens).
+     * Selection mirrors the save screens; task, credential and budget semantics are untouched.
+     */
+    fun quickSave(
+        candidate: MediaCandidate,
+        userAgent: String,
+        onReady: (draft: DownloadDraft, fileName: String, wifiOnly: Boolean,
+            plan: HlsDownloadPlan?, dashPlan: com.example.purebrowser.download.dash.DashDownloadPlan?) -> Unit,
+    ) {
+        if (privacyBusy) { notify("本地数据正在清理，请稍后下载"); return }
+        if (mutableSubmitting.value) { notify("正在处理上一个保存请求，请稍候"); return }
+        if (!candidate.canTryDownload()) { notify("该资源暂时无法保存，请点开后查看原因"); return }
+        val resolved = SaveDefaults.defaultFormatCandidate(candidate)
+        val draft = downloadDraft(resolved, userAgent)
+        if (draft.sourceTabId != tabs.active.value?.recordId || draft.sourceGeneration != engine?.generation ||
+            sniffer?.candidates?.value?.none { it.url == resolved.url } != false) {
+            notify("页面资源已更新，请返回来源重新确认"); return
+        }
+        val wifiOnly = mutableWifiOnly.value
+        val name = quickSaveName(resolved)
+        viewModelScope.launch {
+            try {
+                when (resolved.kind) {
+                    MediaKind.HLS -> {
+                        val cancel = TransferCancellation()
+                        val plan = withContext(Dispatchers.IO) {
+                            val parsed = hlsResolver.resolveEntry(draft, cancel)
+                            if (parsed.playlist is HlsPlaylist.Media) {
+                                hlsResolver.resolvePlan(draft, parsed, null, cancel)
+                            } else {
+                                val master = parsed.playlist as HlsPlaylist.Master
+                                // The remembered default quality must still exist; a vanished
+                                // variant fails honestly instead of silently re-picking another.
+                                val preferred = SaveDefaults.defaultVariant(candidate.variants.orEmpty())?.url
+                                val variant = preferred?.let { url -> master.variants.firstOrNull { it.url == url && it.supported } }
+                                    ?: HlsPlaylistParser.defaultVariant(master.variants)
+                                    ?: throw TransferFailure(FailureKind.UNSUPPORTED, "没有受支持的清晰度，请点开资源后重试")
+                                hlsResolver.resolvePlan(draft, parsed, variant, cancel)
+                            }
+                        }
+                        onReady(draft, name, wifiOnly, plan, null)
+                    }
+                    MediaKind.DASH -> {
+                        val cancel = TransferCancellation()
+                        val plan = withContext(Dispatchers.IO) {
+                            val parsed = dashResolver.resolveEntry(draft, cancel)
+                            com.example.purebrowser.download.dash.MpdPlanParser
+                                .defaultVideoOffer(parsed.document.videoOffers)
+                                ?.let { dashResolver.resolvePlan(draft, parsed, it, cancel) }
+                                ?: throw TransferFailure(FailureKind.UNSUPPORTED, "没有受支持的清晰度，请点开资源后重试")
+                        }
+                        onReady(draft, name, wifiOnly, null, plan)
+                    }
+                    else -> onReady(draft, name, wifiOnly, null, null)
+                }
+            } catch (error: Exception) {
+                notify((error as? TransferFailure)?.safeMessage
+                    ?.takeIf { it.length <= 180 && !it.contains("://") && it.none(Char::isISOControl) }
+                    ?: "无法按默认设置保存，请点开资源后重试")
+            }
+        }
+    }
+
+    /** Quick-save prefilled name: title/quality based, MP4-reserved for manifest protocols. */
+    private fun quickSaveName(candidate: MediaCandidate): String {
+        val base = SaveDefaults.saveNameSuggestion(candidate)
+        return when (candidate.kind) {
+            MediaKind.HLS, MediaKind.DASH -> mp4SaveName(
+                qualitySuffixedName(base, SaveDefaults.defaultVariant(candidate.variants.orEmpty())?.height))
+            else -> base
         }
     }
     private fun operation(id: String, success: String, action: () -> Unit) {

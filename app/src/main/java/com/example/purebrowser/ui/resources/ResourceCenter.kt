@@ -1,6 +1,8 @@
 package com.example.purebrowser.ui.resources
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -54,6 +56,7 @@ fun ResourceSheet(
     onSelect: (MediaCandidate) -> Unit,
     onSource: () -> Unit,
     onAnalyzePage: (() -> Unit)? = null,
+    onQuickSave: ((MediaCandidate) -> Unit)? = null,
 ) {
     // Equal URLs can carry different evidence. Do not deduplicate or key by URL alone.
     val downloadable = candidates.filter { it.canTryDownload() && it.kind!=MediaKind.UNKNOWN }
@@ -106,19 +109,19 @@ fun ResourceSheet(
                         if(onAnalyzePage!=null) androidx.compose.material3.FilledTonalButton(onClick=onAnalyzePage,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("analyze-current-video")) { Text("分析当前视频") }
                         Text(
                             if (downloadable.none { it.kind == MediaKind.HLS } && downloadable.none { it.kind == MediaKind.DASH }) {
-                                "${downloadable.size} 个可尝试的直链 · ${unsupported.size} 个其他媒体资源"
+                                "${downloadable.size} 个可保存的视频文件 · ${unsupported.size} 个其他媒体资源"
                             } else {
-                                "${downloadable.count { it.kind != MediaKind.HLS && it.kind != MediaKind.DASH }} 个可尝试的直链 · ${downloadable.count { it.kind == MediaKind.HLS }} 个 HLS 清单 · ${downloadable.count { it.kind == MediaKind.DASH }} 个 DASH 清单 · ${unsupported.size} 个其他媒体资源"
+                                "${downloadable.count { it.kind != MediaKind.HLS && it.kind != MediaKind.DASH }} 个视频文件 · ${downloadable.count { it.kind == MediaKind.HLS }} 个播放地址（HLS） · ${downloadable.count { it.kind == MediaKind.DASH }} 个播放地址（DASH） · ${unsupported.size} 个其他媒体资源"
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             if (downloadable.any { it.kind == MediaKind.HLS }) {
-                                "优先展示视频元素关联的直链与 HLS。清单只在确认面板显式解析和准备，不自动请求；访问条件、签名过期或不支持的格式可能导致失败。"
+                                "这里优先显示正在播放的视频。点开后选择清晰度即可保存；链接过期或格式不受支持时会保存失败，可回到视频页面重试。"
                             } else if (downloadable.any { it.kind == MediaKind.DASH }) {
-                                "优先展示视频元素关联的直链与 DASH。DASH 清单只在确认面板显式解析，选择档位后下载 fMP4 分片并合并为 MP4；不支持直播、DRM、AV1/HEVC 或 indexRange 单文件。"
-                            } else "优先展示视频元素关联的直链。确认时可选择适用的同源网站会话和最小来源条件，也可关闭后尝试公开下载；会话不跨源转发，不保证跨来源下载成功。签名过期或文件格式仍可能导致失败。",
+                                "这里优先显示正在播放的视频。点开后选择清晰度即可保存，视频和声音会自动合并为一个 MP4 文件；链接过期或格式不受支持时会保存失败，可回到视频页面重试。"
+                            } else "这里优先显示正在播放的视频。保存时可以选择是否使用网站的登录状态（仅限同一网站），不用也能尝试公开下载；链接过期或格式问题仍可能导致失败。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -126,21 +129,22 @@ fun ResourceSheet(
                 }
                 if (candidates.isEmpty()) {
                     item {
-                        EmptyContent("尚未发现视频", "请先播放页面上的视频，再重新打开资源面板观察。也可返回来源页后刷新；跨域播放器或受保护媒体可能无法识别。")
+                        EmptyContent("尚未发现视频", "请先在页面里播放视频，然后重新打开这个面板。也可以返回视频页面刷新后再试；受保护的视频可能无法识别。")
                     }
                 } else {
                     item {
-                        Text("可尝试下载的直链", style = MaterialTheme.typography.titleSmall,
+                        Text("可保存的视频", style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.padding(top = 4.dp).semantics { heading() })
                     }
                     if (downloadable.isEmpty()) {
-                        item { EmptyContent("暂未发现文件直链", "已发现的线索在下方“其他媒体资源”中。继续播放后再查看，不会自动探测或批量下载。") }
+                        item { EmptyContent("还没有可保存的视频文件", "已发现的线索在下方“其他媒体资源”里，继续播放视频后再来看看。应用不会自动下载。") }
                     }
                     items(downloadable) { candidate ->
                         ResourceLine(
                             candidate, downloadable = true,
                             onDetails = { detail = candidate.copy(sources = candidate.sources.toSet()) },
                             onSelect = { onSelect(candidate) },
+                            onQuickSave = onQuickSave?.let { quick -> { quick(candidate) } },
                         )
                     }
                     if (unsupported.isNotEmpty()) {
@@ -174,15 +178,22 @@ fun ResourceSheet(
 }
 
 @Composable
-private fun ResourceLine(candidate: MediaCandidate, downloadable: Boolean, onDetails: () -> Unit, onSelect: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun ResourceLine(candidate: MediaCandidate, downloadable: Boolean, onDetails: () -> Unit, onSelect: () -> Unit, onQuickSave: (() -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().testTag("resource-card-${candidate.displayName}")) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 8.dp).let { m ->
+                if (onQuickSave != null) m.combinedClickable(role = Role.Button,
+                    onClick = { onSelect() }, onLongClick = { onQuickSave() })
+                else m.clickable(role = Role.Button) { onSelect() }
+            }, horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(readableResourceName(candidate.displayName), style = MaterialTheme.typography.titleSmall,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 ResourceMetadata(candidate)
                 if (downloadable && suggestedFileName(candidate) != candidate.displayName) {
-                    Text("资源文件名：${suggestedFileName(candidate)}", style = MaterialTheme.typography.bodySmall)
+                    Text("将保存为：${suggestedFileName(candidate)}", style = MaterialTheme.typography.bodySmall)
                 }
                 if (!downloadable) {
                     Text(candidate.unsupportedExplanation(), style = MaterialTheme.typography.bodySmall,
@@ -192,7 +203,7 @@ private fun ResourceLine(candidate: MediaCandidate, downloadable: Boolean, onDet
             Column {
                 ToolButton(Glyph.LIST, "查看详情", action = onDetails)
                 if(candidate.kind==MediaKind.UNKNOWN && candidate.canTryDownload()) ToolButton(Glyph.SEARCH, "分析媒体", tag=resourceAnalyzeTag(candidate.url), action=onSelect)
-                if (downloadable) ToolButton(Glyph.DOWNLOAD, "尝试下载", tag = resourceSaveTag(candidate.url), action = onSelect)
+                if (downloadable) ToolButton(Glyph.DOWNLOAD, "保存", tag = resourceSaveTag(candidate.url), action = onSelect)
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -204,41 +215,41 @@ private fun ResourceLine(candidate: MediaCandidate, downloadable: Boolean, onDet
 internal fun ResourceMetadata(candidate: MediaCandidate) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(candidate.resourceType(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-        Text("资源主机：${candidate.host}", style = MaterialTheme.typography.bodySmall,
+        Text("来自：${candidate.host}", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (candidate.kind == MediaKind.HLS) {
-            Text("成品大小未知（清单响应不代表视频大小）", style = MaterialTheme.typography.bodySmall,
+            Text("保存后的文件大小要等下载完成后才知道", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("清单${candidate.reliableSizeLabel()}", style = MaterialTheme.typography.bodySmall,
+            Text("播放地址${candidate.reliableSizeLabel()}", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             Text(candidate.reliableSizeLabel(), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (candidate.probeState == ProbeState.PENDING) {
-            Text("验证中", style = MaterialTheme.typography.bodySmall,
+            Text("检查中", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         candidate.totalBytes?.takeIf { it > 0 }?.let {
-            Text("已验证大小：${formatByteSize(it)}（支持断点续传：${if (candidate.resumable == true) "是" else "否"}）",
+            Text("已确认大小：${formatByteSize(it)}（支持断点续传：${if (candidate.resumable == true) "是" else "否"}）",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         candidate.verifiedMime?.takeIf {
             it.length <= 80 && Regex("[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+").matches(it)
         }?.let {
-            Text("已验证类型：$it", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("已确认类型：$it",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (candidate.kind == MediaKind.HLS) {
             candidate.variants?.takeIf { it.isNotEmpty() }?.let {
-                Text("${it.size} 档位${if (it.any { variant -> variant.warning != null }) "（部分档位带兼容提示）" else ""}",
+                Text("${it.size} 种清晰度${if (it.any { variant -> variant.warning != null }) "（部分清晰度带兼容提示）" else ""}",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else if (candidate.kind == MediaKind.DASH) {
             // T97: the listing stays display-only here; resolution and representation choice
             // happen in the DASH confirmation dialog after an explicit user action.
             candidate.variants?.takeIf { it.isNotEmpty() }?.let {
-                Text("DASH · ${it.size} 档位（在确认面板中解析并选择）",
+                Text("DASH · ${it.size} 种清晰度（打开后再选择）",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

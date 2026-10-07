@@ -71,9 +71,9 @@ internal fun ResourceOption(
 internal fun ResourceSource(draft: DownloadDraft) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         draft.sourceTitle?.takeIf(String::isNotBlank)?.let {
-            Text("来源页面：${readableResourceName(it)}", style = MaterialTheme.typography.bodyMedium)
+            Text("来自页面：${readableResourceName(it)}", style = MaterialTheme.typography.bodyMedium)
         }
-        Text("来源主机：${sourceHost(draft.sourceUrl) ?: "未记录"}",
+        Text("来自网站：${sourceHost(draft.sourceUrl) ?: "未记录"}",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -93,11 +93,11 @@ internal fun ResourceSessionOption(
     onChange: (Boolean) -> Unit,
 ) {
     ResourceOption(
-        label = "使用网站登录会话（${offer.domain}）",
+        label = "使用网站登录状态（${offer.domain}）",
         description = if (offer.checkedByDefault)
-            "已为该站点开启：仅 ${offer.domain} 同注册域的站点规则抓取会携带登录会话；不导出、不落盘，下载请求不受影响"
+            "已为该站点开启：仅 ${offer.domain} 同一网站集团的站点规则会带上登录状态；不会导出或另存，下载本身不受影响"
         else
-            "默认关闭：开启后仅 ${offer.domain} 同注册域的站点规则抓取可能携带登录会话；不导出、不落盘，下载请求不受影响",
+            "默认关闭：开启后仅 ${offer.domain} 同一网站集团的站点规则可能带上登录状态；不会导出或另存，下载本身不受影响",
         checked = checked,
         enabled = enabled,
         onChange = onChange,

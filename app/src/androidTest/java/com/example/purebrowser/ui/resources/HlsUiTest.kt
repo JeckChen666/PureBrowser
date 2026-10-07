@@ -39,6 +39,7 @@ import com.example.purebrowser.download.hls.HlsResolver
 import com.example.purebrowser.media.Evidence
 import com.example.purebrowser.media.MediaCandidate
 import com.example.purebrowser.media.MediaKind
+import com.example.purebrowser.media.VariantSummary
 import com.example.purebrowser.theme.PureBrowserTheme
 import com.example.purebrowser.ui.downloads.DownloadsScreen
 import com.example.purebrowser.ui.downloads.byteSummary
@@ -57,12 +58,16 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/** Real Compose confirmation + real resolver/parser/client; only the HTTP boundary is faked. */
+/**
+ * T117 single-screen flow: open → 保存. Real Compose confirmation + real resolver/parser/client;
+ * only the HTTP boundary is faked. The save action itself runs the manifest read and plan
+ * preparation; nothing is fetched before it.
+ */
 class HlsUiTest {
     @get:Rule val compose = createComposeRule()
 
     @Test(timeout = 60_000)
-    fun mediaEntryRequiresExplicitParse_reusesOneRequest_andSavesFrozenPlanAndChoices() {
+    fun mediaEntrySavesInOneAction_reusesOneRequest_andFreezesPlanAndChoices() {
         val original = draft(ENTRY)
         val defaults = mutableStateOf(true)
         val fake = FakeTransport(mapOf(ENTRY to listOf(Reply(media(2)))))
@@ -78,7 +83,9 @@ class HlsUiTest {
         }
 
         compose.onNodeWithText("确认下载 HLS").assertExists()
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
+        // One action is enough: the save is enabled before any fetch happens.
+        compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled()
+        compose.onNodeWithTag("hls-variant-0").assertDoesNotExist()
         compose.onNodeWithTag("download-file-name").performScrollTo().performTextReplacement("chosen.mp4")
         compose.onNodeWithTag("download-file-name").performImeAction()
         compose.onNodeWithTag("download-file-name").assertIsNotFocused()
@@ -89,14 +96,9 @@ class HlsUiTest {
         assertEquals(0, fake.requests.size)
         assertEquals(0, access.calls.size)
 
-        click("hls-parse-playlist")
-        awaitReady()
-        assertEquals(listOf(ENTRY), fake.urls())
-        compose.onNodeWithTag("hls-prepare-variant").assertDoesNotExist()
-        compose.onNodeWithText("清单已准备 · 2 个分片").assertExists()
-        compose.onNodeWithText("清单时长：0 分 8 秒（清单声明）").assertExists()
-        compose.onNodeWithText("成品大小未知；清单响应大小不是视频大小。下载完成并封装校验后才保存 MP4。").assertExists()
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled().performClick()
+        click("hls-save")
+        compose.waitUntil(timeoutMillis = 10_000) { submissions.isNotEmpty() }
+        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
         compose.runOnIdle {
             assertEquals(1, submissions.size)
             val saved = submissions.single()
@@ -115,107 +117,128 @@ class HlsUiTest {
     }
 
     @Test(timeout = 60_000)
-    fun masterDefaultsTo1080_manualSelectionDoesNotFetch_andPrepareReadsOnlySelectedChild() {
-        val fake = FakeTransport(mapOf(ENTRY to listOf(Reply(MASTER)), LOW to listOf(Reply(media(3)))))
-        val submissions = show(draft(ENTRY), fake)
-        assertEquals(0, fake.requests.size)
-        click("hls-parse-playlist")
-        awaitVariantList()
+    fun prelistedVariantsDefaultTo1080_andOneSaveChainsParseAndPrepare() {
+        val fake = FakeTransport(mapOf(
+            ENTRY to listOf(Reply(MASTER)),
+            LOW to listOf(Reply(media(3))),
+            HIGH to listOf(Reply(media(2))),
+        ))
+        val submissions = show(draft(ENTRY, attachedVariants()), fake)
+        // Rows come from the detect-and-parse summaries; the default is preselected with no requests.
         compose.onNodeWithTag("hls-variant-1").performScrollTo().assertIsSelected()
         compose.onNodeWithTag("hls-variant-2").assertIsNotSelected() // Supported 2160p is not the default.
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
-        assertEquals(listOf(ENTRY), fake.urls())
+        compose.onNodeWithText("1080p · 3000000 bit/s（清单声明带宽） · 默认", substring = true).assertExists()
+        assertEquals(0, fake.requests.size)
 
-        click("hls-variant-0")
-        compose.onNodeWithTag("hls-variant-0").assertIsSelected()
-        compose.onNodeWithTag("hls-variant-1").assertIsNotSelected()
-        assertEquals(listOf(ENTRY), fake.urls())
-        click("hls-prepare-variant")
-        awaitReady()
-        assertEquals(listOf(ENTRY, LOW), fake.urls())
         click("hls-save")
+        compose.waitUntil(timeoutMillis = 10_000) { submissions.isNotEmpty() }
         compose.runOnIdle {
+            assertEquals(listOf(ENTRY, HIGH), fake.urls())
             val saved = submissions.single()
-            assertEquals(LOW, saved.plan.variant?.url)
-            assertEquals(720, saved.plan.variant?.height)
-            assertEquals(1280, saved.plan.variant?.width)
-            assertEquals(LOW, saved.plan.playlistUrl)
-            assertEquals(3, saved.plan.media.segments.size)
+            assertEquals(HIGH, saved.plan.variant?.url)
+            assertEquals(1080, saved.plan.variant?.height)
+            assertEquals(HIGH, saved.plan.playlistUrl)
+            assertEquals(2, saved.plan.media.segments.size)
         }
     }
 
     @Test(timeout = 60_000)
-    fun warnedVariantIsSelectable_andKeepsDefaultChoiceUntilUserSwitch() {
-        val fake = FakeTransport(mapOf(ENTRY to listOf(Reply(MASTER))))
-        val submissions = show(draft(ENTRY), fake)
-        click("hls-parse-playlist")
-        awaitVariantList()
-        compose.onNodeWithTag("hls-variant-3").performScrollTo().assertIsEnabled().assertIsNotSelected().performClick()
-        // Warning copy as of f43dd8e ("gate downgrades stay selectable"); scroll like a user so
-        // the row is composed even on small-viewport AVDs (API28 matrix).
-        compose.onNodeWithText("此档位编码不是 H.264/AAC，保存时可能失败").performScrollTo().assertExists()
-        compose.onNodeWithTag("hls-variant-3").assertIsSelected()
+    fun pickingAnotherPrelistedRowSavesThatQuality_withoutExtraFetchOnSelection() {
+        val fake = FakeTransport(mapOf(
+            ENTRY to listOf(Reply(MASTER)),
+            LOW to listOf(Reply(media(3))),
+        ))
+        val submissions = show(draft(ENTRY, attachedVariants()), fake)
+        click("hls-variant-0")
+        compose.onNodeWithTag("hls-variant-0").assertIsSelected()
         compose.onNodeWithTag("hls-variant-1").assertIsNotSelected()
-        assertEquals(listOf(ENTRY), fake.urls())
-        compose.runOnIdle { assertTrue(submissions.isEmpty()) }
-    }
-
-    @Test(timeout = 60_000)
-    fun accessCheckboxInvalidatesReadyPlan_withoutAutomaticFetch_andReparseUsesNewChoice() {
-        val fake = FakeTransport(mapOf(ENTRY to listOf(Reply(media(2)), Reply(media(3)))))
-        val access = FakeAccess()
-        val submissions = show(draft(ENTRY), fake, access)
-        click("hls-parse-playlist")
-        awaitReady()
-        compose.onNodeWithTag("download-use-context").performScrollTo().assertIsOn().performClick()
-        compose.onNodeWithTag("download-use-context").assertIsOff()
-        compose.onNodeWithTag("hls-plan-ready").assertDoesNotExist()
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
-        compose.waitForIdle()
-        assertEquals(listOf(ENTRY), fake.urls())
-        assertEquals(listOf(ENTRY), access.calls.toList())
-
-        click("hls-parse-playlist")
-        awaitReady()
-        assertEquals(listOf(ENTRY, ENTRY), fake.urls())
-        assertEquals(1, access.calls.size)
-        assertNull(fake.requests.last().headers["Cookie"])
-        assertNull(fake.requests.last().headers["Referer"])
+        assertEquals(0, fake.requests.size) // Selection itself never fetches.
         click("hls-save")
+        compose.waitUntil(timeoutMillis = 10_000) { submissions.isNotEmpty() }
         compose.runOnIdle {
-            assertFalse(submissions.single().draft.useAccessContext)
+            assertEquals(listOf(ENTRY, LOW), fake.urls())
+            assertEquals(LOW, submissions.single().plan.variant?.url)
+            assertEquals(720, submissions.single().plan.variant?.height)
             assertEquals(3, submissions.single().plan.media.segments.size)
         }
     }
 
     @Test(timeout = 60_000)
-    fun accessChangeDuringReadCancels_andLateOldResultCannotRestorePreviousPlan() {
-        val gate = CloseGate()
-        val old = Reply(media(2), gate)
-        val fake = FakeTransport(mapOf(ENTRY to listOf(old, Reply(media(3)))))
+    fun warnedPrelistedVariantStaysSelectableAndSavesTheWarnedChoice() {
+        val warnedChild = "${BASE}unsupported.m3u8"
+        val fake = FakeTransport(mapOf(
+            ENTRY to listOf(Reply(MASTER)),
+            warnedChild to listOf(Reply(media(2))),
+        ))
+        val submissions = show(draft(ENTRY, attachedVariants()), fake)
+        compose.onNodeWithTag("hls-variant-3").performScrollTo().assertIsEnabled().assertIsNotSelected()
+        click("hls-variant-3")
+        compose.onNodeWithText("此档位编码不是 H.264/AAC，保存时可能失败").performScrollTo().assertExists()
+        compose.onNodeWithTag("hls-variant-3").assertIsSelected()
+        click("hls-save")
+        compose.waitUntil(timeoutMillis = 10_000) { submissions.isNotEmpty() }
+        compose.runOnIdle {
+            assertEquals(listOf(ENTRY, warnedChild), fake.urls())
+            assertEquals(warnedChild, submissions.single().plan.variant?.url)
+        }
+    }
+
+    @Test(timeout = 60_000)
+    fun saveFailureStaysOnSameScreen_withRetryAffordance_andSecondSaveSucceeds() {
+        val fake = FakeTransport(mapOf(ENTRY to listOf(Reply(media(2), status = 403), Reply(media(3)))))
         val submissions = show(draft(ENTRY), fake)
-        try {
-            click("hls-parse-playlist")
-            awaitLatch(gate.entered)
-            compose.onNodeWithTag("download-use-context").performScrollTo().performClick()
-            awaitLatch(gate.cancelled)
-            compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
-            assertEquals(listOf(ENTRY), fake.urls())
-            click("hls-parse-playlist")
-            awaitReady()
-            gate.release.countDown()
-            awaitLatch(old.finished)
-            compose.waitForIdle()
-            compose.onNodeWithText("清单已准备 · 3 个分片").assertExists()
-            compose.onNodeWithText("清单已准备 · 2 个分片").assertDoesNotExist()
-            compose.onNodeWithTag("hls-error").assertDoesNotExist()
-            click("hls-save")
-            compose.runOnIdle {
-                assertFalse(submissions.single().draft.useAccessContext)
-                assertEquals(3, submissions.single().plan.media.segments.size)
-            }
-        } finally {
-            gate.release.countDown()
+        click("hls-save")
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithTag("hls-error").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("确认下载 HLS").assertExists()
+        // No dead end: the failure surfaces with the retry/re-pick affordance and save re-enables.
+        compose.onNodeWithText("可再次点“保存视频”重试，或点选其他清晰度后保存。").assertExists()
+        compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled().performClick()
+        compose.waitUntil(timeoutMillis = 10_000) { submissions.isNotEmpty() }
+        compose.runOnIdle { assertEquals(3, submissions.single().plan.media.segments.size) }
+    }
+
+    @Test(timeout = 60_000)
+    fun accessToggleInvalidatesParsedState_withoutAutomaticFetch_andReparseUsesNewChoice() {
+        // Two supported variants in a master without attached summaries: the first save parses and
+        // stops for one explicit row confirm (no silent default submit of an unseen ladder).
+        val master = masterOf("360.m3u8" to 360, "720.m3u8" to 720)
+        val low = "${BASE}720.m3u8"
+        val fake = FakeTransport(mapOf(
+            ENTRY to listOf(Reply(master), Reply(master)),
+            low to listOf(Reply(media(3))),
+        ))
+        val access = FakeAccess()
+        val submissions = show(draft(ENTRY), fake, access)
+        click("hls-save")
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithTag("hls-variant-1").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.runOnIdle { assertTrue(submissions.isEmpty()) }
+        assertEquals(listOf(ENTRY), fake.urls())
+
+        compose.onNodeWithTag("download-use-context").performScrollTo().assertIsOn().performClick()
+        compose.onNodeWithTag("download-use-context").assertIsOff()
+        compose.onNodeWithTag("hls-variant-0").assertDoesNotExist()
+        compose.waitForIdle()
+        assertEquals(listOf(ENTRY), fake.urls()) // Invalidating never auto-refetches.
+        assertEquals(listOf(ENTRY), access.calls.toList())
+
+        click("hls-save")
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithTag("hls-variant-1").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals(listOf(ENTRY, ENTRY), fake.urls())
+        assertEquals(1, access.calls.size)
+        assertNull(fake.requests.last().headers["Cookie"])
+        assertNull(fake.requests.last().headers["Referer"])
+        click("hls-save")
+        compose.waitUntil(timeoutMillis = 10_000) { submissions.isNotEmpty() }
+        compose.runOnIdle {
+            assertFalse(submissions.single().draft.useAccessContext)
+            assertEquals(low, submissions.single().plan.variant?.url)
+            assertEquals(3, submissions.single().plan.media.segments.size)
         }
     }
 
@@ -223,7 +246,7 @@ class HlsUiTest {
     fun dismissalCancelsRead_andLateResultCannotUpdateReplacementDraftOrSubmit() {
         val gate = CloseGate()
         val old = Reply(media(2), gate)
-        val fake = FakeTransport(mapOf(ENTRY to listOf(old), NEW_ENTRY to listOf(Reply(media(3)))))
+        val fake = FakeTransport(mapOf(ENTRY to listOf(old, Reply(media(3))), NEW_ENTRY to listOf(Reply(media(3)))))
         val resolver = HlsResolver(fake, FakeAccess(), allowLocalHttp = false)
         val active = mutableStateOf<DownloadDraft?>(draft(ENTRY))
         val submissions = mutableListOf<Submission>()
@@ -239,7 +262,7 @@ class HlsUiTest {
             }
         }
         try {
-            click("hls-parse-playlist")
+            click("hls-save")
             awaitLatch(gate.entered)
             compose.onNodeWithText("取消").performScrollTo().performClick()
             awaitLatch(gate.cancelled)
@@ -249,17 +272,11 @@ class HlsUiTest {
                 assertTrue(submissions.isEmpty())
                 active.value = draft(NEW_ENTRY).copy(sourceTabId = "replacement-tab", sourceGeneration = 42)
             }
-            compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
-            assertEquals(listOf(ENTRY), fake.urls())
-            click("hls-parse-playlist")
-            awaitReady()
+            click("hls-save")
+            compose.waitUntil(timeoutMillis = 10_000) { submissions.isNotEmpty() }
             gate.release.countDown()
             awaitLatch(old.finished)
             compose.waitForIdle()
-            compose.onNodeWithText("清单已准备 · 3 个分片").assertExists()
-            compose.onNodeWithText("清单已准备 · 2 个分片").assertDoesNotExist()
-            compose.onNodeWithTag("hls-error").assertDoesNotExist()
-            click("hls-save")
             compose.runOnIdle {
                 assertEquals(1, submissions.size)
                 assertEquals(NEW_ENTRY, submissions.single().plan.entryUrl)
@@ -273,30 +290,24 @@ class HlsUiTest {
     }
 
     @Test(timeout = 60_000)
-    fun switchingVariantCancelsChildRead_invalidatesPlan_andDoesNotFetchNewChildUntilPrepare() {
+    fun switchingVariantCancelsChildRead_invalidatesChain_andSecondSavePreparesPicked() {
         val gate = CloseGate()
         val old = Reply(media(2), gate)
         val fake = FakeTransport(mapOf(ENTRY to listOf(Reply(MASTER)), HIGH to listOf(old), LOW to listOf(Reply(media(3)))))
-        val submissions = show(draft(ENTRY), fake)
+        val submissions = show(draft(ENTRY, attachedVariants()), fake)
         try {
-            click("hls-parse-playlist")
-            awaitVariantList()
-            click("hls-prepare-variant") // Default 1080p child read is intentionally held open.
+            click("hls-save") // Chain: parse entry, then the default 1080p child read (held open).
             awaitLatch(gate.entered)
             click("hls-variant-0")
             awaitLatch(gate.cancelled)
             compose.onNodeWithTag("hls-variant-0").assertIsSelected()
-            compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
             assertEquals(listOf(ENTRY, HIGH), fake.urls())
-            click("hls-prepare-variant")
-            awaitReady()
+            click("hls-save")
+            compose.waitUntil(timeoutMillis = 10_000) { submissions.isNotEmpty() }
             gate.release.countDown()
             awaitLatch(old.finished)
             compose.waitForIdle()
             assertEquals(listOf(ENTRY, HIGH, LOW), fake.urls())
-            compose.onNodeWithText("清单已准备 · 3 个分片").assertExists()
-            compose.onNodeWithTag("hls-error").assertDoesNotExist()
-            click("hls-save")
             compose.runOnIdle {
                 assertEquals(LOW, submissions.single().plan.variant?.url)
                 assertEquals(3, submissions.single().plan.media.segments.size)
@@ -343,45 +354,41 @@ class HlsUiTest {
     }
 
     @Test(timeout = 60_000)
-    fun wifiOnlyBlocksParse_withoutFetching_orAutoRestartingWhenWifiReturns() {
+    fun wifiOnlyBlocksTheSaveNetwork_withoutFetching_orAutoRestartingWhenWifiReturns() {
         val wifi = mutableStateOf(false)
         val fake = FakeTransport(mapOf(ENTRY to listOf(Reply(media(2)))))
         show(draft(ENTRY), fake, canUseWifi = { wifi.value })
-        click("hls-parse-playlist")
+        click("hls-save")
         compose.onNodeWithTag("hls-wifi-required").assertExists()
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
         assertEquals(0, fake.requests.size)
         compose.runOnIdle { wifi.value = true }
         compose.waitForIdle()
-        assertEquals(0, fake.requests.size)
-        compose.onNodeWithTag("hls-plan-ready").assertDoesNotExist()
-        click("hls-parse-playlist")
-        awaitReady()
-        assertEquals(listOf(ENTRY), fake.urls())
+        assertEquals(0, fake.requests.size) // Never auto-restarts when Wi-Fi returns.
         compose.onNodeWithTag("hls-wifi-required").assertDoesNotExist()
+        click("hls-save")
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithTag("hls-saving").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals(listOf(ENTRY), fake.urls())
     }
 
     @Test(timeout = 60_000)
-    fun wifiOnlyAlsoBlocksPrepare_turningItOffDoesNotFetchUntilExplicitPrepare() {
-        val wifi = mutableStateOf(true)
+    fun wifiOnlyAlsoBlocksBeforeTheManifestRead_forPrelistedVariants() {
+        val wifi = mutableStateOf(false)
         val fake = FakeTransport(mapOf(ENTRY to listOf(Reply(MASTER)), HIGH to listOf(Reply(media(2)))))
-        val submissions = show(draft(ENTRY), fake, canUseWifi = { wifi.value })
-        click("hls-parse-playlist")
-        awaitVariantList()
-        compose.runOnIdle { wifi.value = false }
-        click("hls-prepare-variant")
+        val submissions = show(draft(ENTRY, attachedVariants()), fake, canUseWifi = { wifi.value })
+        click("hls-save")
         compose.onNodeWithTag("hls-wifi-required").assertExists()
-        assertEquals(listOf(ENTRY), fake.urls())
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
+        assertEquals(0, fake.requests.size)
         compose.onNode(isToggleable() and hasText("仅 Wi-Fi")).performScrollTo().assertIsOn().performClick()
         compose.waitForIdle()
-        assertEquals(listOf(ENTRY), fake.urls())
         compose.onNodeWithTag("hls-wifi-required").assertDoesNotExist()
-        click("hls-prepare-variant")
-        awaitReady()
-        assertEquals(listOf(ENTRY, HIGH), fake.urls())
         click("hls-save")
-        compose.runOnIdle { assertFalse(submissions.single().wifiOnly) }
+        compose.waitUntil(timeoutMillis = 10_000) { submissions.isNotEmpty() }
+        compose.runOnIdle {
+            assertEquals(listOf(ENTRY, HIGH), fake.urls())
+            assertFalse(submissions.single().wifiOnly)
+        }
     }
 
     private fun show(
@@ -404,31 +411,34 @@ class HlsUiTest {
         compose.onNodeWithTag(tag).performScrollTo().assertIsEnabled().performClick()
     }
 
-    private fun awaitReady() {
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithTag("hls-plan-ready").fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled()
-    }
-
-    private fun awaitVariantList() {
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithTag("hls-variant-0").fetchSemanticsNodes().isNotEmpty()
-        }
-    }
-
     private fun awaitLatch(latch: CountDownLatch) {
         compose.waitUntil(timeoutMillis = 10_000) { latch.count == 0L }
     }
 
-    private fun draft(url: String) = DownloadDraft(
+    /** Detect-and-parse summaries mirroring [MASTER]: 720 / 1080 / 2160 clean + a warned 1080. */
+    private fun attachedVariants() = listOf(
+        VariantSummary(720, 1_000_000L, null, LOW, null),
+        VariantSummary(1080, 3_000_000L, null, HIGH, null),
+        VariantSummary(2160, 6_000_000L, null, "${BASE}2160.m3u8", null),
+        VariantSummary(1080, 2_000_000L, null, "${BASE}unsupported.m3u8", "此档位编码不是 H.264/AAC，保存时可能失败"),
+    )
+
+    private fun draft(url: String, variants: List<VariantSummary>? = null) = DownloadDraft(
         candidate = MediaCandidate(url, MediaKind.HLS, setOf(Evidence.DOM),
             mimeType = "application/vnd.apple.mpegurl", sizeBytes = 123,
-            frameUrl = "${BASE}watch", reliableSource = true),
+            frameUrl = "${BASE}watch", reliableSource = true, variants = variants),
         userAgent = "hls-ui-test", sourceUrl = "${BASE}watch?source=frozen",
         sourceTitle = "原始来源页", sourceTabId = "frozen-tab", sourceGeneration = 7,
         useAccessContext = true,
     )
+
+    private fun masterOf(vararg children: Pair<String, Int>): String = buildString {
+        append("#EXTM3U\n")
+        children.forEach { (file, height) ->
+            append("#EXT-X-STREAM-INF:BANDWIDTH=${height * 1000},RESOLUTION=${height * 16 / 9}x$height,CODECS=\"avc1.42E01E,mp4a.40.2\"\n")
+            append("$file\n")
+        }
+    }
 
     private data class Submission(val draft: DownloadDraft, val name: String, val wifiOnly: Boolean, val plan: HlsDownloadPlan)
     private data class Request(val url: String, val headers: Map<String, String>)
@@ -451,7 +461,7 @@ class HlsUiTest {
         }
     }
 
-    private class Reply(text: String, val gate: CloseGate? = null) {
+    private class Reply(text: String, val gate: CloseGate? = null, val status: Int = 200) {
         val bytes = text.toByteArray(Charsets.UTF_8)
         val finished = CountDownLatch(1)
     }
@@ -468,7 +478,7 @@ class HlsUiTest {
             requests.add(Request(url, headers.toMap()))
             cancel.bind { reply.gate?.cancelled?.countDown() }
             return object : HttpResponse {
-                override val status = 200
+                override val status = reply.status
                 override fun header(name: String): String? = when {
                     name.equals("Content-Length", true) -> reply.bytes.size.toString()
                     name.equals("Content-Type", true) -> "application/vnd.apple.mpegurl"

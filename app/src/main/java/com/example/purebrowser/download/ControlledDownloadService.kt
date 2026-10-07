@@ -22,10 +22,10 @@ class ControlledDownloadService:Service() {
         val open=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val active=records.filter { it.transfer==TransferType.CONTROLLED && it.taskStatus in TaskControlRules.writing }
         val text=when {
-            active.any { it.taskStatus==TaskStatus.MUXING }->"正在封装 MP4；尚未保存成品"
-            active.any { it.taskStatus==TaskStatus.PUBLISHING }->"正在发布公共成品"
-            active.any { it.taskStatus==TaskStatus.VERIFYING }->"正在校验视频"
-            active.isNotEmpty()->"正在下载 ${active.size} 个任务；返回应用查看进度"
+            active.any { it.taskStatus==TaskStatus.MUXING }->"正在合并视频，尚未保存完成"
+            active.any { it.taskStatus==TaskStatus.PUBLISHING }->"正在保存视频"
+            active.any { it.taskStatus==TaskStatus.VERIFYING }->"正在检查视频"
+            active.any { it.taskStatus==TaskStatus.RUNNING }->"正在下载 ${active.count { it.taskStatus==TaskStatus.RUNNING }} 个视频；返回应用查看进度"
             else->"正在处理任务队列"
         }
         val b=NotificationCompat.Builder(this,"video_downloads").setSmallIcon(R.drawable.ic_launcher_foreground)

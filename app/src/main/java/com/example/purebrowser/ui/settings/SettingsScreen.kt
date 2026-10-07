@@ -4,8 +4,11 @@ import android.os.Build
 import com.example.purebrowser.download.PublishRoutePolicy
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -17,6 +20,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -25,6 +30,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
+import com.example.purebrowser.R
 import com.example.purebrowser.data.browser.ThemeMode
 import com.example.purebrowser.media.rules.ImportedRulePolicy
 import com.example.purebrowser.media.rules.ImportedRuleStore
@@ -183,7 +190,10 @@ fun SettingsScreen(
                 else "此系统版本不允许应用直接写入公共下载，成品保存在应用专属外部目录，可通过打开或分享另存。不提供目录选择。显示名称可修改，实际文件名保留唯一前缀。移除记录不会删除文件，删除文件需要另行确认。")
             }
             SettingsGroup("站点规则") {
-                SettingsNote("导入的规则只保存在本机应用私有存储，不联网分发、不自动更新。导入后与内置规则合并，内置规则始终优先；导入规则的受控抓取额度减半且不允许跨源跳转。分析入口会标注命中来自“导入规则”。")
+                SettingsNote("导入的站点规则只保存在本机，不联网分发、不自动更新。导入后与内置规则合并使用，内置规则始终优先。")
+                // tech-detail:begin
+                SettingsNote("导入规则的受控抓取额度减半且不允许跨源跳转；分析入口会标注命中来自“导入规则”。")
+                // tech-detail:end
                 OutlinedButton(
                     onClick = {
                         importedCount = com.example.purebrowser.media.rules.ImportedRuleStore.importedCount(context)
@@ -230,7 +240,7 @@ fun SettingsScreen(
                 }
             }
             SettingsGroup("诊断") {
-                SettingsNote("仅包含应用版本、系统/WebView 版本、任务状态、失败类别及字节数。任务用本次报告的序号表示，不包含网址、Cookie、认证信息、标题、名称或任务 ID。不会自动上传。")
+                SettingsNote("诊断文本只包含应用版本、任务状态和失败类别等脱敏信息，不含网址、账号或文件名，也不会自动上传。")
                 OutlinedButton(
                     onClick = {
                         val generate = privacyActions.diagnosticReport ?: return@OutlinedButton
@@ -282,7 +292,7 @@ fun SettingsScreen(
             text = {
                 Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("外部规则将获得受控抓取能力（仅 GET、HTTPS、限额减半、不跨源跳转）。文件来源无法由应用验证，请先自行核对发布方的完整性摘要再确认。", style = MaterialTheme.typography.bodyLarge)
+                    Text("导入的规则将可以代替你读取网页内容（仅限 HTTPS 网页、次数受限、不会跳到其他网站）。应用无法确认文件来源，请先自行核对发布方的完整性摘要再确认。", style = MaterialTheme.typography.bodyLarge)
                     Text("签名状态：${pending.signatureLabel}", style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.testTag("rule-import-signature"))
                     Text("规则条数：${pending.count}", style = MaterialTheme.typography.bodyMedium)
@@ -452,6 +462,28 @@ private fun SettingsNote(text: String) {
     Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
+/**
+ * T118: protocol/implementation boundary folded behind an explicit collapsed toggle on the same
+ * screen. Touch target follows the 48dp rule; expanded state is not part of navigation state.
+ */
+@Composable
+private fun TechDetailSection(vararg lines: String) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .clickable(role = Role.Button) { expanded = !expanded },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (expanded) "收起技术详情" else "展开技术详情",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f).testTag("tech-detail-toggle"),
+        )
+    }
+    if (expanded) lines.forEach { SettingsNote(it) }
+}
+
 @Composable
 fun AboutScreen() {
     val context = LocalContext.current
@@ -469,27 +501,54 @@ fun AboutScreen() {
                 .testTag("aboutScreen").verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // T116: approved logo mark (direction B, same art as the launcher foreground)
+            // rendered launcher-style: brand blue plate + white mark. Decorative for TalkBack;
+            // the heading text right below carries the app name.
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFF356DE8)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_launcher_foreground),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
             Text("PureBrowser", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
             Text("本地视频浏览器 · $version", style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.testTag("aboutRuntimeVersion"))
             SettingsNote("应用 ID：${context.packageName}")
             SettingsGroup("下载能力与边界") {
-                SettingsNote("支持 MP4/WebM 直链、无后缀视频与限定同源网站会话。HLS 需显式解析清单、选择档位并准备；仅支持未加密的固定点播 MPEG-TS（H.264 / AAC），封装校验后保存为独立 MP4。")
-                SettingsNote("符合条件的直链任务支持暂停与续传：必须有可验证的强 ETag，服务器还需正确支持 Range，并确认资源未改变；不满足条件时需重新下载。限定的静态 HLS 可复用已经完整保存且校验一致的分片，不复用半片；封装、校验或发布阶段不承诺可暂停。重新下载另建任务，HLS 保留所选档位，档位不可用时不会自动改选其他画质。")
-                SettingsNote("开发候选增加页面媒体声明、无后缀／Range 请求线索的显式分析与公开站点格式选择。受支持的 H.264＋AAC 完整双轨可尝试封装 MP4；中断或过期需重新分析，不支持双轨续传。YouTube 完整保存仍在验证，解析出地址不等于下载成功。")
-                SettingsNote("不支持 HLS 直播、加密分片、HLS 独立音轨／fMP4、通用 DASH、MSE 全覆盖、跨站敏感鉴权或 DRM。blob 本身不是文件地址。版本号以本机安装包为准；开发候选不代表正式发布。")
+                SettingsNote("能保存：网页里正在播放的视频文件，以及常见的 HLS / DASH 播放地址，统一保存为 MP4 文件。")
+                SettingsNote("暂不支持：直播、受站点保护（加密）的内容，以及其他特殊格式。这类视频会明确提示无法保存，不会假装成功。")
+                SettingsNote("下载中断后能否接着原任务继续，取决于网站本身的支持；不支持时需要重新下载。重新下载会创建新任务，不会自动改选其他画质。")
+                TechDetailSection(
+                    // tech-detail:begin
+                    "支持 MP4/WebM 直链、无后缀视频与限定同源网站会话。HLS 需显式解析清单、选择档位并准备；仅支持未加密的固定点播 MPEG-TS（H.264 / AAC），封装校验后保存为独立 MP4。",
+                    "符合条件的直链任务支持暂停与续传：必须有可验证的强 ETag，服务器还需正确支持 Range，并确认资源未改变；不满足条件时需重新下载。限定的静态 HLS 可复用已经完整保存且校验一致的分片，不复用半片；封装、校验或发布阶段不承诺可暂停。",
+                    "开发候选增加页面媒体声明、无后缀／Range 请求线索的显式分析与公开站点格式选择。受支持的 H.264＋AAC 完整双轨可尝试封装 MP4；中断或过期需重新分析，不支持双轨续传。YouTube 完整保存仍在验证，解析出地址不等于下载成功。",
+                    "不支持 HLS 直播、加密分片、HLS 独立音轨／fMP4、通用 DASH、MSE 全覆盖、跨站敏感鉴权或 DRM。blob 本身不是文件地址。版本号以本机安装包为准；开发候选不代表正式发布。"
+                    // tech-detail:end
+                )
             }
             SettingsGroup("文件与存储") {
                 SettingsNote(if (Build.VERSION.SDK_INT >= 29) "已保存的视频位于本机公共 Download/PureBrowser 目录。"
                 else "此系统版本不允许应用直接写入公共下载，已保存的视频位于应用专属外部目录，可通过打开或分享另存。")
-                SettingsNote("续传缓存与临时分片留在应用私有存储，会额外占用空间；确认清理已停止任务的缓存后，受影响任务必须重新下载。仅移除记录不会删除设备文件。")
-                SettingsNote("Android 10 及以上，发布中的公共副本处于 pending 状态，不作为视频库成品展示；旧版系统使用独立临时文件。下载、封装、校验和发布成功后，才在视频库提供本地预览、打开或分享。")
+                SettingsNote("未完成的下载会在本机保留临时缓存，会额外占用空间；清理后这些任务需要重新下载。仅移除记录不会删除设备里的文件。")
+                SettingsNote("下载完成并通过检查后，视频才会出现在视频库里，可以预览、打开或分享。")
                 SettingsNote("视频库仅索引本应用保存的文件，不扫描整机媒体。文件分享通过 Android 系统选择器交给你选定的应用；不会由本应用自动上传。")
+                TechDetailSection(
+                    // tech-detail:begin
+                    "Android 10 及以上，发布中的公共副本处于 pending 状态，不作为视频库成品展示；旧版系统使用独立临时文件。下载、封装、校验和发布成功后才提供本地预览、打开或分享。"
+                    // tech-detail:end
+                )
             }
             SettingsGroup("隐私与使用") {
-                SettingsNote("网站清理面向本应用 WebView 的所有网站，并需先停止网页、网站会话及相关下载。兼容系统接口仅返回已请求清理（REQUESTED），不能证明所有存储、缓存或 Service Worker 数据已经完全清除；不清理其他应用或整机数据，不删除已保存的视频。")
+                SettingsNote("网站清理会作用于本应用内的所有网站，清理前需要先停止网页和下载。系统接口只能确认已发出清理请求，无法保证每个网站的数据都被完全清除；不会动其他应用的数据，也不会删除已保存的视频。")
                 SettingsNote("仅保存你拥有或获授权的内容。不绕过 DRM 或访问控制。")
-                SettingsNote("基于 Android WebView、Jetpack Compose 和受控下载服务。应用无自有后端，不上传浏览数据。")
+                SettingsNote("应用没有自己的服务器，不上传浏览数据。下载由应用内置的下载功能完成。")
             }
             SettingsGroup("开源组件") {
                 SettingsNote("AndroidX / Jetpack Compose（Apache 2.0）；Kotlin（Apache 2.0）。Android WebView 和 DownloadManager 由设备系统提供。媒体传输由应用受控核心执行，不使用外部命令下载器。站点解析使用固定版本 YouTube.js 18.1.0（MIT）及其 Apache/BSD/MIT/ISC 依赖，原始许可证随安装包提供。")

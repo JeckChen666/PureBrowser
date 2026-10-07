@@ -79,6 +79,66 @@ internal class HlsPreparation(private val resolver: HlsResolver, private val sco
         }
     }
 
+    /**
+     * T117 one-action save: reads the entry only when the user taps 保存, honors an already-picked
+     * variant address (a vanished or newly-unsupported pick fails honestly — never a silent
+     * re-pick), then prepares the plan; [onReady] fires at most once per invocation, on this
+     * dialog's scope, only for this chain. A multi-variant master WITHOUT a prior pick stops after
+     * the parse so the surfaced rows can be confirmed with the same 保存 action.
+     */
+    fun save(draft: DownloadDraft, preferredVariantUrl: String?, onReady: (HlsDownloadPlan) -> Unit) {
+        if (closed || busy) return
+        if (options != null && optionsDraft == draft) {
+            prepareSelected(draft, onReady)
+            return
+        }
+        request({ cancel ->
+            val parsed = resolver.resolveEntry(draft, cancel)
+            // A media entry is already the child playlist; reuse it without a second GET.
+            val ready = if (parsed.playlist is HlsPlaylist.Media) resolver.resolvePlan(draft, parsed, null, cancel) else null
+            parsed to ready
+        }) { (parsed, ready) ->
+            options = parsed
+            optionsDraft = draft
+            val master = parsed.playlist as? HlsPlaylist.Master
+            if (master == null) {
+                selected = null
+                plan = ready
+                preparedDraft = if (ready != null) draft else null
+                if (ready != null) onReady(ready)
+                return@request
+            }
+            val chosen = preferredVariantUrl?.let { preferred -> master.variants.firstOrNull { it.url == preferred } }
+            when {
+                // The picked quality vanished or turned unsupported: report and keep the rows.
+                preferredVariantUrl != null && chosen?.supported != true -> {
+                    selected = HlsPlaylistParser.defaultVariant(master.variants)
+                    error = "所选清晰度已不在清单中，请重新选择后再保存"
+                }
+                // No prior pick and a real ladder: stop after the parse for one explicit confirm.
+                preferredVariantUrl == null && master.variants.count { it.supported } > 1 ->
+                    selected = HlsPlaylistParser.defaultVariant(master.variants)
+                else -> {
+                    selected = chosen ?: HlsPlaylistParser.defaultVariant(master.variants) ?: master.variants.firstOrNull()
+                    prepareSelected(draft, onReady)
+                }
+            }
+        }
+    }
+
+    private fun prepareSelected(draft: DownloadDraft, onReady: (HlsDownloadPlan) -> Unit) {
+        val parsed = options ?: return
+        val variant = selected?.takeIf { it.supported } ?: run {
+            error = "没有受支持的档位，请返回来源网页重新发现资源"
+            return
+        }
+        request({ cancel -> resolver.resolvePlan(draft, parsed, variant, cancel) }) { ready ->
+            plan = ready
+            preparedDraft = draft
+            onReady(ready)
+        }
+    }
+
     /** Access changes invalidate entry metadata as well as the prepared plan; never auto-reparse. */
     fun accessChanged() {
         invalidate()

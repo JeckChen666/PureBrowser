@@ -93,14 +93,14 @@ fun DownloadsScreen(
             ) {
                 item(key = "intro") {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("仅显示本应用任务；传输完成后仍需核对格式与文件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("这里只显示本应用创建的下载任务，不查看其他应用的下载。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         OutlinedButton(onClick = onLibrary, modifier = Modifier.heightIn(min = 48.dp).testTag("downloadsLibrary")) {
                             Text("打开本地视频库")
                         }
                     }
                 }
                 if (items.isEmpty()) {
-                    item(key = "empty") { EmptyContent("还没有下载任务", "在网页资源中心选择可保存的视频后，任务会出现在这里。不会扫描其他应用的下载。") }
+                    item(key = "empty") { EmptyContent("还没有下载任务", "在网页里找到想保存的视频并确认保存后，任务会出现在这里。") }
                 }
                 DownloadUiGroup.entries.forEach { group ->
                     val grouped = ordered.filter { it.uiGroup() == group }

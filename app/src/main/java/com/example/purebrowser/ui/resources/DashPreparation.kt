@@ -72,6 +72,51 @@ internal class DashPreparation(private val resolver: DashResolver, private val s
         }
     }
 
+    /**
+     * T117 one-action save, mirroring [HlsPreparation.save]: the manifest is read only when the
+     * user taps 保存; a picked height (the pre-parsed DASH summaries carry no per-variant
+     * addresses) is honored or fails honestly, and a multi-offer document without a prior pick
+     * stops after the parse for one explicit confirm of the surfaced rows.
+     */
+    fun save(draft: DownloadDraft, preferredHeight: Int?, onReady: (DashDownloadPlan) -> Unit) {
+        if (closed || busy) return
+        if (options != null && optionsDraft == draft) {
+            prepareSelected(draft, onReady)
+            return
+        }
+        request({ cancel -> resolver.resolveEntry(draft, cancel) }) { parsed ->
+            options = parsed
+            optionsDraft = draft
+            val offers = parsed.document.videoOffers
+            val chosen = preferredHeight?.let { height -> offers.firstOrNull { it.height == height } }
+            when {
+                preferredHeight != null && chosen?.supported != true -> {
+                    selected = MpdPlanParser.defaultVideoOffer(offers)
+                    error = "所选清晰度已不在清单中，请重新选择后再保存"
+                }
+                preferredHeight == null && offers.count { it.supported } > 1 ->
+                    selected = MpdPlanParser.defaultVideoOffer(offers)
+                else -> {
+                    selected = chosen ?: MpdPlanParser.defaultVideoOffer(offers) ?: offers.firstOrNull()
+                    prepareSelected(draft, onReady)
+                }
+            }
+        }
+    }
+
+    private fun prepareSelected(draft: DownloadDraft, onReady: (DashDownloadPlan) -> Unit) {
+        val parsed = options ?: return
+        val offer = selected?.takeIf { it.supported } ?: run {
+            error = "没有受支持的档位，请返回来源网页重新发现资源"
+            return
+        }
+        request({ cancel -> resolver.resolvePlan(draft, parsed, offer, cancel) }) { ready ->
+            plan = ready
+            preparedDraft = draft
+            onReady(ready)
+        }
+    }
+
     /** Access changes invalidate entry metadata as well as the prepared plan; never auto-reparse. */
     fun accessChanged() {
         invalidate()

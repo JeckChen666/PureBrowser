@@ -1,5 +1,17 @@
 # 开发机组合回归
 
+## v0.2.1 主文案静态检查（T118 产出，T119 回归门）
+
+```sh
+python3 tools/verification/check_user_copy.py
+```
+
+扫描 T118 改写范围内的 UI 字符串字面量（资源面板、设置/关于、下载任务列表与详情、下载通知、CopyMapping），
+主文案不允许出现开发/协议术语（清单、档位、直链、MPEG-TS、fMP4、ETag、受控下载器、候选）。
+这些词只允许出现在 `// tech-detail:begin` … `// tech-detail:end` 注释标记之间的折叠"技术详情"文案里（或行尾 `// tech-detail`）。
+诊断/日志/代码层不在扫描范围（术语保持不变，可诊断性不降级）。有发现时退出码 1，便于 T119 与 JVM/lint 一起挂门。
+完整逐条处置见 `docs/COPY-AUDIT-V0.2.1.md`。
+
 `run_v013_regression.py` 只接受专用 **PureBrowser_API37_ReleaseLab** AVD（默认 emulator-5560）。
 默认不清空应用数据，不会操作主模拟器或原 v0.1.0 包；请先启动专用 AVD，确认没有其他 instrumentation。
 复跑前留出足够标签容量。合成夹具端口 8765、8766、8768 必须空闲。

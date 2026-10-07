@@ -8,6 +8,8 @@ import com.example.purebrowser.download.FileAvailability
 import com.example.purebrowser.download.PauseReason
 import com.example.purebrowser.download.TaskStatus
 import com.example.purebrowser.download.SystemTaskRead
+import com.example.purebrowser.ui.CopyMapping
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -31,7 +33,7 @@ class DownloadPresentationRulesTest {
         val hls = item().copy(protocol = DownloadProtocol.HLS, total = 100, bytes = 50)
         assertNull(hls.progressFraction())
         assertTrue(hls.byteSummary().contains("总大小未知"))
-        assertTrue(hls.copy(segmentCount = 4, completedSegments = 2).progressDescription().contains("不是整体保存进度"))
+        assertTrue(hls.copy(segmentCount = 4, completedSegments = 2).progressDescription().contains("不代表整体保存进度"))
         assertNull(hls.copy(segmentCount = 4, completedSegments = 5).progressFraction())
     }
 
@@ -41,7 +43,17 @@ class DownloadPresentationRulesTest {
         assertTrue(item().copy(failure = FailureKind.STORAGE).recoveryHint().contains("存储空间"))
         assertTrue(item().copy(failure = FailureKind.ACCESS_CONDITION, sourceUrl = "https://example.test").recoveryHint().contains("需要登录"))
         assertTrue(item().copy(pauseReason = PauseReason.WIFI).recoveryHint().contains("仅允许 Wi-Fi"))
-        assertTrue(item().copy(failure = FailureKind.NOT_VIDEO).recoveryHint().contains("不受支持"))
+        assertTrue(item().copy(failure = FailureKind.NOT_VIDEO).recoveryHint().contains("暂不支持"))
+    }
+
+    /** T118: failed tasks surface mapped user guidance, classified from the safe failure text. */
+    @Test fun failedTasksShowMappedGuidanceFromClassifiedSafeFailure() {
+        val encrypted = item().copy(taskStatus = TaskStatus.FAILED, failure = FailureKind.UNSUPPORTED, detail = "本版不支持加密 HLS")
+        assertEquals(CopyMapping.PROTECTED, encrypted.stoppedReason())
+        val expired = item().copy(taskStatus = TaskStatus.FAILED, failure = FailureKind.ACCESS_CONDITION, detail = "当前访问条件不足")
+        assertEquals(CopyMapping.LINK_EXPIRED, expired.stoppedReason())
+        val unclassified = item().copy(taskStatus = TaskStatus.FAILED, failure = FailureKind.INTERRUPTED, detail = "无法归类的诊断文本")
+        assertEquals(CopyMapping.UNKNOWN, unclassified.stoppedReason())
     }
 
     @Test fun unknownStateDoesNotEnableDestructiveRecordOrFileActions() {

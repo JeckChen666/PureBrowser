@@ -22,6 +22,7 @@ import com.example.purebrowser.download.FormatCheck
 import com.example.purebrowser.download.FailureKind
 import com.example.purebrowser.download.PauseReason
 import com.example.purebrowser.download.SystemTaskRead
+import com.example.purebrowser.ui.CopyMapping
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -59,12 +60,12 @@ internal fun DownloadItem.stateLabel(): String = when {
         TaskStatus.WAITING_NETWORK -> "等待网络"
         TaskStatus.PAUSING -> "正在暂停 · 等待写入结束"
         TaskStatus.PAUSED -> "已暂停 · 尚未保存成品"
-        TaskStatus.RUNNING -> if (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) "正在下载分片" else "正在传输"
-        TaskStatus.MUXING -> "正在封装 MP4 · 尚未保存"
-        TaskStatus.VERIFYING -> if (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) "正在校验 MP4 · 尚未保存" else "正在校验文件 · 尚未保存"
-        TaskStatus.PUBLISHING -> "正在保存至公共下载目录"
+        TaskStatus.RUNNING -> if (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) "正在下载视频" else "正在传输"
+        TaskStatus.MUXING -> "正在合并视频 · 尚未保存"
+        TaskStatus.VERIFYING -> if (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) "正在检查视频 · 尚未保存" else "正在检查文件 · 尚未保存"
+        TaskStatus.PUBLISHING -> "正在保存视频"
         TaskStatus.SUCCEEDED -> savedStateLabel()
-        TaskStatus.FAILED -> "下载失败"
+        TaskStatus.FAILED -> "保存失败"
         TaskStatus.CANCELLED -> "已取消下载"
         TaskStatus.INTERRUPTED -> "下载已中断"
     }
@@ -101,44 +102,40 @@ internal fun DownloadItem.canCancelTask(): Boolean = isActiveTask() ||
     (!cancelled && systemRead == SystemTaskRead.PRESENT &&
         (taskStatus == TaskStatus.INTERRUPTED || (taskStatus == TaskStatus.FAILED && resumeAvailable())))
 
+/**
+ * T118: why the task stopped plus the next step. Pause states keep their short reason; failures
+ * are classified through [CopyMapping] from the persisted kind and the safe failure text that the
+ * repository surfaces in [DownloadItem.detail] for failed tasks. Never claims an unknown cause.
+ */
 internal fun DownloadItem.stoppedReason(): String? = pauseReason?.let {
     when (it) {
-        PauseReason.USER -> "用户主动暂停"
-        PauseReason.WIFI -> "原任务仅允许 Wi-Fi，正在等待符合条件的网络"
+        PauseReason.USER -> "你暂停了下载"
+        PauseReason.WIFI -> "此任务仅允许 Wi-Fi，正在等待符合条件的网络"
         PauseReason.NETWORK -> "网络不可用或连接中断"
         PauseReason.SYSTEM -> "系统限制或停止了下载"
-        PauseReason.RECOVERY -> "应用重启或任务中断后，需要核对检查点"
+        PauseReason.RECOVERY -> "应用重启或任务中断后，需要先核对已下载的内容"
         PauseReason.STORAGE -> "存储空间不足或缓存无法写入"
-        PauseReason.ACCESS -> "网站访问条件失效，不能安全续传"
+        PauseReason.ACCESS -> "链接可能已过期或需要登录，不能安全续传"
         PauseReason.SOURCE_CHANGED -> "下载来源已变化，不能安全续传"
     }
-} ?: failure?.let {
-    when (it) {
-        FailureKind.NETWORK -> "网络传输失败"
-        FailureKind.HTTP_REJECTED -> "服务器拒绝了下载请求"
-        FailureKind.ACCESS_CONDITION -> "网站访问条件失效"
-        FailureKind.NOT_VIDEO -> "返回内容不是可保存的视频"
-        FailureKind.UNSUPPORTED -> "下载来源或格式不受支持"
-        FailureKind.STORAGE -> "存储空间不足或文件无法写入"
-        FailureKind.SYSTEM_LIMIT -> "系统限制了下载"
-        FailureKind.INTERRUPTED -> "下载执行已中断"
-    }
+} ?: failure?.let { kind ->
+    CopyMapping.failureGuidance(kind, detail.takeIf { taskStatus == TaskStatus.FAILED })
 }
 
 internal fun DownloadItem.pauseResumeExplanation(pauseConnected: Boolean, resumeConnected: Boolean): String? = when {
     !canCancelTask() -> null
-    taskStatus == TaskStatus.PAUSING -> "正在等待当前写入结束并保存检查点；请等待已暂停，现在不能继续。"
+    taskStatus == TaskStatus.PAUSING -> "正在等待当前写入结束并保存进度；已暂停后才能继续。"
     taskStatus in setOf(TaskStatus.MUXING, TaskStatus.VERIFYING, TaskStatus.PUBLISHING) ->
-        "下载后的处理阶段不能暂停或续传；成品保存完成前不会进入视频库。"
+        "下载后的处理阶段不能暂停或继续；保存完成前不会进入视频库。"
     pauseReason in setOf(PauseReason.ACCESS, PauseReason.SOURCE_CHANGED) ->
-        "不能安全续传。请返回来源网页重新发现资源；重新下载会创建新任务，不是继续此任务。"
+        "不能安全续传。请回到视频页面重新打开后再试；重新下载会创建新任务，不是继续此任务。"
     taskStatus in setOf(TaskStatus.PAUSED, TaskStatus.WAITING_WIFI, TaskStatus.WAITING_NETWORK, TaskStatus.INTERRUPTED, TaskStatus.FAILED) -> when {
         resumeAvailable() && resumeConnected ->
-            "保留已确认的私有缓存；继续使用同一任务并核对检查点，仍遵守此任务原有的网络限制。取消下载会清理缓存。"
-        resumeAvailable() -> "私有缓存已保留，但当前没有可用的继续操作。取消下载会清理缓存。"
-        else -> "当前无法安全继续，请等待状态确认或返回来源重新下载。重新下载创建新任务；取消下载会清理缓存。"
+            "已下载的内容已保留；继续使用同一任务并核对进度，仍遵守此任务原有的网络限制。取消下载会清理缓存。"
+        resumeAvailable() -> "已下载的内容已保留，但当前没有可用的继续操作。取消下载会清理缓存。"
+        else -> "当前无法安全继续，请等待状态确认或回到视频页面重新保存。重新下载创建新任务；取消下载会清理缓存。"
     }
-    pauseAvailable() && pauseConnected -> "暂停会保留已确认的私有缓存；取消下载会清理缓存，不保留用于续传。"
+    pauseAvailable() && pauseConnected -> "暂停会保留已下载的内容；取消下载会清理缓存，不保留用于续传。"
     else -> null
 }
 
@@ -146,22 +143,22 @@ internal fun DownloadItem.pauseResumeExplanation(pauseConnected: Boolean, resume
 internal fun DownloadItem.recoveryHint(): String = when {
     systemRead == SystemTaskRead.UNAVAILABLE -> "暂时无法读取任务，请等待状态确认；不会用缓存状态执行文件操作。"
     availability == FileAvailability.MISSING && verified -> "已保存的文件已丢失；移除记录不会找回文件。" +
-        if (!sourceUrl.isNullOrBlank()) "可返回来源网页重新发现资源。" else "来源信息缺失，请自行重新找到网页。"
-    pauseReason == PauseReason.STORAGE || failure == FailureKind.STORAGE -> "请检查可用存储空间。仅在检查点与继续能力已确认时继续原任务。"
+        if (!sourceUrl.isNullOrBlank()) "可回到视频页面重新打开后再试。" else "来源信息缺失，请自行重新找到网页。"
+    pauseReason == PauseReason.STORAGE || failure == FailureKind.STORAGE -> "请检查可用存储空间。仅在继续能力已确认时继续原任务。"
     pauseReason == PauseReason.NETWORK || failure == FailureKind.NETWORK -> "请检查网络。仅在继续能力已确认时使用原任务；重新下载则会另建任务，不是续传。"
     pauseReason == PauseReason.WIFI -> "此任务仅允许 Wi-Fi，请连接符合原任务要求的网络。"
     pauseReason == PauseReason.SYSTEM || failure == FailureKind.SYSTEM_LIMIT -> "系统限制了任务，请核对系统网络与后台运行限制。"
     pauseReason in setOf(PauseReason.ACCESS, PauseReason.SOURCE_CHANGED) ||
         failure in setOf(FailureKind.ACCESS_CONDITION, FailureKind.HTTP_REJECTED) ->
-        if (!sourceUrl.isNullOrBlank()) "链接可能已过期或需要登录，可返回来源网页重新发现资源；不能安全续传。"
+        if (!sourceUrl.isNullOrBlank()) "链接可能已过期或需要登录，可回到视频页面重新打开后再试；不能安全续传。"
         else "访问条件已失效且来源信息缺失，请自行重新找到网页；不能安全续传。"
-    failure in setOf(FailureKind.NOT_VIDEO, FailureKind.UNSUPPORTED) -> "此资源或返回内容不受支持。" +
-        if (!sourceUrl.isNullOrBlank()) "请返回来源网页重新选择可保存的视频。" else "来源信息缺失，请自行重新找到网页。"
-    !sourceUrl.isNullOrBlank() -> "可返回来源网页重新发现资源；不会自动重新下载。"
+    failure in setOf(FailureKind.NOT_VIDEO, FailureKind.UNSUPPORTED) -> "该视频的格式暂不支持保存。" +
+        if (!sourceUrl.isNullOrBlank()) "请回到视频页面重新选择可保存的视频。" else "来源信息缺失，请自行重新找到网页。"
+    !sourceUrl.isNullOrBlank() -> "可回到视频页面重新打开后再试；不会自动重新下载。"
     else -> "来源信息缺失，请自行重新找到网页；不会自动重新下载。"
 }
 
-internal fun DownloadItem.cacheSummary(): String = "应用私有缓存 · ${localFileSize(cacheBytes)}（不是已保存的成品）"
+internal fun DownloadItem.cacheSummary(): String = "已下载的缓存 · ${localFileSize(cacheBytes)}（不是已保存的视频文件）"
 
 /** Paused/waiting tasks stay cancellable, but must not look like an actively running transfer. */
 internal fun DownloadItem.showsLiveProgress(): Boolean = isActiveTask() && if (taskStatus != null) {
@@ -201,12 +198,12 @@ internal fun DownloadItem.progressFraction(): Float? = when {
 internal fun DownloadItem.segmentSummary(): String {
     val count = segmentCount
     val reliable = count != null && count > 0 && completedSegments in 0..count
-    return if (reliable) "已下载分片 $completedSegments / $count（不是整体保存进度）"
-    else "分片进度未确认，不推测总分片数"
+    return if (reliable) "已下载 $completedSegments / $count 段（不代表整体保存进度）"
+    else "分段进度未确认，不推测总段数"
 }
 
 internal fun DownloadItem.progressDescription(): String = when {
-    taskStatus == TaskStatus.MUXING -> "正在封装 MP4，尚未保存成品，不显示整体百分比"
+    taskStatus == TaskStatus.MUXING -> "正在合并视频，尚未保存成品，不显示整体百分比"
     taskStatus in setOf(TaskStatus.PAUSING, TaskStatus.PAUSED, TaskStatus.WAITING_WIFI, TaskStatus.WAITING_NETWORK) -> "${stateLabel()}，${if (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) segmentSummary() else byteSummary()}"
     taskStatus in setOf(TaskStatus.VERIFYING, TaskStatus.PUBLISHING) -> "${stateLabel()}，不显示整体百分比"
     (protocol == DownloadProtocol.HLS || protocol == DownloadProtocol.DASH) && taskStatus == TaskStatus.RUNNING -> segmentSummary()

@@ -72,7 +72,12 @@ internal fun DownloadTaskRow(
                 color = if (group == DownloadUiGroup.ATTENTION) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.testTag("download-status-${item.id}"),
             )
-            if (item.detail.isNotBlank()) Text(localSafeLabel(item.detail), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // T118: failed tasks show mapped guidance (see stoppedReason); the raw diagnostic
+            // wording stays available in the task detail's collapsed 技术详情 section.
+            val failedWithGuidance = item.taskStatus == TaskStatus.FAILED && item.stoppedReason() != null
+            if (item.detail.isNotBlank() && !failedWithGuidance) {
+                Text(localSafeLabel(item.detail), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if (item.systemRead == SystemTaskRead.PRESENT && !item.cancelled) {
                 Text(item.byteSummary(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("download-bytes-${item.id}"))
             }
@@ -80,7 +85,7 @@ internal fun DownloadTaskRow(
                 Text(item.cacheSummary(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("download-cache-${item.id}"))
             }
             item.stoppedReason()?.let { reason ->
-                Text("停止原因 · $reason", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("download-reason-${item.id}"))
+                Text(reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("download-reason-${item.id}"))
             }
             if (!quickView && pauseExplanation != null) {
                 Text(pauseExplanation, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("download-pause-help-${item.id}"))
@@ -134,8 +139,8 @@ internal fun DownloadTaskRow(
                 if (allowPublicRetry && item.retryAvailable() && item.useAccessContext) {
                     TextButton(
                         onClick = { onAction(DownloadAction.RETRY_PUBLIC) }, enabled = !busy,
-                        modifier = Modifier.downloadButtonModifier("public-retry", "不使用网站条件重新下载，创建新任务", item),
-                    ) { Text("不使用网站条件重试") }
+                        modifier = Modifier.downloadButtonModifier("public-retry", "不使用网站登录状态重新下载，创建新任务", item),
+                    ) { Text("不使用登录状态重试") }
                 }
                 if (!item.sourceUrl.isNullOrBlank()) {
                     DownloadIconAction(Glyph.GLOBE, "source", "返回来源网页", item, !busy, onSource)

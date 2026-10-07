@@ -130,8 +130,8 @@ class HlsBrowserJourneyTest {
             compose.onNode(hasContentDescription("尝试下载") and hasClickAction() and
                 hasAnyAncestor(hasTestTag("resource-card-${observed.displayName}"))).performScrollTo().performClick()
             compose.onNodeWithText("确认下载 HLS").assertExists()
-            compose.onNodeWithTag("hls-variant-0").assertDoesNotExist()
-            compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
+            // T117 single-screen flow: one enabled 保存 action; no separate parse/prepare steps.
+            compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled()
             // Override ONLY this confirmation. Never change the device's default download policy.
             val wifiControl = compose.onNode(isToggleable() and hasText("仅 Wi-Fi"))
             wifiControl.performScrollTo()
@@ -140,20 +140,17 @@ class HlsBrowserJourneyTest {
             compose.onNodeWithTag("download-file-name").performScrollTo().performTextReplacement(fileName)
             compose.onNodeWithTag("download-file-name").performImeAction()
 
-            compose.onNodeWithTag("hls-parse-playlist").performScrollTo().assertIsEnabled().performClick()
-            compose.waitUntil(15_000) {
-                compose.onAllNodesWithTag("hls-variant-0").fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onNodeWithTag("hls-variant-0").performScrollTo().assertIsSelected()
             // The fixture has two declared aliases of one synthetic rendition, not a real ABR ladder.
-            compose.onNodeWithTag("hls-variant-1").performScrollTo().assertIsEnabled().performClick().assertIsSelected()
-            compose.onNodeWithTag("hls-save").performScrollTo().assertIsNotEnabled()
-            compose.onNodeWithTag("hls-prepare-variant").performScrollTo().assertIsEnabled().performClick()
-            compose.waitUntil(15_000) {
-                compose.onAllNodesWithTag("hls-plan-ready").fetchSemanticsNodes().isNotEmpty()
+            // If the ladder was not pre-attached at detection, the first save reads it and surfaces
+            // the rows on this same screen for one explicit confirm; either way variant=two is a
+            // single row tap, then the one 保存 chains the read and the plan preparation.
+            if (compose.onAllNodesWithTag("hls-variant-1").fetchSemanticsNodes().isEmpty()) {
+                compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled().performClick()
             }
-            compose.onNodeWithText("清单已准备 · 4 个分片").assertExists()
-            compose.onNodeWithText("清单时长：0 分 8 秒（清单声明）").assertExists()
+            compose.waitUntil(15_000) {
+                compose.onAllNodesWithTag("hls-variant-1").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithTag("hls-variant-1").performScrollTo().assertIsEnabled().performClick().assertIsSelected()
             submitted = true
             compose.onNodeWithTag("hls-save").performScrollTo().assertIsEnabled().performClick()
             compose.waitUntil(15_000) {
