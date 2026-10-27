@@ -1,5 +1,7 @@
 # PureBrowser
 
+<p align="center"><img src="docs/design/logo/icon.png" width="120" alt="PureBrowser logo" /></p>
+
 以网页视频发现与授权保存为核心的纯本地 Android 浏览器。**v0.1.4 小范围 Pre-release**：浏览 → 发现 → 受控下载 → 视频库 → 打开/分享 → 文件管理。
 
 不提供自有云存储、云解析、云同步、账号、遥测或后端；仍可联网访问用户选择的网站。
